@@ -68,6 +68,11 @@ body {
 }
 
 .markdown-body strong {
+  color: #102033;
+  font-weight: 700;
+}
+
+.markdown-body mark {
   border-radius: 0.4rem;
   background: #f7dfad;
   box-decoration-break: clone;
@@ -75,6 +80,7 @@ body {
   padding: 0.05rem 0.32rem;
   color: #4a2d08;
   font-weight: 700;
+  white-space: inherit;
 }
 
 .markdown-body a {
