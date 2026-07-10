@@ -88,7 +88,7 @@ const RATING_WORDS = [
 
 const ACTION_WORDS = ['首次覆盖', '维持', '上调', '下调', '恢复覆盖', '首予', '新增'];
 
-const LISTED_CODE_PATTERN = /\b(?:\d{4,6}|[A-Z]{1,6})\.(?:HK|SS|SZ|US|TW|KS|KQ|JP|L|O|N)\b/;
+const LISTED_CODE_PATTERN = /\b(?:\d{4,6}|[A-Z]{1,6})\.(?:HK|SS|SZ|US|TW|KS|KQ|JP|L|O|N|SI)\b/;
 const PAREN_TARGET_PATTERN = /([\u4e00-\u9fa5A-Za-z][\u4e00-\u9fa5A-Za-z0-9&.\-\s]{1,40})[（(]([^）)]+)[）)]/g;
 
 export function normalizeText(value: string): string {
@@ -157,15 +157,15 @@ export function extractTargetMentions(report: ReportDocument): TargetMention[] {
   for (const block of report.institutions) {
     const blockLines = report.lines.slice(block.startLine - 1, block.endLine);
     const candidates = extractTargetCandidates(blockLines, block.startLine);
-    const blockText = blockLines.join('\n');
 
-    for (const candidate of candidates) {
-      const nearbyText = getNearbyText(report.lines, candidate.lineNumber - 1, 5);
-      const rating = extractRating(nearbyText) ?? extractRating(blockText);
-      const targetPrice = extractTargetPrice(nearbyText) ?? extractTargetPrice(blockText);
-      const currentPrice = extractCurrentPrice(nearbyText) ?? extractCurrentPrice(blockText);
-      const action = extractAction(nearbyText) ?? extractAction(blockText);
-      const excerpt = compactExcerpt(nearbyText);
+    for (let index = 0; index < candidates.length; index += 1) {
+      const candidate = candidates[index];
+      const context = getTargetContext(report.lines, block, candidate, candidates[index + 1]?.lineNumber);
+      const rating = extractRating(context.text);
+      const targetPrice = extractTargetPrice(context.text);
+      const currentPrice = extractCurrentPrice(context.text);
+      const action = extractAction(context.text);
+      const excerpt = compactExcerpt(context.text);
 
       mentions.push({
         reportId: report.id,
@@ -180,7 +180,10 @@ export function extractTargetMentions(report: ReportDocument): TargetMention[] {
         action,
         lineNumber: candidate.lineNumber,
         excerpt,
-        signals: extractSignals(report, block, candidate.name),
+        signals: extractSignals(report, block, candidate.name, {
+          startLine: candidate.lineNumber,
+          endLine: context.endLine,
+        }),
       });
     }
   }
@@ -192,9 +195,12 @@ export function extractSignals(
   report: ReportDocument,
   block: InstitutionBlock,
   targetName?: string,
+  range?: { startLine: number; endLine: number },
 ): CatalystRiskItem[] {
   const signals: CatalystRiskItem[] = [];
-  for (let index = block.startLine - 1; index < block.endLine; index += 1) {
+  const startLine = Math.max(block.startLine, range?.startLine ?? block.startLine);
+  const endLine = Math.min(block.endLine, range?.endLine ?? block.endLine);
+  for (let index = startLine - 1; index < endLine; index += 1) {
     const line = report.lines[index] ?? '';
     const type = classifySignal(line);
     if (!type) {
@@ -270,8 +276,9 @@ function extractTargetCandidates(lines: string[], firstLineNumber: number) {
     for (const match of line.matchAll(PAREN_TARGET_PATTERN)) {
       const rawName = cleanupName(match[1]);
       const inside = match[2].trim();
+      const matchIndex = match.index ?? line.indexOf(match[0]);
       const highConfidence =
-        LISTED_CODE_PATTERN.test(inside) ||
+        (LISTED_CODE_PATTERN.test(inside) && isLikelyTargetHeading(line, matchIndex)) ||
         /覆盖个股|覆盖公司/.test(line);
       if (!highConfidence) {
         continue;
@@ -280,7 +287,7 @@ function extractTargetCandidates(lines: string[], firstLineNumber: number) {
         .split(/[/,，;；]/)
         .map((item) => item.trim())
         .filter(Boolean);
-      const code = aliases.find((item) => LISTED_CODE_PATTERN.test(item));
+      const code = inside.match(LISTED_CODE_PATTERN)?.[0];
       if (rawName && !isNoiseName(rawName)) {
         candidates.push({
           name: rawName,
@@ -294,6 +301,62 @@ function extractTargetCandidates(lines: string[], firstLineNumber: number) {
   return candidates;
 }
 
+function isLikelyTargetHeading(line: string, matchIndex: number): boolean {
+  const prefix = line.slice(0, Math.max(0, matchIndex)).trim();
+  return !prefix || /^[#>*\-•■\s]+$/.test(prefix);
+}
+
+function getTargetContext(
+  lines: string[],
+  block: InstitutionBlock,
+  candidate: { name: string; aliases: string[]; code?: string; lineNumber: number },
+  nextCandidateLine?: number,
+): { text: string; endLine: number } {
+  const startLine = candidate.lineNumber;
+  const naturalEndLine = nextCandidateLine ? nextCandidateLine - 1 : candidate.lineNumber + 8;
+  const endLine = Math.min(block.endLine, naturalEndLine);
+  const selectedLineIndexes = new Set<number>();
+  for (let index = startLine - 1; index < endLine; index += 1) {
+    selectedLineIndexes.add(index);
+  }
+
+  for (let index = endLine; index < block.endLine; index += 1) {
+    const line = lines[index] ?? '';
+    if (isTargetMetadataLine(line, candidate)) {
+      selectedLineIndexes.add(index);
+    }
+  }
+
+  return {
+    text: [...selectedLineIndexes]
+      .sort((left, right) => left - right)
+      .map((index) => lines[index])
+      .join('\n'),
+    endLine,
+  };
+}
+
+function isTargetMetadataLine(
+  line: string,
+  candidate: { name: string; aliases: string[]; code?: string },
+): boolean {
+  if (!containsTargetIdentifier(line, candidate)) {
+    return false;
+  }
+  return Boolean(extractRating(line) || extractTargetPrice(line) || extractCurrentPrice(line) || extractAction(line));
+}
+
+function containsTargetIdentifier(
+  line: string,
+  candidate: { name: string; aliases: string[]; code?: string },
+): boolean {
+  const normalizedLine = normalizeText(line);
+  const identifiers = uniqueStrings([candidate.name, candidate.code ?? '', ...candidate.aliases]).filter(
+    (item) => normalizeText(item).length >= 2,
+  );
+  return identifiers.some((item) => normalizedLine.includes(normalizeText(item)));
+}
+
 function extractRating(text: string): string | undefined {
   const normalized = text.normalize('NFKC');
   const explicit = normalized.match(/(?:投资评级|评级|Rating)[:：]?\s*[“"']?([A-Za-z\u4e00-\u9fa5]+)[”"']?/i);
@@ -303,18 +366,47 @@ function extractRating(text: string): string | undefined {
       return rating;
     }
   }
-  return RATING_WORDS.find((word) => normalized.includes(word));
+  return RATING_WORDS.find((word) => ratingAppearsInContext(normalized, word));
 }
 
 function extractAction(text: string): string | undefined {
-  return ACTION_WORDS.find((word) => text.includes(word));
+  const normalized = text.normalize('NFKC');
+  const standalone = ACTION_WORDS.find((word) => /首次覆盖|恢复覆盖|首予/.test(word) && normalized.includes(word));
+  if (standalone) {
+    return standalone;
+  }
+  return ACTION_WORDS.find((word) => actionAppearsInContext(normalized, word));
+}
+
+function ratingAppearsInContext(text: string, rating: string): boolean {
+  const escaped = escapeRegExp(rating);
+  const beforeRatingLabel = new RegExp(`[“"']?${escaped}[”"']?\\s*(?:评级|Rating)`, 'i');
+  const afterRatingAction = new RegExp(
+    `(?:评级为|投资评级|维持|首予|重申|给予|上调至|下调至)\\s*[“"']?${escaped}[”"']?`,
+    'i',
+  );
+  return beforeRatingLabel.test(text) || afterRatingAction.test(text);
+}
+
+function actionAppearsInContext(text: string, action: string): boolean {
+  const escaped = escapeRegExp(action);
+  const actionBeforeRating = new RegExp(
+    `${escaped}[^。\\n]{0,20}(?:评级|目标价|买入|增持|中性|持有|卖出|减持|Buy|Hold|Sell|Overweight|Underweight|跑赢|跑输)`,
+    'i',
+  );
+  const actionAfterSubject = new RegExp(`(?:评级|目标价|target price|Rating)[^。\\n]{0,20}${escaped}`, 'i');
+  return actionBeforeRating.test(text) || actionAfterSubject.test(text);
+}
+
+function escapeRegExp(value: string): string {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
 
 function extractTargetPrice(text: string): string | undefined {
   const normalized = text.normalize('NFKC');
   const patterns = [
-    /(?:目标价|target price|TP|PT)[^0-9人民币港元美元]{0,16}(?:为|至|:|：)?\s*(人民币\s*)?([0-9]+(?:\.[0-9]+)?\s*(?:港元|美元|元|新台币|人民币))/i,
-    /((?:人民币\s*)?[0-9]+(?:\.[0-9]+)?\s*(?:港元|美元|元|新台币|人民币))[^。\n]{0,12}(?:目标价|target price|TP|PT)/i,
+    /(?:目标价|target price|TP|PT)[^0-9人民币港元美元新元]{0,16}(?:为|至|:|：)?\s*(人民币\s*)?([0-9]+(?:\.[0-9]+)?\s*(?:港元|美元|元|新元|新加坡元|新台币|人民币))/i,
+    /((?:人民币\s*)?[0-9]+(?:\.[0-9]+)?\s*(?:港元|美元|元|新元|新加坡元|新台币|人民币))[^。\n]{0,12}(?:目标价|target price|TP|PT)/i,
   ];
 
   for (const pattern of patterns) {
