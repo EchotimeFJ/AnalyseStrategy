@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { apiGet } from '@/lib/api';
 import { useAsyncData } from '@/hooks/useAsyncData';
@@ -6,10 +6,14 @@ import type { ReportDetail, ReportSummary } from '@/types';
 import { Layout, PageHeader } from '@/components/Layout';
 import { Badge, EmptyState, ErrorBlock, LoadingBlock, Panel } from '@/components/ui';
 import { MarkdownViewer } from '@/components/MarkdownViewer';
+import { getCenteredScrollTop, getSourceLineScrollTop } from '@/lib/reportScroll';
 
 export default function Reports() {
   const [params, setParams] = useSearchParams();
   const selectedId = params.get('id');
+  const focusedLine = parseLineNumber(params.get('line'));
+  const highlightTerms = useMemo(() => params.getAll('highlight').map((item) => item.trim()).filter(Boolean), [params]);
+  const reportListRef = useRef<HTMLElement | null>(null);
   const [year, setYear] = useState('');
   const reportsQuery = useMemo(() => (year ? `/api/reports?year=${year}` : '/api/reports'), [year]);
   const reports = useAsyncData(() => apiGet<ReportSummary[]>(reportsQuery), [reportsQuery]);
@@ -26,6 +30,49 @@ export default function Reports() {
     }
   }, [firstId, selectedId, setParams]);
 
+  useEffect(() => {
+    if (!detail.data || !focusedLine) {
+      return;
+    }
+
+    const frame = window.requestAnimationFrame(() => {
+      const element = findSourceLineElement(focusedLine);
+      if (!element) {
+        return;
+      }
+
+      document.querySelectorAll('.report-line-focus').forEach((node) => {
+        node.classList.remove('report-line-focus');
+      });
+      element.classList.add('report-line-focus');
+      const rect = element.getBoundingClientRect();
+      const top = getSourceLineScrollTop({
+        windowScrollY: window.scrollY,
+        viewportHeight: window.innerHeight,
+        elementTop: rect.top,
+        elementHeight: rect.height,
+        startLine: Number(element.dataset.lineStart ?? focusedLine),
+        endLine: Number(element.dataset.lineEnd ?? focusedLine),
+        targetLine: focusedLine,
+      });
+      window.scrollTo({ top, behavior: 'auto' });
+    });
+
+    return () => window.cancelAnimationFrame(frame);
+  }, [detail.data, focusedLine]);
+
+  useEffect(() => {
+    if (!activeId || !reports.data?.length) {
+      return;
+    }
+
+    const frame = window.requestAnimationFrame(() => {
+      scrollReportListToActiveItem(reportListRef.current, activeId);
+    });
+
+    return () => window.cancelAnimationFrame(frame);
+  }, [activeId, reports.data]);
+
   const years = [...new Set((reports.data ?? []).map((report) => report.year))].sort().reverse();
 
   return (
@@ -37,6 +84,7 @@ export default function Reports() {
       />
       <div className="grid min-w-0 gap-6 xl:grid-cols-[minmax(0,360px)_minmax(0,1fr)]">
         <Panel
+          ref={reportListRef}
           title="日报列表"
           eyebrow="Reports"
           action={
@@ -61,6 +109,7 @@ export default function Reports() {
             {(reports.data ?? []).map((report) => (
               <button
                 key={report.id}
+                data-report-id={report.id}
                 onClick={() => setParams({ id: report.id })}
                 className={`w-full rounded-2xl border p-4 text-left transition ${
                   activeId === report.id ? 'border-amber-300 bg-amber-50' : 'border-slate-200 bg-white/70 hover:border-slate-300'
@@ -95,7 +144,7 @@ export default function Reports() {
                 </div>
               </Panel>
               <Panel title="Markdown 原文" eyebrow="Original" className="overflow-hidden">
-                <MarkdownViewer markdown={detail.data.markdown} />
+                <MarkdownViewer markdown={detail.data.markdown} highlightTerms={highlightTerms} />
               </Panel>
             </>
           ) : (
@@ -105,6 +154,53 @@ export default function Reports() {
       </div>
     </Layout>
   );
+}
+
+function parseLineNumber(value: string | null) {
+  if (!value) {
+    return undefined;
+  }
+
+  const line = Number.parseInt(value, 10);
+  return Number.isFinite(line) && line > 0 ? line : undefined;
+}
+
+function findSourceLineElement(line: number) {
+  const nodes = Array.from(document.querySelectorAll<HTMLElement>('[data-line-start]'));
+  return (
+    nodes.find((node) => {
+      const start = Number(node.dataset.lineStart);
+      const end = Number(node.dataset.lineEnd || node.dataset.lineStart);
+      return start <= line && line <= end;
+    }) ??
+    nodes
+      .filter((node) => Number(node.dataset.lineStart) <= line)
+      .sort((left, right) => Number(right.dataset.lineStart) - Number(left.dataset.lineStart))[0] ??
+    null
+  );
+}
+
+function scrollReportListToActiveItem(container: HTMLElement | null, activeId: string) {
+  if (!container) {
+    return;
+  }
+
+  const item = Array.from(container.querySelectorAll<HTMLElement>('[data-report-id]')).find(
+    (node) => node.dataset.reportId === activeId,
+  );
+  if (!item) {
+    return;
+  }
+
+  const containerRect = container.getBoundingClientRect();
+  const itemRect = item.getBoundingClientRect();
+  const itemOffsetTop = itemRect.top - containerRect.top + container.scrollTop;
+  const top = getCenteredScrollTop({
+    containerHeight: container.clientHeight,
+    itemOffsetTop,
+    itemHeight: item.offsetHeight,
+  });
+  container.scrollTo({ top, behavior: 'auto' });
 }
 
 function Meta({ label, value }: { label: string; value: string }) {

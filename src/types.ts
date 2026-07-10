@@ -90,6 +90,7 @@ export type TargetChange = {
   changeType: string;
   date: string;
   reportId: string;
+  lineNumber: number;
 };
 
 export type MatrixRow = {

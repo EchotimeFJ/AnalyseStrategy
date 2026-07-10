@@ -58,6 +58,7 @@ type TargetChange = {
   changeType: string;
   date: string;
   reportId: string;
+  lineNumber: number;
 };
 
 const RATING_SEARCH_ALIASES: Record<string, string[]> = {
@@ -537,6 +538,7 @@ function toChange(mention: TargetMention, previous: TargetMention | undefined, c
     changeType,
     date: mention.date,
     reportId: mention.reportId,
+    lineNumber: mention.lineNumber,
   };
 }
 

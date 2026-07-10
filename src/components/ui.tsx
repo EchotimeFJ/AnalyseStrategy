@@ -1,21 +1,23 @@
-import type { ReactNode } from 'react';
+import { forwardRef, type ReactNode } from 'react';
 import { Loader2 } from 'lucide-react';
 
-export function Panel({
-  title,
-  eyebrow,
-  action,
-  children,
-  className = '',
-}: {
+type PanelProps = {
   title?: string;
   eyebrow?: string;
   action?: ReactNode;
   children: ReactNode;
   className?: string;
-}) {
+};
+
+export const Panel = forwardRef<HTMLElement, PanelProps>(function Panel({
+  title,
+  eyebrow,
+  action,
+  children,
+  className = '',
+}, ref) {
   return (
-    <section className={`rounded-[28px] border border-slate-200/70 bg-white/78 p-5 shadow-sm backdrop-blur ${className}`}>
+    <section ref={ref} className={`rounded-[28px] border border-slate-200/70 bg-white/78 p-5 shadow-sm backdrop-blur ${className}`}>
       {(title || eyebrow || action) && (
         <div className="mb-4 flex flex-col items-stretch justify-between gap-4 sm:flex-row sm:items-start">
           <div>
@@ -28,7 +30,7 @@ export function Panel({
       {children}
     </section>
   );
-}
+});
 
 export function StatCard({ label, value, hint }: { label: string; value?: string | number; hint?: string }) {
   return (

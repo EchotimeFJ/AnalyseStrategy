@@ -40,6 +40,7 @@ assert.equal(searchHits.at(-1)?.date, '2025-09-10');
 const profile = await getTargetProfile('小米集团');
 assert.equal(profile.mentions[0].date, '2025-12-04');
 assert.equal(profile.ratingChanges[0].date, '2025-12-04');
+assert.equal(profile.ratingChanges[0].lineNumber, 3);
 assert.equal(profile.summary.targetPrices[0].date, '2025-12-04');
 
 await fs.rm(tmpRoot, { recursive: true, force: true });

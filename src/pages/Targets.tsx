@@ -1,10 +1,11 @@
 import { FormEvent, useEffect, useState } from 'react';
-import { useSearchParams } from 'react-router-dom';
+import { Link, useSearchParams } from 'react-router-dom';
 import { apiGet, queryString } from '@/lib/api';
 import type { TargetProfile } from '@/types';
 import { Layout, PageHeader } from '@/components/Layout';
 import { Badge, EmptyState, ErrorBlock, LoadingBlock, Panel, StatCard } from '@/components/ui';
 import { ChangeRow, MentionCard, SignalCard } from '@/components/SignalList';
+import { buildReportLink, targetMentionHighlightTerms } from '@/lib/reportLinks';
 
 const LAST_TARGET_QUERY_KEY = 'analyse-strategy:last-target-query';
 
@@ -149,7 +150,15 @@ export default function Targets() {
               <Panel title="机构最新观点矩阵" eyebrow="Institution matrix">
                 <div className="space-y-3">
                   {(profile.matrix[0]?.items ?? []).map((item) => (
-                    <div key={`${item.institution}-${item.reportId}`} className="rounded-2xl border border-slate-200 bg-white/70 p-4">
+                    <Link
+                      key={`${item.institution}-${item.reportId}`}
+                      to={buildReportLink({
+                        reportId: item.reportId,
+                        lineNumber: item.lineNumber,
+                        highlightTerms: targetMentionHighlightTerms(item),
+                      })}
+                      className="block rounded-2xl border border-slate-200 bg-white/70 p-4 transition hover:border-amber-300 hover:shadow-md"
+                    >
                       <div className="flex flex-wrap gap-2">
                         <Badge tone="blue">{item.institution}</Badge>
                         <Badge tone="amber">{item.date}</Badge>
@@ -157,7 +166,7 @@ export default function Targets() {
                         {item.targetPrice ? <Badge tone="slate">{item.targetPrice}</Badge> : null}
                       </div>
                       <p className="mt-3 line-clamp-3 text-sm leading-6 text-slate-600">{item.excerpt}</p>
-                    </div>
+                    </Link>
                   ))}
                 </div>
               </Panel>

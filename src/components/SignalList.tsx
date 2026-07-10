@@ -1,11 +1,16 @@
 import { Link } from 'react-router-dom';
 import type { SignalItem, TargetChange, TargetMention } from '@/types';
 import { Badge } from '@/components/ui';
+import { buildReportLink, signalHighlightTerms, targetMentionHighlightTerms } from '@/lib/reportLinks';
 
 export function MentionCard({ mention }: { mention: TargetMention }) {
   return (
     <Link
-      to={`/reports?id=${encodeURIComponent(mention.reportId)}`}
+      to={buildReportLink({
+        reportId: mention.reportId,
+        lineNumber: mention.lineNumber,
+        highlightTerms: targetMentionHighlightTerms(mention),
+      })}
       className="block rounded-2xl border border-slate-200 bg-white/70 p-4 transition hover:border-amber-300 hover:shadow-md"
     >
       <div className="flex flex-wrap items-center gap-2">
@@ -24,7 +29,11 @@ export function SignalCard({ item }: { item: SignalItem }) {
   const tone = item.type === 'risk' ? 'red' : item.type === 'catalyst' ? 'green' : 'blue';
   return (
     <Link
-      to={`/reports?id=${encodeURIComponent(item.reportId)}`}
+      to={buildReportLink({
+        reportId: item.reportId,
+        lineNumber: item.lineNumber,
+        highlightTerms: signalHighlightTerms(item),
+      })}
       className="block rounded-2xl border border-slate-200 bg-white/70 p-4 transition hover:border-sky-300 hover:shadow-md"
     >
       <div className="flex flex-wrap gap-2">
@@ -41,7 +50,11 @@ export function SignalCard({ item }: { item: SignalItem }) {
 export function ChangeRow({ change }: { change: TargetChange }) {
   return (
     <Link
-      to={`/reports?id=${encodeURIComponent(change.reportId)}`}
+      to={buildReportLink({
+        reportId: change.reportId,
+        lineNumber: change.lineNumber,
+        highlightTerms: [change.targetName],
+      })}
       className="grid gap-3 rounded-2xl border border-slate-200 bg-white/70 p-4 text-sm transition hover:border-amber-300 hover:shadow-md md:grid-cols-[120px_1fr_160px]"
     >
       <div>

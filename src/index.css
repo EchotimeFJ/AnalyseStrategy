@@ -83,6 +83,19 @@ body {
   white-space: inherit;
 }
 
+.markdown-body mark.report-target-highlight {
+  border: 1px solid rgba(14, 165, 233, 0.28);
+  background: #d8f3ff;
+  color: #075985;
+}
+
+.markdown-body .report-line-focus {
+  border-radius: 0.85rem;
+  background: rgba(251, 191, 36, 0.16);
+  box-shadow: 0 0 0 3px rgba(251, 191, 36, 0.18);
+  scroll-margin-top: 2rem;
+}
+
 .markdown-body a {
   color: #0f6ea8;
   text-decoration: underline;

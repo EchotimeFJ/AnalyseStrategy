@@ -5,6 +5,7 @@ import { apiGet, queryString } from '@/lib/api';
 import type { SearchHit } from '@/types';
 import { Layout, PageHeader } from '@/components/Layout';
 import { Badge, EmptyState, ErrorBlock, LoadingBlock, Panel } from '@/components/ui';
+import { buildReportLink, searchHitHighlightTerms } from '@/lib/reportLinks';
 
 const ratingShortcuts = ['买入', '增持', '中性', '持有', '减持', '卖出'];
 const LAST_SEARCH_FILTER_KEY = 'analyse-strategy:last-search-filter';
@@ -178,7 +179,14 @@ export default function SearchPage() {
                 {hits.map((hit, index) => (
                   <Link
                     key={`${hit.reportId}-${hit.lineNumber}-${hit.matchedText}-${index}`}
-                    to={`/reports?id=${encodeURIComponent(hit.reportId)}`}
+                    to={buildReportLink({
+                      reportId: hit.reportId,
+                      lineNumber: hit.lineNumber,
+                      highlightTerms: searchHitHighlightTerms({
+                        matchedText: hit.matchedText,
+                        query,
+                      }),
+                    })}
                     className="block rounded-2xl border border-slate-200 bg-white/75 p-4 transition hover:border-amber-300 hover:shadow-md"
                   >
                     <div className="flex flex-wrap gap-2">
