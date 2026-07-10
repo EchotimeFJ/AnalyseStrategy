@@ -6,30 +6,76 @@ import { Layout, PageHeader } from '@/components/Layout';
 import { Badge, EmptyState, ErrorBlock, LoadingBlock, Panel, StatCard } from '@/components/ui';
 import { ChangeRow, MentionCard, SignalCard } from '@/components/SignalList';
 
+const LAST_TARGET_QUERY_KEY = 'analyse-strategy:last-target-query';
+
+function readLastTargetQuery() {
+  if (typeof window === 'undefined') {
+    return '';
+  }
+
+  try {
+    return window.sessionStorage.getItem(LAST_TARGET_QUERY_KEY)?.trim() ?? '';
+  } catch {
+    return '';
+  }
+}
+
+function saveLastTargetQuery(value: string) {
+  if (typeof window === 'undefined') {
+    return;
+  }
+
+  try {
+    window.sessionStorage.setItem(LAST_TARGET_QUERY_KEY, value);
+  } catch {
+    // Session storage is a convenience cache; the query still works without it.
+  }
+}
+
+function clearLastTargetQuery() {
+  if (typeof window === 'undefined') {
+    return;
+  }
+
+  try {
+    window.sessionStorage.removeItem(LAST_TARGET_QUERY_KEY);
+  } catch {
+    // Ignore storage cleanup failures.
+  }
+}
+
 export default function Targets() {
   const [params] = useSearchParams();
-  const [query, setQuery] = useState(params.get('q') ?? '英诺赛科');
+  const [query, setQuery] = useState(() => params.get('q')?.trim() || readLastTargetQuery());
   const [profile, setProfile] = useState<TargetProfile | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
   useEffect(() => {
-    const initialQuery = params.get('q');
+    const initialQuery = params.get('q')?.trim() || readLastTargetQuery();
     if (initialQuery) {
+      setQuery(initialQuery);
       void loadProfile(initialQuery);
     }
-    // 只在首次进入页面时消费 URL 查询词，后续由表单控制。
+    // 只在首次进入页面时消费 URL/会话查询词，后续由表单控制。
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   async function loadProfile(value: string) {
-    if (!value.trim()) {
+    const nextQuery = value.trim();
+    if (!nextQuery) {
+      clearLastTargetQuery();
+      setProfile(null);
+      setError('');
       return;
     }
     setLoading(true);
     setError('');
     try {
-      setProfile(await apiGet<TargetProfile>(`/api/targets${queryString({ q: value })}`));
+      const nextProfile = await apiGet<TargetProfile>(`/api/targets${queryString({ q: nextQuery })}`);
+      saveLastTargetQuery(nextQuery);
+      setQuery(nextQuery);
+      setProfile(nextProfile);
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : String(reason));
     } finally {
@@ -135,7 +181,7 @@ export default function Targets() {
             </div>
           </>
         ) : (
-          <EmptyState title="输入标的开始分析" description="建议先试试：英诺赛科、2577.HK、SpaceX、中金公司、3908.HK。" />
+          <EmptyState title="输入标的开始分析" description="输入名称、英文名或代码后点击分析；系统会在本次浏览会话中保留上一次分析结果。" />
         )}
       </div>
     </Layout>

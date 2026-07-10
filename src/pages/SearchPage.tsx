@@ -1,4 +1,4 @@
-import { FormEvent, useState } from 'react';
+import { FormEvent, useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { Search as SearchIcon } from 'lucide-react';
 import { apiGet, queryString } from '@/lib/api';
@@ -7,23 +7,105 @@ import { Layout, PageHeader } from '@/components/Layout';
 import { Badge, EmptyState, ErrorBlock, LoadingBlock, Panel } from '@/components/ui';
 
 const ratingShortcuts = ['买入', '增持', '中性', '持有', '减持', '卖出'];
+const LAST_SEARCH_FILTER_KEY = 'analyse-strategy:last-search-filter';
+
+type SearchFilters = {
+  query: string;
+  mode: string;
+  from: string;
+  to: string;
+};
+
+function readLastSearchFilter(): SearchFilters | null {
+  if (typeof window === 'undefined') {
+    return null;
+  }
+
+  try {
+    const raw = window.sessionStorage.getItem(LAST_SEARCH_FILTER_KEY);
+    return raw ? (JSON.parse(raw) as SearchFilters) : null;
+  } catch {
+    return null;
+  }
+}
+
+function saveLastSearchFilter(value: SearchFilters) {
+  if (typeof window === 'undefined') {
+    return;
+  }
+
+  try {
+    window.sessionStorage.setItem(LAST_SEARCH_FILTER_KEY, JSON.stringify(value));
+  } catch {
+    // Session storage is only used to restore the last successful search.
+  }
+}
+
+function clearLastSearchFilter() {
+  if (typeof window === 'undefined') {
+    return;
+  }
+
+  try {
+    window.sessionStorage.removeItem(LAST_SEARCH_FILTER_KEY);
+  } catch {
+    // Ignore storage cleanup failures.
+  }
+}
 
 export default function SearchPage() {
-  const [query, setQuery] = useState('英诺赛科');
-  const [mode, setMode] = useState('all');
-  const [from, setFrom] = useState('');
-  const [to, setTo] = useState('');
+  const [query, setQuery] = useState(() => readLastSearchFilter()?.query ?? '');
+  const [mode, setMode] = useState(() => readLastSearchFilter()?.mode ?? 'all');
+  const [from, setFrom] = useState(() => readLastSearchFilter()?.from ?? '');
+  const [to, setTo] = useState(() => readLastSearchFilter()?.to ?? '');
   const [hits, setHits] = useState<SearchHit[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
-  async function runSearch(nextQuery = query, nextMode = mode) {
+  useEffect(() => {
+    const cached = readLastSearchFilter();
+    if (cached) {
+      setQuery(cached.query);
+      setMode(cached.mode);
+      setFrom(cached.from);
+      setTo(cached.to);
+      void runSearch(cached);
+    }
+    // 只在首次进入页面时恢复上一次成功搜索的条件。
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  async function runSearch(filters: SearchFilters = { query, mode, from, to }) {
+    const nextFilters = {
+      query: filters.query.trim(),
+      mode: filters.mode,
+      from: filters.from.trim(),
+      to: filters.to.trim(),
+    };
+
+    if (!nextFilters.query) {
+      clearLastSearchFilter();
+      setHits([]);
+      setError('');
+      return;
+    }
+
     setLoading(true);
     setError('');
     try {
       const data = await apiGet<SearchHit[]>(
-        `/api/search${queryString({ q: nextQuery, mode: nextMode, from, to })}`,
+        `/api/search${queryString({
+          q: nextFilters.query,
+          mode: nextFilters.mode,
+          from: nextFilters.from,
+          to: nextFilters.to,
+        })}`,
       );
+      saveLastSearchFilter(nextFilters);
+      setQuery(nextFilters.query);
+      setMode(nextFilters.mode);
+      setFrom(nextFilters.from);
+      setTo(nextFilters.to);
       setHits(data);
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : String(reason));
@@ -41,7 +123,7 @@ export default function SearchPage() {
     const nextQuery = `${rating}评级`;
     setQuery(nextQuery);
     setMode('rating');
-    await runSearch(nextQuery, 'rating');
+    await runSearch({ query: nextQuery, mode: 'rating', from, to });
   }
 
   return (

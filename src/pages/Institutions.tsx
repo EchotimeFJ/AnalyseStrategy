@@ -1,26 +1,74 @@
-import { FormEvent, useState } from 'react';
+import { FormEvent, useEffect, useState } from 'react';
 import { apiGet, queryString } from '@/lib/api';
 import type { InstitutionView } from '@/types';
 import { Layout, PageHeader } from '@/components/Layout';
 import { Badge, EmptyState, ErrorBlock, LoadingBlock, Panel } from '@/components/ui';
 
+const LAST_INSTITUTION_FILTER_KEY = 'analyse-strategy:last-institution-filter';
+
+type LastInstitutionFilter = {
+  target: string;
+};
+
+function readLastInstitutionFilter(): LastInstitutionFilter | null {
+  if (typeof window === 'undefined') {
+    return null;
+  }
+
+  try {
+    const raw = window.sessionStorage.getItem(LAST_INSTITUTION_FILTER_KEY);
+    return raw ? (JSON.parse(raw) as LastInstitutionFilter) : null;
+  } catch {
+    return null;
+  }
+}
+
+function saveLastInstitutionFilter(value: LastInstitutionFilter) {
+  if (typeof window === 'undefined') {
+    return;
+  }
+
+  try {
+    window.sessionStorage.setItem(LAST_INSTITUTION_FILTER_KEY, JSON.stringify(value));
+  } catch {
+    // Session storage is only used to restore the last successful query.
+  }
+}
+
 export default function Institutions() {
-  const [target, setTarget] = useState('英诺赛科');
+  const [target, setTarget] = useState(() => readLastInstitutionFilter()?.target ?? '');
   const [view, setView] = useState<InstitutionView | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
-  async function submit(event?: FormEvent) {
-    event?.preventDefault();
+  useEffect(() => {
+    const cached = readLastInstitutionFilter();
+    if (cached) {
+      setTarget(cached.target);
+      void loadView(cached.target);
+    }
+    // 只在首次进入页面时恢复上一次成功生成的条件。
+  }, []);
+
+  async function loadView(value: string) {
+    const nextTarget = value.trim();
     setLoading(true);
     setError('');
     try {
-      setView(await apiGet<InstitutionView>(`/api/institutions${queryString({ target })}`));
+      const nextView = await apiGet<InstitutionView>(`/api/institutions${queryString({ target: nextTarget })}`);
+      saveLastInstitutionFilter({ target: nextTarget });
+      setTarget(nextTarget);
+      setView(nextView);
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : String(reason));
     } finally {
       setLoading(false);
     }
+  }
+
+  async function submit(event?: FormEvent) {
+    event?.preventDefault();
+    await loadView(target);
   }
 
   return (
@@ -108,7 +156,7 @@ export default function Institutions() {
             </Panel>
           </>
         ) : (
-          <EmptyState title="输入条件后生成矩阵" description="建议先试试英诺赛科、SpaceX、中金公司等近期报告提及的标的。" />
+          <EmptyState title="输入条件后生成矩阵" description="输入标的名称或代码可聚焦单一公司；留空点击生成矩阵可查看全局覆盖。" />
         )}
       </div>
     </Layout>
