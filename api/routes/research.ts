@@ -1,5 +1,6 @@
 import { Router, type Request, type Response } from 'express';
 import {
+  diffReportChanges,
   ensureIndex,
   exportData,
   getInstitutionView,
@@ -11,6 +12,8 @@ import {
   getWatchlistView,
   rebuildIndex,
   searchReports,
+  type IndexState,
+  type ReportChangeSet,
 } from '../services/reportIndex.js';
 import {
   addAlias,
@@ -133,33 +136,21 @@ router.get('/export', async (req: Request, res: Response): Promise<void> => {
 
 router.get('/index', async (_req: Request, res: Response): Promise<void> => {
   const index = await ensureIndex();
-  res.json({
-    success: true,
-    data: {
-      sourceDir: index.sourceDir,
-      indexedAt: index.indexedAt,
-      reportCount: index.reports.length,
-      mentionCount: index.mentions.length,
-      errors: index.errors,
-    },
-  });
+  res.json({ success: true, data: toIndexStatus(index) });
 });
 
 router.post('/reindex', async (_req: Request, res: Response): Promise<void> => {
+  const previous = await ensureIndex();
   const index = await rebuildIndex();
+  const reportChanges = diffReportChanges(previous, index);
   res.json({
     success: true,
-    data: {
-      sourceDir: index.sourceDir,
-      indexedAt: index.indexedAt,
-      reportCount: index.reports.length,
-      mentionCount: index.mentions.length,
-      errors: index.errors,
-    },
+    data: toIndexStatus(index, reportChanges),
   });
 });
 
 router.post('/update-strategy', async (_req: Request, res: Response): Promise<void> => {
+  const previous = await ensureIndex();
   const pull = await pullStrategyRepository();
   if (!pull.success) {
     res.status(500).json({ success: false, error: pull.stderr, data: pull });
@@ -167,20 +158,26 @@ router.post('/update-strategy', async (_req: Request, res: Response): Promise<vo
   }
 
   const index = await rebuildIndex();
+  const reportChanges = diffReportChanges(previous, index);
   res.json({
     success: true,
     data: {
       pull,
-      index: {
-        sourceDir: index.sourceDir,
-        indexedAt: index.indexedAt,
-        reportCount: index.reports.length,
-        mentionCount: index.mentions.length,
-        errors: index.errors,
-      },
+      index: toIndexStatus(index, reportChanges),
     },
   });
 });
+
+function toIndexStatus(index: IndexState, reportChanges?: ReportChangeSet) {
+  return {
+    sourceDir: index.sourceDir,
+    indexedAt: index.indexedAt,
+    reportCount: index.reports.length,
+    mentionCount: index.mentions.length,
+    errors: index.errors,
+    reportChanges,
+  };
+}
 
 function asString(value: unknown): string | undefined {
   if (typeof value === 'string' && value.trim()) {

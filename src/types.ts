@@ -21,6 +21,21 @@ export type ReportSummary = {
   updatedAt?: string;
 };
 
+export type ReportChangeType = 'added' | 'modified' | 'removed';
+
+export type ReportChange = ReportSummary & {
+  type: ReportChangeType;
+  previousUpdatedAt?: string;
+  nextUpdatedAt?: string;
+};
+
+export type ReportChangeSet = {
+  added: ReportChange[];
+  modified: ReportChange[];
+  removed: ReportChange[];
+  generatedAt: string;
+};
+
 export type InstitutionBlock = {
   institution: string;
   startLine: number;
@@ -161,6 +176,7 @@ export type IndexStatus = {
   reportCount: number;
   mentionCount: number;
   errors: Array<{ filePath: string; message: string }>;
+  reportChanges?: ReportChangeSet;
 };
 
 export type StrategyUpdateResult = {

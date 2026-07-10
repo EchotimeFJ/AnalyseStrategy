@@ -13,7 +13,7 @@ import { readUserConfig, type WatchItem } from './localConfig.js';
 
 const DEFAULT_REPORT_DIR = '/Users/bytedance/ai-projects/Strategy/港A美/机构日报';
 
-type IndexState = {
+export type IndexState = {
   sourceDir: string;
   reports: ReportDocument[];
   mentions: TargetMention[];
@@ -21,7 +21,7 @@ type IndexState = {
   errors: Array<{ filePath: string; message: string }>;
 };
 
-type ReportSummary = {
+export type ReportSummary = {
   id: string;
   date: string;
   year: string;
@@ -31,6 +31,21 @@ type ReportSummary = {
   targetCount: number;
   lineCount: number;
   updatedAt?: string;
+};
+
+export type ReportChangeType = 'added' | 'modified' | 'removed';
+
+export type ReportChange = ReportSummary & {
+  type: ReportChangeType;
+  previousUpdatedAt?: string;
+  nextUpdatedAt?: string;
+};
+
+export type ReportChangeSet = {
+  added: ReportChange[];
+  modified: ReportChange[];
+  removed: ReportChange[];
+  generatedAt: string;
 };
 
 type TargetChange = {
@@ -103,6 +118,39 @@ export async function rebuildIndex(): Promise<IndexState> {
     errors,
   };
   return state;
+}
+
+export function diffReportChanges(before: IndexState, after: IndexState): ReportChangeSet {
+  const beforeById = new Map(before.reports.map((report) => [report.id, report]));
+  const afterById = new Map(after.reports.map((report) => [report.id, report]));
+  const added: ReportChange[] = [];
+  const modified: ReportChange[] = [];
+  const removed: ReportChange[] = [];
+
+  for (const report of after.reports) {
+    const previous = beforeById.get(report.id);
+    if (!previous) {
+      added.push(toReportChange('added', report, after.mentions));
+      continue;
+    }
+
+    if (previous.markdown !== report.markdown) {
+      modified.push(toReportChange('modified', report, after.mentions, previous));
+    }
+  }
+
+  for (const report of before.reports) {
+    if (!afterById.has(report.id)) {
+      removed.push(toReportChange('removed', report, before.mentions));
+    }
+  }
+
+  return {
+    added: added.sort(compareReportChangesDesc),
+    modified: modified.sort(compareReportChangesDesc),
+    removed: removed.sort(compareReportChangesDesc),
+    generatedAt: new Date().toISOString(),
+  };
 }
 
 export async function getSummary() {
@@ -324,6 +372,24 @@ function toReportSummary(report: ReportDocument, mentions: TargetMention[]): Rep
     lineCount: report.lineCount,
     updatedAt: report.updatedAt,
   };
+}
+
+function toReportChange(
+  type: ReportChangeType,
+  report: ReportDocument,
+  mentions: TargetMention[],
+  previous?: ReportDocument,
+): ReportChange {
+  return {
+    ...toReportSummary(report, mentions),
+    type,
+    previousUpdatedAt: previous?.updatedAt,
+    nextUpdatedAt: report.updatedAt,
+  };
+}
+
+function compareReportChangesDesc(left: ReportChange, right: ReportChange): number {
+  return compareDateDesc(left.date, right.date) || left.id.localeCompare(right.id);
 }
 
 async function scanMarkdownFiles(dir: string): Promise<string[]> {

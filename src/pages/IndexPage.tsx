@@ -1,7 +1,8 @@
 import { useState } from 'react';
+import { Link } from 'react-router-dom';
 import { apiGet, apiPost } from '@/lib/api';
 import { useAsyncData } from '@/hooks/useAsyncData';
-import type { IndexStatus, StrategyUpdateResult } from '@/types';
+import type { IndexStatus, ReportChange, ReportChangeSet, ReportChangeType, StrategyUpdateResult } from '@/types';
 import { Layout, PageHeader } from '@/components/Layout';
 import { Badge, ErrorBlock, LoadingBlock, Panel, StatCard } from '@/components/ui';
 import { formatDateTime } from '@/lib/format';
@@ -97,6 +98,8 @@ export default function IndexPage() {
             ) : null}
           </Panel>
 
+          {data.reportChanges ? <ReportChangesPanel changes={data.reportChanges} /> : null}
+
           <Panel title="数据质量" eyebrow="Quality">
             {data.errors.length ? (
               <div className="space-y-3">
@@ -115,4 +118,106 @@ export default function IndexPage() {
       ) : null}
     </Layout>
   );
+}
+
+function ReportChangesPanel({ changes }: { changes: ReportChangeSet }) {
+  const total = changes.added.length + changes.modified.length + changes.removed.length;
+
+  return (
+    <Panel title="本次报告变更" eyebrow="Diff">
+      <div className="mb-4 flex flex-wrap gap-2">
+        <Badge tone={changes.added.length ? 'green' : 'slate'}>新增 {changes.added.length}</Badge>
+        <Badge tone={changes.modified.length ? 'amber' : 'slate'}>修改 {changes.modified.length}</Badge>
+        <Badge tone={changes.removed.length ? 'red' : 'slate'}>删除 {changes.removed.length}</Badge>
+        <Badge tone="blue">生成于 {formatDateTime(changes.generatedAt)}</Badge>
+      </div>
+
+      {total ? (
+        <div className="grid gap-4 xl:grid-cols-3">
+          <ReportChangeGroup title="新增报告" type="added" items={changes.added} />
+          <ReportChangeGroup title="修改报告" type="modified" items={changes.modified} />
+          <ReportChangeGroup title="删除报告" type="removed" items={changes.removed} />
+        </div>
+      ) : (
+        <div className="rounded-2xl bg-slate-50 p-5 text-sm leading-7 text-slate-600">
+          本次更新没有发现新增、修改或删除的日报。
+        </div>
+      )}
+    </Panel>
+  );
+}
+
+function ReportChangeGroup({
+  title,
+  type,
+  items,
+}: {
+  title: string;
+  type: ReportChangeType;
+  items: ReportChange[];
+}) {
+  const emptyText: Record<ReportChangeType, string> = {
+    added: '没有新增日报',
+    modified: '没有修改日报',
+    removed: '没有删除日报',
+  };
+
+  return (
+    <div className="rounded-2xl border border-slate-200 bg-white/70 p-4">
+      <div className="mb-3 flex items-center justify-between gap-3">
+        <div className="font-semibold text-slate-950">{title}</div>
+        <Badge tone={items.length ? reportChangeTone(type) : 'slate'}>{items.length}</Badge>
+      </div>
+      {items.length ? (
+        <div className="space-y-2">
+          {items.map((item) => (
+            <ReportChangeItem key={`${type}-${item.id}`} item={item} type={type} />
+          ))}
+        </div>
+      ) : (
+        <div className="rounded-xl bg-slate-50 px-3 py-2 text-sm text-slate-500">{emptyText[type]}</div>
+      )}
+    </div>
+  );
+}
+
+function ReportChangeItem({ item, type }: { item: ReportChange; type: ReportChangeType }) {
+  const content = (
+    <>
+      <div className="flex flex-wrap items-center gap-2">
+        <Badge tone={reportChangeTone(type)}>{item.date}</Badge>
+        <span className="text-xs text-slate-500">{item.lineCount} 行</span>
+        <span className="text-xs text-slate-500">{item.targetCount} 个提及</span>
+      </div>
+      <div className="mt-2 line-clamp-2 text-sm font-medium text-slate-800">{item.title}</div>
+      {type === 'modified' ? (
+        <div className="mt-2 text-xs text-slate-500">
+          {formatDateTime(item.previousUpdatedAt)} → {formatDateTime(item.nextUpdatedAt)}
+        </div>
+      ) : null}
+    </>
+  );
+
+  if (type === 'removed') {
+    return <div className="rounded-xl bg-slate-50 p-3">{content}</div>;
+  }
+
+  return (
+    <Link
+      to={`/reports?id=${encodeURIComponent(item.id)}`}
+      className="block rounded-xl bg-slate-50 p-3 transition hover:bg-amber-50 hover:shadow-sm"
+    >
+      {content}
+    </Link>
+  );
+}
+
+function reportChangeTone(type: ReportChangeType) {
+  if (type === 'added') {
+    return 'green';
+  }
+  if (type === 'modified') {
+    return 'amber';
+  }
+  return 'red';
 }
