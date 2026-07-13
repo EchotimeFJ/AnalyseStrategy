@@ -1,0 +1,26 @@
+api/services/gitUpdater.ts
+  s_40d86e65aedcef::t_e4d4377be95ca9 50-61,154-174
+  s_40d86e65aedcef::t_45dd597adfb663 36,93,105,110,175-179
+  s_40d86e65aedcef::t_25cfcf71a33d4c 180
+tests/gitUpdater.test.ts
+  s_40d86e65aedcef::t_9727851ac3cc53 36-47
+  s_40d86e65aedcef::t_97043f65343cf1 5-6,20,52-53,56,59,62,65,73-74,83-84,87,90,93,96
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "27c1cb3281cabc429f1beeb786ec1dfad1abbb71",
+  "prompts": {},
+  "sessions": {
+    "s_40d86e65aedcef": {
+      "agent_id": {
+        "tool": "trae",
+        "id": "6a4f5931e8e26568c891e7f4",
+        "model": "gpt-5.4__dev"
+      },
+      "human_author": "fujia.111 <fujia.111@bytedance.com>"
+    }
+  },
+  "attestation_metadata": {},
+  "remote_transcripts": {}
+}
