@@ -1,6 +1,7 @@
 /**
  * local server entry file, for local development
  */
+import 'dotenv/config';
 import app from './app.js';
 
 /**
