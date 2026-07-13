@@ -2,7 +2,7 @@ import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
 
 const execFileAsync = promisify(execFile);
-const DEFAULT_STRATEGY_DIR = '/Users/bytedance/ai-projects/Strategy';
+const DEFAULT_STRATEGY_DIR = process.env.STRATEGY_DIR || '/Users/bytedance/ai-projects/Strategy';
 
 export type GitRunResult = {
   stdout: string;

@@ -11,7 +11,7 @@ import {
 } from './reportParser.js';
 import { readUserConfig, type WatchItem } from './localConfig.js';
 
-const DEFAULT_REPORT_DIR = '/Users/bytedance/ai-projects/Strategy/港A美/机构日报';
+const DEFAULT_REPORT_DIR = process.env.REPORT_DIR || '/Users/bytedance/ai-projects/Strategy/港A美/机构日报';
 
 export type IndexState = {
   sourceDir: string;
