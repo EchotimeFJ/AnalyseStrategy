@@ -1,10 +1,11 @@
 import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
 import tsconfigPaths from "vite-tsconfig-paths";
+import { APP_BASE_PATH } from './src/lib/appPaths';
 
 // https://vite.dev/config/
 export default defineConfig({
-  base: '/as/',
+  base: APP_BASE_PATH,
   plugins: [
     react({
       babel: {

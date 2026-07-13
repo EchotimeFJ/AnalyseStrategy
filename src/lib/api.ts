@@ -1,4 +1,5 @@
 import type { ApiResponse } from '@/types';
+import { APP_BASE_PATH } from '@/lib/appPaths';
 
 export function resolveApiPath(path: string, basePath = getDefaultBasePath()): string {
   if (/^(?:[a-z]+:)?\/\//i.test(path)) {
@@ -62,7 +63,7 @@ function getDefaultBasePath() {
     return '/';
   }
 
-  return import.meta.env?.BASE_URL ?? '/';
+  return import.meta.env?.BASE_URL ?? APP_BASE_PATH;
 }
 
 function normalizeBasePath(basePath: string) {

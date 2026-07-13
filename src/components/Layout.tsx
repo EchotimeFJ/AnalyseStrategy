@@ -10,21 +10,28 @@ import {
   Search,
   Star,
 } from 'lucide-react';
+import { APP_ROUTES } from '@/lib/appPaths';
 
 const navItems = [
-  { to: '/', label: '总览', icon: LayoutDashboard },
-  { to: '/reports', label: '报告阅读', icon: BookOpenText },
-  { to: '/search', label: '精确搜索', icon: Search },
-  { to: '/targets', label: '标的分析', icon: Binoculars },
-  { to: '/radar', label: '研究雷达', icon: Radar },
-  { to: '/institutions', label: '机构观点', icon: Building2 },
-  { to: '/watchlist', label: '关注列表', icon: Star },
-  { to: '/index', label: '索引管理', icon: DatabaseZap },
+  { to: APP_ROUTES.dashboard, label: '总览', icon: LayoutDashboard },
+  { to: APP_ROUTES.reports, label: '报告阅读', icon: BookOpenText },
+  { to: APP_ROUTES.search, label: '精确搜索', icon: Search },
+  { to: APP_ROUTES.targets, label: '标的分析', icon: Binoculars },
+  { to: APP_ROUTES.radar, label: '研究雷达', icon: Radar },
+  { to: APP_ROUTES.institutions, label: '机构观点', icon: Building2 },
+  { to: APP_ROUTES.watchlist, label: '关注列表', icon: Star },
+  { to: APP_ROUTES.manage, label: '索引管理', icon: DatabaseZap },
 ];
 
-const mobilePrimaryNav = navItems.filter((item) =>
-  ['/', '/reports', '/search', '/targets', '/index'].includes(item.to),
-);
+const mobilePrimaryNavPaths = new Set<string>([
+  APP_ROUTES.dashboard,
+  APP_ROUTES.reports,
+  APP_ROUTES.search,
+  APP_ROUTES.targets,
+  APP_ROUTES.manage,
+]);
+
+const mobilePrimaryNav = navItems.filter((item) => mobilePrimaryNavPaths.has(item.to));
 
 export function Layout({ children }: { children: ReactNode }) {
   return (
