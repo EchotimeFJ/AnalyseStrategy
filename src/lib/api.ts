@@ -1,7 +1,22 @@
 import type { ApiResponse } from '@/types';
 
+export function resolveApiPath(path: string, basePath = getDefaultBasePath()): string {
+  if (/^(?:[a-z]+:)?\/\//i.test(path)) {
+    return path;
+  }
+
+  const normalizedPath = path.startsWith('/') ? path : `/${path}`;
+  const normalizedBasePath = normalizeBasePath(basePath);
+
+  if (!normalizedBasePath || normalizedPath === normalizedBasePath || normalizedPath.startsWith(`${normalizedBasePath}/`)) {
+    return normalizedPath;
+  }
+
+  return `${normalizedBasePath}${normalizedPath}`;
+}
+
 export async function apiGet<T>(path: string): Promise<T> {
-  const response = await fetch(path);
+  const response = await fetch(resolveApiPath(path));
   const payload = (await response.json()) as ApiResponse<T>;
   if (!response.ok || !payload.success) {
     throw new Error(payload.error || `请求失败: ${path}`);
@@ -10,7 +25,7 @@ export async function apiGet<T>(path: string): Promise<T> {
 }
 
 export async function apiPost<T>(path: string, body?: unknown): Promise<T> {
-  const response = await fetch(path, {
+  const response = await fetch(resolveApiPath(path), {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(body ?? {}),
@@ -23,7 +38,7 @@ export async function apiPost<T>(path: string, body?: unknown): Promise<T> {
 }
 
 export async function apiDelete<T>(path: string): Promise<T> {
-  const response = await fetch(path, { method: 'DELETE' });
+  const response = await fetch(resolveApiPath(path), { method: 'DELETE' });
   const payload = (await response.json()) as ApiResponse<T>;
   if (!response.ok || !payload.success) {
     throw new Error(payload.error || `请求失败: ${path}`);
@@ -40,4 +55,28 @@ export function queryString(params: Record<string, string | undefined>) {
   });
   const text = query.toString();
   return text ? `?${text}` : '';
+}
+
+function getDefaultBasePath() {
+  if (import.meta.env?.DEV) {
+    return '/';
+  }
+
+  return import.meta.env?.BASE_URL ?? '/';
+}
+
+function normalizeBasePath(basePath: string) {
+  if (!basePath || basePath === '/') {
+    return '';
+  }
+
+  let normalized = basePath.trim();
+  if (!normalized.startsWith('/')) {
+    normalized = `/${normalized}`;
+  }
+  if (normalized.endsWith('/')) {
+    normalized = normalized.slice(0, -1);
+  }
+
+  return normalized;
 }

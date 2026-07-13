@@ -1,6 +1,6 @@
 import { FormEvent, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { apiDelete, apiGet, apiPost } from '@/lib/api';
+import { apiDelete, apiGet, apiPost, resolveApiPath } from '@/lib/api';
 import { useAsyncData } from '@/hooks/useAsyncData';
 import type { WatchlistData } from '@/types';
 import { Layout, PageHeader } from '@/components/Layout';
@@ -92,7 +92,10 @@ export default function Watchlist() {
                       <Link to={`/targets?q=${encodeURIComponent(item.name)}`} className="text-sm font-semibold text-slate-950 underline underline-offset-4">
                         查看标的档案
                       </Link>
-                      <a href={`/api/export?type=target&q=${encodeURIComponent(item.name)}`} className="text-sm font-semibold text-amber-700 underline underline-offset-4">
+                      <a
+                        href={resolveApiPath(`/api/export?type=target&q=${encodeURIComponent(item.name)}`)}
+                        className="text-sm font-semibold text-amber-700 underline underline-offset-4"
+                      >
                         导出 CSV
                       </a>
                     </div>
