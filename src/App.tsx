@@ -10,7 +10,7 @@ import IndexPage from "@/pages/IndexPage";
 
 export default function App() {
   return (
-    <Router>
+    <Router basename="/as">
       <Routes>
         <Route path="/" element={<Dashboard />} />
         <Route path="/reports" element={<Reports />} />
