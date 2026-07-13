@@ -33,7 +33,7 @@ export async function pullStrategyRepository(options: {
   const runGit = options.runGit ?? defaultGitRunner;
 
   try {
-    const result = await runGit('git', ['pull', '--ff-only'], {
+    const result = await runGit('git', withSafeDirectory(strategyDir, ['pull', '--ff-only']), {
       cwd: strategyDir,
       timeout: 120_000,
     });
@@ -47,6 +47,18 @@ export async function pullStrategyRepository(options: {
     };
   } catch (error) {
     const message = getErrorMessage(error);
+    const credentialError = getGitCredentialError(strategyDir, message);
+    if (credentialError) {
+      return {
+        success: false,
+        strategyDir,
+        stdout: '',
+        stderr: credentialError,
+        startedAt,
+        finishedAt: new Date().toISOString(),
+      };
+    }
+
     const fallback = isFetchHeadPermissionError(message)
       ? await verifyRemoteIsCurrent(strategyDir, runGit)
       : null;
@@ -78,7 +90,7 @@ async function verifyRemoteIsCurrent(
   runGit: GitRunner,
 ): Promise<{ success: true; stdout: string } | { success: false; stderr: string }> {
   try {
-    const branch = (await runGit('git', ['rev-parse', '--abbrev-ref', 'HEAD'], {
+    const branch = (await runGit('git', withSafeDirectory(strategyDir, ['rev-parse', '--abbrev-ref', 'HEAD']), {
       cwd: strategyDir,
       timeout: 30_000,
     })).stdout.trim();
@@ -90,12 +102,12 @@ async function verifyRemoteIsCurrent(
       };
     }
 
-    const localHead = (await runGit('git', ['rev-parse', 'HEAD'], {
+    const localHead = (await runGit('git', withSafeDirectory(strategyDir, ['rev-parse', 'HEAD']), {
       cwd: strategyDir,
       timeout: 30_000,
     })).stdout.trim();
 
-    const remoteRef = (await runGit('git', ['ls-remote', '--heads', 'origin', branch], {
+    const remoteRef = (await runGit('git', withSafeDirectory(strategyDir, ['ls-remote', '--heads', 'origin', branch]), {
       cwd: strategyDir,
       timeout: 120_000,
     })).stdout.trim();
@@ -137,6 +149,33 @@ function isFetchHeadPermissionError(message: string): boolean {
 
 function getErrorMessage(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
+}
+
+function getGitCredentialError(strategyDir: string, message: string) {
+  if (!isGithubCredentialError(message)) {
+    return null;
+  }
+
+  return [
+    '当前服务器没有可用的 GitHub 拉取凭据，暂时无法自动执行 Strategy 仓库的 git pull。',
+    `Strategy 目录：${strategyDir}`,
+    '请为服务器配置该私有仓库的只读 deploy key，或改用带凭据的 HTTPS 认证后再重试。',
+    '',
+    '原始错误：',
+    message.trim(),
+  ].join('\n');
+}
+
+function isGithubCredentialError(message: string): boolean {
+  return (
+    message.includes("could not read Username for 'https://github.com'") ||
+    message.includes('Permission denied (publickey)') ||
+    message.includes('Authentication failed')
+  );
+}
+
+function withSafeDirectory(strategyDir: string, args: string[]) {
+  return ['-c', `safe.directory=${strategyDir}`, ...args];
 }
 
 const defaultGitRunner: GitRunner = async (command, args, options) => {
