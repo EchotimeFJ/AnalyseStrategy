@@ -3,7 +3,6 @@ import { NavLink } from 'react-router-dom';
 import {
   Binoculars,
   BookOpenText,
-  Building2,
   DatabaseZap,
   LayoutDashboard,
   Radar,
@@ -18,7 +17,6 @@ const navItems = [
   { to: APP_ROUTES.search, label: '精确搜索', icon: Search },
   { to: APP_ROUTES.targets, label: '标的分析', icon: Binoculars },
   { to: APP_ROUTES.radar, label: '研究雷达', icon: Radar },
-  { to: APP_ROUTES.institutions, label: '机构观点', icon: Building2 },
   { to: APP_ROUTES.watchlist, label: '关注列表', icon: Star },
   { to: APP_ROUTES.manage, label: '索引管理', icon: DatabaseZap },
 ];
@@ -41,7 +39,7 @@ export function Layout({ children }: { children: ReactNode }) {
         <div className="rounded-[28px] border border-white/10 bg-white/8 p-5">
           <div className="text-[11px] font-semibold uppercase tracking-[0.28em] text-amber-200">Research Desk</div>
           <h1 className="mt-3 text-2xl font-semibold leading-tight">机构日报分析平台</h1>
-          <p className="mt-3 text-sm leading-6 text-slate-300">本地 Markdown 报告库、标的追踪与机构观点矩阵。</p>
+          <p className="mt-3 text-sm leading-6 text-slate-300">本地 Markdown 报告库、标的追踪与研究雷达。</p>
         </div>
         <nav className="mt-6 space-y-1">
           {navItems.map((item) => {

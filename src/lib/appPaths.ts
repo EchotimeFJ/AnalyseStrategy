@@ -7,12 +7,19 @@ export const APP_ROUTES = {
   search: '/search',
   targets: '/targets',
   radar: '/radar',
-  institutions: '/institutions',
   watchlist: '/watchlist',
   manage: '/manage',
   legacyIndex: '/index',
+  legacyInstitutions: '/institutions',
 } as const;
 
 export function appRoute(path: string) {
-  return path === APP_ROUTES.legacyIndex ? APP_ROUTES.manage : path;
+  if (path === APP_ROUTES.legacyIndex) {
+    return APP_ROUTES.manage;
+  }
+  if (path === APP_ROUTES.legacyInstitutions) {
+    return APP_ROUTES.dashboard;
+  }
+
+  return path;
 }
