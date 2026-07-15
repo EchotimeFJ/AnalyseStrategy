@@ -1,8 +1,8 @@
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
+import { getStrategyDir } from '../runtimeConfig.js';
 
 const execFileAsync = promisify(execFile);
-const DEFAULT_STRATEGY_DIR = process.env.STRATEGY_DIR || '/Users/bytedance/ai-projects/Strategy';
 
 export type GitRunResult = {
   stdout: string;
@@ -28,7 +28,7 @@ export async function pullStrategyRepository(options: {
   strategyDir?: string;
   runGit?: GitRunner;
 } = {}): Promise<PullResult> {
-  const strategyDir = options.strategyDir ?? DEFAULT_STRATEGY_DIR;
+  const strategyDir = options.strategyDir ?? getStrategyDir();
   const startedAt = new Date().toISOString();
   const runGit = options.runGit ?? defaultGitRunner;
 

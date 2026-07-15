@@ -17,10 +17,10 @@ const result = await pullStrategyRepository({
 
 assert.equal(calls.length, 1);
 assert.equal(calls[0].command, 'git');
-assert.deepEqual(calls[0].args, ['-c', 'safe.directory=/Users/bytedance/ai-projects/Strategy', 'pull', '--ff-only']);
-assert.equal(calls[0].cwd, '/Users/bytedance/ai-projects/Strategy');
+assert.deepEqual(calls[0].args, ['-c', 'safe.directory=/opt/Strategy', 'pull', '--ff-only']);
+assert.equal(calls[0].cwd, '/opt/Strategy');
 assert.equal(result.success, true);
-assert.equal(result.strategyDir, '/Users/bytedance/ai-projects/Strategy');
+assert.equal(result.strategyDir, '/opt/Strategy');
 assert.equal(result.stdout.trim(), 'Already up to date.');
 assert.ok(result.finishedAt);
 
@@ -70,7 +70,7 @@ assert.equal(sandboxFallback.success, true);
 assert.match(sandboxFallback.stdout, /Already up to date/);
 assert.match(sandboxFallback.stdout, /ls-remote verified/);
 assert.equal(sandboxCalls.length, 4);
-assert.ok(sandboxCalls.every((call) => call.args[1] === 'safe.directory=/Users/bytedance/ai-projects/Strategy'));
+assert.ok(sandboxCalls.every((call) => call.args[1] === 'safe.directory=/opt/Strategy'));
 assert.deepEqual(sandboxCalls.map((call) => stripSafeDirectory(call.args)), [
   ['pull', '--ff-only'],
   ['rev-parse', '--abbrev-ref', 'HEAD'],

@@ -10,8 +10,7 @@ import {
   type TargetMention,
 } from './reportParser.js';
 import { readUserConfig, type WatchItem } from './localConfig.js';
-
-const DEFAULT_REPORT_DIR = process.env.REPORT_DIR || '/Users/bytedance/ai-projects/Strategy/港A美/机构日报';
+import { getReportDir } from '../runtimeConfig.js';
 
 export type IndexState = {
   sourceDir: string;
@@ -71,7 +70,7 @@ const RATING_SEARCH_ALIASES: Record<string, string[]> = {
 };
 
 let state: IndexState = {
-  sourceDir: process.env.REPORTS_DIR || DEFAULT_REPORT_DIR,
+  sourceDir: getReportDir(),
   reports: [],
   mentions: [],
   errors: [],
@@ -85,7 +84,7 @@ export async function ensureIndex(): Promise<IndexState> {
 }
 
 export async function rebuildIndex(): Promise<IndexState> {
-  const sourceDir = process.env.REPORTS_DIR || DEFAULT_REPORT_DIR;
+  const sourceDir = getReportDir();
   const files = await scanMarkdownFiles(sourceDir);
   const reports: ReportDocument[] = [];
   const errors: IndexState['errors'] = [];

@@ -9,7 +9,7 @@
     "lint": "eslint .",
     "preview": "vite preview",
     "check": "tsc --noEmit",
-    "test": "tsx tests/parser.test.ts && tsx tests/gitUpdater.test.ts && tsx tests/ordering.test.ts && tsx tests/ratingSearch.test.ts && tsx tests/reportChanges.test.ts && tsx tests/reportLinks.test.ts && tsx tests/reportScroll.test.ts && tsx tests/markdownPreprocess.test.ts && tsx tests/appPaths.test.ts && tsx tests/apiPath.test.ts",
+    "test": "tsx tests/parser.test.ts && tsx tests/runtimeConfig.test.ts && tsx tests/reportIndexConfig.test.ts && tsx tests/gitUpdater.test.ts && tsx tests/ordering.test.ts && tsx tests/ratingSearch.test.ts && tsx tests/reportChanges.test.ts && tsx tests/reportLinks.test.ts && tsx tests/reportScroll.test.ts && tsx tests/markdownPreprocess.test.ts && tsx tests/appPaths.test.ts && tsx tests/apiPath.test.ts",
     "server:dev": "nodemon",
     "dev": "concurrently \"npm run client:dev\" \"npm run server:dev\""
   },
