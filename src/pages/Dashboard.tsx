@@ -108,7 +108,7 @@ function OpinionCard({ opinion }: { opinion: OpinionRecord }) {
       <div className="flex flex-wrap gap-2"><Badge tone="green">{opinion.rating ?? '积极观点'}</Badge><Badge tone="blue">{opinion.institution}</Badge><Badge tone="slate">{opinion.reportDate}</Badge></div>
       <div className="mt-3 font-semibold text-slate-950">{opinion.security.displayName}</div>
       <div className="mt-1 text-xs text-slate-500">{opinion.security.code ?? '未识别代码'}{opinion.targetPrice ? ` · 目标价 ${opinion.targetPrice}` : ''}</div>
-      <p className="mt-3 line-clamp-3 text-sm leading-6 text-slate-600">{source?.excerpt}</p>
+      <p className="mt-3 line-clamp-3 text-sm leading-6 text-slate-600">{source?.excerpt.replace(/==/g, '')}</p>
     </Link>
   );
 }

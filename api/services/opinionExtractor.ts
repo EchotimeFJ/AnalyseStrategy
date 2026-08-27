@@ -41,7 +41,8 @@ export function extractOpinions(report: ReportDocument): OpinionRecord[] {
 }
 
 function toOpinion(report: ReportDocument, mention: TargetMention, index: number): OpinionRecord {
-  const institution = resolveInstitution(mention.institution);
+  const headingInstitution = resolveInstitution(mention.institution);
+  const institution = headingInstitution.verified ? headingInstitution : inferInstitutionFromText(mention.excerpt) ?? headingInstitution;
   const code = normalizeSecurityCode(mention.code);
   const aliases = [...new Set([mention.targetName, ...mention.aliases]
     .map(normalizeEntityName)
@@ -78,7 +79,7 @@ function toOpinion(report: ReportDocument, mention: TargetMention, index: number
     id: `${report.id}:${mention.lineNumber}:${index}`,
     reportId: report.id,
     reportDate: report.date,
-    institution: institution.canonicalName || '待识别机构',
+    institution: institution.verified ? institution.canonicalName : `待识别机构（${institution.rawName || '未知'}）`,
     institutionVerified: institution.verified,
     security,
     rating,
@@ -89,4 +90,10 @@ function toOpinion(report: ReportDocument, mention: TargetMention, index: number
     types: classifyOpinionTypes({ rating, action, text: mention.excerpt }),
     evidence,
   };
+}
+
+function inferInstitutionFromText(text: string) {
+  const candidates = [...text.matchAll(/([\u4e00-\u9fa5A-Za-z]{2,12})(?:研究)?观点/g)]
+    .map((match) => resolveInstitution(match[1]));
+  return candidates.find((candidate) => candidate.verified) ?? null;
 }

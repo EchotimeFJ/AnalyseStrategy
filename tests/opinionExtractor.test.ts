@@ -44,4 +44,17 @@ assert.equal(cautious.targetPrice, '5 港元');
 assert.equal(cautious.types.includes('risk'), true);
 assert.equal(cautious.types.includes('catalyst'), false);
 
+const themedReport = buildReportFromMarkdown({
+  id: '2026-08-28',
+  filePath: '/tmp/2026-08-28.md',
+  markdown: `# AI
+
+腾讯控股 (0700.HK)
+花旗观点：维持买入评级，目标价 763 港元。
+`,
+});
+const themedOpinion = extractOpinions(themedReport)[0];
+assert.equal(themedOpinion.institution, '花旗');
+assert.equal(themedOpinion.institutionVerified, true);
+
 console.log('opinion extractor tests passed');

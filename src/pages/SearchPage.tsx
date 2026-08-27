@@ -6,6 +6,7 @@ import type { GroupedSearchResponse, SearchHit } from '@/types';
 import { Layout, PageHeader } from '@/components/Layout';
 import { Badge, EmptyState, ErrorBlock, LoadingBlock, Panel } from '@/components/ui';
 import { buildReportLink, searchHitHighlightTerms } from '@/lib/reportLinks';
+import { compactSearchParams } from '@/lib/searchParams';
 
 const ratingShortcuts = ['买入', '增持', '中性', '持有', '减持', '卖出'];
 
@@ -41,7 +42,7 @@ export default function SearchPage() {
         ? await apiGet<SearchHit[]>(`/api/search${queryString(searchParams)}`)
         : await apiGet<GroupedSearchResponse>(`/api/search${queryString(searchParams)}`);
       setResult(data);
-      setParams(searchParams as Record<string, string>);
+      setParams(compactSearchParams(searchParams));
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : String(reason));
     } finally {
