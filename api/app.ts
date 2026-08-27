@@ -43,12 +43,20 @@ app.use(
  * error handler middleware
  */
 app.use((error: Error, req: Request, res: Response, next: NextFunction) => {
-  void error
   void req
   void next
+  const isIndexUnavailable = 'code' in error && error.code === 'ENOENT'
   res.status(500).json({
     success: false,
-    error: 'Server internal error',
+    error: isIndexUnavailable
+      ? {
+          code: 'INDEX_UNAVAILABLE',
+          message: '报告目录不可用，请检查数据源配置后重试',
+        }
+      : {
+          code: 'INTERNAL_ERROR',
+          message: '服务暂时不可用，请稍后重试',
+        },
   })
 })
 

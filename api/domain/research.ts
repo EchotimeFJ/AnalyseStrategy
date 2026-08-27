@@ -47,3 +47,29 @@ export interface DataQualityIssue {
   lineNumber?: number;
   message: string;
 }
+
+export interface ReportOverview {
+  reportId: string;
+  date: string;
+  title: string;
+  institutions: string[];
+  opinions: OpinionRecord[];
+  securities: SecurityEntity[];
+  positiveCount: number;
+  ratingChangeCount: number;
+  targetPriceChangeCount: number;
+  riskCount: number;
+  catalystCount: number;
+}
+
+export interface CompanyProfile {
+  security: SecurityEntity;
+  firstMention: string | null;
+  latestMention: string | null;
+  latestRating: string | null;
+  latestTargetPrice: string | null;
+  institutions: string[];
+  opinions: OpinionRecord[];
+  catalysts: OpinionRecord[];
+  risks: OpinionRecord[];
+}

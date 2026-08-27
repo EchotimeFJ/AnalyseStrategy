@@ -191,3 +191,79 @@ export type StrategyUpdateResult = {
   };
   index: IndexStatus;
 };
+
+export type ConfidenceLevel = 'high' | 'medium' | 'low';
+export type OpinionType = 'positive' | 'rating-change' | 'target-price-change' | 'catalyst' | 'risk';
+
+export type SourceEvidence = {
+  reportId: string;
+  filePath: string;
+  lineNumber: number;
+  excerpt: string;
+  method: string;
+  confidence: ConfidenceLevel;
+};
+
+export type SecurityEntity = {
+  key: string;
+  code: string | null;
+  displayName: string;
+  aliases: string[];
+  confidence: ConfidenceLevel;
+};
+
+export type OpinionRecord = {
+  id: string;
+  reportId: string;
+  reportDate: string;
+  institution: string;
+  institutionVerified: boolean;
+  security: SecurityEntity;
+  rating: string | null;
+  rawRating: string | null;
+  action: string | null;
+  targetPrice: string | null;
+  currentPrice: string | null;
+  types: OpinionType[];
+  evidence: SourceEvidence[];
+};
+
+export type ReportOverview = {
+  reportId: string;
+  date: string;
+  title: string;
+  institutions: string[];
+  opinions: OpinionRecord[];
+  securities: SecurityEntity[];
+  positiveCount: number;
+  ratingChangeCount: number;
+  targetPriceChangeCount: number;
+  riskCount: number;
+  catalystCount: number;
+};
+
+export type TodayOverview = {
+  sourceDir: string;
+  indexedAt?: string;
+  indexVersion?: string;
+  reportCount: number;
+  securityCount: number;
+  opinionCount: number;
+  errorCount: number;
+  qualityIssueCount: number;
+  latestDate?: string;
+  positiveOpinions: OpinionRecord[];
+  reportOverviews: ReportOverview[];
+};
+
+export type CompanyProfile = {
+  security: SecurityEntity;
+  firstMention: string | null;
+  latestMention: string | null;
+  latestRating: string | null;
+  latestTargetPrice: string | null;
+  institutions: string[];
+  opinions: OpinionRecord[];
+  catalysts: OpinionRecord[];
+  risks: OpinionRecord[];
+};

@@ -9,7 +9,13 @@ import {
   type SearchHit,
   type TargetMention,
 } from './reportParser.js';
-import type { DataQualityIssue, OpinionRecord, SecurityEntity } from '../domain/research.js';
+import type {
+  CompanyProfile,
+  DataQualityIssue,
+  OpinionRecord,
+  ReportOverview,
+  SecurityEntity,
+} from '../domain/research.js';
 import { mergeSecurityEntities, resolveInstitution, securityKey } from './entityResolver.js';
 import { extractOpinions } from './opinionExtractor.js';
 import { readUserConfig, type WatchItem } from './localConfig.js';
@@ -225,17 +231,16 @@ export async function getSummary() {
   const index = await ensureIndex();
   const years = countBy(index.reports, (report) => report.year);
   const institutions = countBy(
-    index.reports.flatMap((report) => report.institutions.map((item) => item.institution)),
+    index.opinions.filter((item) => item.institutionVerified).map((item) => item.institution),
     (item) => item,
   );
   const latestReports = getReportSummaries(index.reports).slice(-8).reverse();
-  const targetNames = new Set(index.mentions.map((mention) => targetKey(mention)));
 
   return {
     sourceDir: index.sourceDir,
     indexedAt: index.indexedAt,
     reportCount: index.reports.length,
-    targetCount: targetNames.size,
+    targetCount: index.entities.size,
     mentionCount: index.mentions.length,
     errorCount: index.errors.length,
     latestDate: latestReports[0]?.date,
@@ -243,6 +248,72 @@ export async function getSummary() {
     institutions: toSortedCountArray(institutions).slice(0, 18),
     latestReports,
     radar: await getRadar({ limit: 6 }),
+  };
+}
+
+export async function getOverview() {
+  const index = await ensureIndex();
+  const reports = index.reports.slice().sort((left, right) => compareDateDesc(left.date, right.date));
+  const reportOverviews = reports.slice(0, 12).map((report) => buildReportOverview(report, index.opinions));
+  const positiveOpinions = dedupeOpinions(index.opinions.filter((opinion) => opinion.types.includes('positive')))
+    .sort(compareOpinionsDesc)
+    .slice(0, 30);
+  return {
+    sourceDir: index.sourceDir,
+    indexedAt: index.indexedAt,
+    indexVersion: index.version,
+    reportCount: index.reports.length,
+    securityCount: index.entities.size,
+    opinionCount: index.opinions.length,
+    errorCount: index.errors.length,
+    qualityIssueCount: index.qualityIssues.length,
+    latestDate: reports[0]?.date,
+    positiveOpinions,
+    reportOverviews,
+  };
+}
+
+export async function getReportOverview(reportId: string): Promise<ReportOverview | null> {
+  const index = await ensureIndex();
+  const report = index.reports.find((item) => item.id === reportId);
+  return report ? buildReportOverview(report, index.opinions) : null;
+}
+
+export async function getCompanyProfiles(query = ''): Promise<CompanyProfile[]> {
+  const index = await ensureIndex();
+  const normalized = normalizeText(query);
+  const matchingEntities = [...index.entities.values()].filter((entity) => {
+    if (!normalized) return true;
+    return [entity.code ?? '', entity.displayName, ...entity.aliases]
+      .some((value) => normalizeText(value).includes(normalized));
+  });
+
+  return matchingEntities.map((security) => {
+    const opinions = dedupeOpinions(index.opinions.filter((opinion) => opinion.security.key === security.key))
+      .sort(compareOpinionsDesc);
+    return {
+      security,
+      firstMention: opinions.at(-1)?.reportDate ?? null,
+      latestMention: opinions[0]?.reportDate ?? null,
+      latestRating: opinions.find((opinion) => opinion.rating)?.rating ?? null,
+      latestTargetPrice: opinions.find((opinion) => opinion.targetPrice)?.targetPrice ?? null,
+      institutions: [...new Set(opinions.map((opinion) => opinion.institution))].sort(),
+      opinions,
+      catalysts: opinions.filter((opinion) => opinion.types.includes('catalyst')),
+      risks: opinions.filter((opinion) => opinion.types.includes('risk')),
+    };
+  }).sort((left, right) =>
+    (right.latestMention ?? '').localeCompare(left.latestMention ?? '') ||
+    left.security.displayName.localeCompare(right.security.displayName),
+  );
+}
+
+export async function getDataQuality() {
+  const index = await ensureIndex();
+  return {
+    issueCount: index.qualityIssues.length + index.errors.length,
+    parseErrors: index.errors,
+    issues: index.qualityIssues,
   };
 }
 
@@ -422,6 +493,55 @@ export async function exportData(type: string, query?: string) {
 
 function getReportSummaries(reports: ReportDocument[]): ReportSummary[] {
   return reports.map((report) => toReportSummary(report, state.mentions));
+}
+
+function buildReportOverview(report: ReportDocument, opinions: OpinionRecord[]): ReportOverview {
+  const reportOpinions = dedupeOpinions(opinions.filter((opinion) => opinion.reportId === report.id));
+  const securities = [...new Map(reportOpinions.map((opinion) => [opinion.security.key, opinion.security])).values()];
+  return {
+    reportId: report.id,
+    date: report.date,
+    title: report.title,
+    institutions: [...new Set(reportOpinions.map((opinion) => opinion.institution))],
+    opinions: reportOpinions,
+    securities,
+    positiveCount: reportOpinions.filter((opinion) => opinion.types.includes('positive')).length,
+    ratingChangeCount: reportOpinions.filter((opinion) => opinion.types.includes('rating-change')).length,
+    targetPriceChangeCount: reportOpinions.filter((opinion) => opinion.types.includes('target-price-change')).length,
+    riskCount: reportOpinions.filter((opinion) => opinion.types.includes('risk')).length,
+    catalystCount: reportOpinions.filter((opinion) => opinion.types.includes('catalyst')).length,
+  };
+}
+
+function dedupeOpinions(opinions: OpinionRecord[]): OpinionRecord[] {
+  const grouped = new Map<string, OpinionRecord>();
+  for (const opinion of opinions) {
+    const key = `${opinion.reportId}|${opinion.institution}|${opinion.security.key}`;
+    const current = grouped.get(key);
+    if (!current) {
+      grouped.set(key, opinion);
+      continue;
+    }
+    grouped.set(key, {
+      ...current,
+      rating: current.rating ?? opinion.rating,
+      rawRating: current.rawRating ?? opinion.rawRating,
+      action: current.action ?? opinion.action,
+      targetPrice: current.targetPrice ?? opinion.targetPrice,
+      currentPrice: current.currentPrice ?? opinion.currentPrice,
+      types: [...new Set([...current.types, ...opinion.types])],
+      evidence: [...current.evidence, ...opinion.evidence],
+      security: {
+        ...current.security,
+        aliases: [...new Set([...current.security.aliases, ...opinion.security.aliases])],
+      },
+    });
+  }
+  return [...grouped.values()];
+}
+
+function compareOpinionsDesc(left: OpinionRecord, right: OpinionRecord): number {
+  return compareDateDesc(left.reportDate, right.reportDate) || left.id.localeCompare(right.id);
 }
 
 function sortReportsDesc(reports: ReportDocument[]): ReportDocument[] {

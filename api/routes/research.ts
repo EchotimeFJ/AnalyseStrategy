@@ -1,11 +1,15 @@
-import { Router, type Request, type Response } from 'express';
+import { Router, type Request, type RequestHandler, type Response } from 'express';
 import {
   diffReportChanges,
   ensureIndex,
   exportData,
   getInstitutionView,
+  getCompanyProfiles,
+  getDataQuality,
+  getOverview,
   getRadar,
   getReportById,
+  getReportOverview,
   getReports,
   getSummary,
   getTargetProfile,
@@ -25,11 +29,15 @@ import { pullStrategyRepository } from '../services/gitUpdater.js';
 
 const router = Router();
 
-router.get('/summary', async (_req: Request, res: Response): Promise<void> => {
-  res.json({ success: true, data: await getSummary() });
-});
+router.get('/overview', asyncRoute(async (_req: Request, res: Response): Promise<void> => {
+  res.json({ success: true, data: await getOverview() });
+}));
 
-router.get('/reports', async (req: Request, res: Response): Promise<void> => {
+router.get('/summary', asyncRoute(async (_req: Request, res: Response): Promise<void> => {
+  res.json({ success: true, data: await getSummary() });
+}));
+
+router.get('/reports', asyncRoute(async (req: Request, res: Response): Promise<void> => {
   res.json({
     success: true,
     data: await getReports({
@@ -37,18 +45,35 @@ router.get('/reports', async (req: Request, res: Response): Promise<void> => {
       institution: asString(req.query.institution),
     }),
   });
-});
+}));
 
-router.get('/reports/:id', async (req: Request, res: Response): Promise<void> => {
+router.get('/reports/:id', asyncRoute(async (req: Request, res: Response): Promise<void> => {
   const report = await getReportById(req.params.id);
   if (!report) {
     res.status(404).json({ success: false, error: '报告不存在' });
     return;
   }
   res.json({ success: true, data: report });
-});
+}));
 
-router.get('/search', async (req: Request, res: Response): Promise<void> => {
+router.get('/reports/:id/overview', asyncRoute(async (req: Request, res: Response): Promise<void> => {
+  const overview = await getReportOverview(req.params.id);
+  if (!overview) {
+    res.status(404).json({ success: false, error: { code: 'REPORT_NOT_FOUND', message: '报告不存在' } });
+    return;
+  }
+  res.json({ success: true, data: overview });
+}));
+
+router.get('/companies', asyncRoute(async (req: Request, res: Response): Promise<void> => {
+  res.json({ success: true, data: await getCompanyProfiles(asString(req.query.q) ?? '') });
+}));
+
+router.get('/data-quality', asyncRoute(async (_req: Request, res: Response): Promise<void> => {
+  res.json({ success: true, data: await getDataQuality() });
+}));
+
+router.get('/search', asyncRoute(async (req: Request, res: Response): Promise<void> => {
   res.json({
     success: true,
     data: await searchReports({
@@ -59,18 +84,18 @@ router.get('/search', async (req: Request, res: Response): Promise<void> => {
       mode: asString(req.query.mode),
     }),
   });
-});
+}));
 
-router.get('/targets', async (req: Request, res: Response): Promise<void> => {
+router.get('/targets', asyncRoute(async (req: Request, res: Response): Promise<void> => {
   const query = asString(req.query.q);
   if (!query) {
     res.json({ success: true, data: null });
     return;
   }
   res.json({ success: true, data: await getTargetProfile(query) });
-});
+}));
 
-router.get('/radar', async (req: Request, res: Response): Promise<void> => {
+router.get('/radar', asyncRoute(async (req: Request, res: Response): Promise<void> => {
   res.json({
     success: true,
     data: await getRadar({
@@ -78,9 +103,9 @@ router.get('/radar', async (req: Request, res: Response): Promise<void> => {
       to: asString(req.query.to),
     }),
   });
-});
+}));
 
-router.get('/institutions', async (req: Request, res: Response): Promise<void> => {
+router.get('/institutions', asyncRoute(async (req: Request, res: Response): Promise<void> => {
   res.json({
     success: true,
     data: await getInstitutionView({
@@ -88,9 +113,9 @@ router.get('/institutions', async (req: Request, res: Response): Promise<void> =
       institution: asString(req.query.institution),
     }),
   });
-});
+}));
 
-router.get('/watchlist', async (_req: Request, res: Response): Promise<void> => {
+router.get('/watchlist', asyncRoute(async (_req: Request, res: Response): Promise<void> => {
   const config = await readUserConfig();
   res.json({
     success: true,
@@ -100,22 +125,22 @@ router.get('/watchlist', async (_req: Request, res: Response): Promise<void> => 
       items: await getWatchlistView(config.watchlist),
     },
   });
-});
+}));
 
-router.post('/watchlist', async (req: Request, res: Response): Promise<void> => {
+router.post('/watchlist', asyncRoute(async (req: Request, res: Response): Promise<void> => {
   const config = await addWatchItem({
     name: String(req.body.name ?? ''),
     aliases: Array.isArray(req.body.aliases) ? req.body.aliases : [],
     note: req.body.note,
   });
   res.json({ success: true, data: config });
-});
+}));
 
-router.delete('/watchlist/:id', async (req: Request, res: Response): Promise<void> => {
+router.delete('/watchlist/:id', asyncRoute(async (req: Request, res: Response): Promise<void> => {
   res.json({ success: true, data: await removeWatchItem(req.params.id) });
-});
+}));
 
-router.post('/aliases', async (req: Request, res: Response): Promise<void> => {
+router.post('/aliases', asyncRoute(async (req: Request, res: Response): Promise<void> => {
   res.json({
     success: true,
     data: await addAlias({
@@ -123,23 +148,23 @@ router.post('/aliases', async (req: Request, res: Response): Promise<void> => {
       aliases: Array.isArray(req.body.aliases) ? req.body.aliases : [],
     }),
   });
-});
+}));
 
-router.get('/export', async (req: Request, res: Response): Promise<void> => {
+router.get('/export', asyncRoute(async (req: Request, res: Response): Promise<void> => {
   const type = asString(req.query.type) ?? 'summary';
   const q = asString(req.query.q);
   const content = await exportData(type, q);
   const isCsv = type === 'target' || type === 'search';
   res.setHeader('Content-Type', isCsv ? 'text/csv; charset=utf-8' : 'application/json; charset=utf-8');
   res.send(content);
-});
+}));
 
-router.get('/index', async (_req: Request, res: Response): Promise<void> => {
+router.get('/index', asyncRoute(async (_req: Request, res: Response): Promise<void> => {
   const index = await ensureIndex();
   res.json({ success: true, data: toIndexStatus(index) });
-});
+}));
 
-router.post('/reindex', async (_req: Request, res: Response): Promise<void> => {
+router.post('/reindex', asyncRoute(async (_req: Request, res: Response): Promise<void> => {
   const previous = await ensureIndex();
   const index = await rebuildIndex();
   const reportChanges = diffReportChanges(previous, index);
@@ -147,9 +172,9 @@ router.post('/reindex', async (_req: Request, res: Response): Promise<void> => {
     success: true,
     data: toIndexStatus(index, reportChanges),
   });
-});
+}));
 
-router.post('/update-strategy', async (_req: Request, res: Response): Promise<void> => {
+router.post('/update-strategy', asyncRoute(async (_req: Request, res: Response): Promise<void> => {
   const previous = await ensureIndex();
   const pull = await pullStrategyRepository();
   if (!pull.success) {
@@ -166,7 +191,13 @@ router.post('/update-strategy', async (_req: Request, res: Response): Promise<vo
       index: toIndexStatus(index, reportChanges),
     },
   });
-});
+}));
+
+function asyncRoute(handler: (req: Request, res: Response) => Promise<void>): RequestHandler {
+  return (req, res, next) => {
+    void handler(req, res).catch(next);
+  };
+}
 
 function toIndexStatus(index: IndexState, reportChanges?: ReportChangeSet) {
   return {
