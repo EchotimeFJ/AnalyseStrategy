@@ -2,10 +2,10 @@ import assert from 'node:assert/strict';
 import { buildReportFromMarkdown } from '../api/services/reportParser';
 import { extractOpinions } from '../api/services/opinionExtractor';
 import { createOpenAiCompatibleProvider } from '../api/services/aiProvider';
-import { createAiService } from '../api/services/aiService';
+import { buildAiCacheKey, createAiService } from '../api/services/aiService';
 
 const config = {
-  providerName: 'Mock', baseUrl: 'https://mock.example/v1', model: 'mock-model', apiKey: 'sk-secret',
+  providerId: 'custom' as const, providerName: 'Mock', baseUrl: 'https://mock.example/v1', model: 'mock-model', apiKey: 'sk-secret',
   timeoutMs: 5_000, dailyTokenBudget: 100_000, maxConcurrency: 2,
 };
 let capturedAuthorization = '';
@@ -36,6 +36,12 @@ let answer = '';
 for await (const delta of prepared.stream) answer += delta;
 assert.equal(answer, '有来源的回答');
 assert.equal(capturedAuthorization, 'Bearer sk-secret');
+
+assert.notEqual(
+  buildAiCacheKey('v1', config, '同一个问题', {}),
+  buildAiCacheKey('v1', { ...config, providerId: 'openrouter', baseUrl: 'https://openrouter.ai/api/v1' }, '同一个问题', {}),
+  '切换服务商后不能命中旧服务商的回答缓存',
+);
 
 const unconfigured = createAiService({
   configStore: { resolve: async () => null, getPublic: async () => ({ configured: false }) },

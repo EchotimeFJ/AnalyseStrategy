@@ -7,6 +7,19 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta name="description" content="机构日报速览、智能检索、公司研究与报告问答工作台" />
     <title>机构研究工作台</title>
+    <script>
+      (() => {
+        try {
+          const saved = localStorage.getItem('analyse-strategy-theme')
+          const theme = saved === 'light' || saved === 'dark'
+            ? saved
+            : matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light'
+          document.documentElement.classList.add(theme)
+        } catch {
+          document.documentElement.classList.add('light')
+        }
+      })()
+    </script>
     <script type="module">
       if (import.meta.hot?.on) {
         import.meta.hot.on('vite:error', (error) => {

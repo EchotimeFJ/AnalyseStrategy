@@ -2,8 +2,15 @@ import fs from 'node:fs/promises';
 import path from 'node:path';
 import { timingSafeEqual } from 'node:crypto';
 import { decryptSecret, encryptSecret, maskApiKey, type EncryptedValue } from './secretStore.js';
+import {
+  AI_PROVIDER_PRESETS,
+  getAiProviderPreset,
+  inferAiProviderId,
+  type AiProviderId,
+} from './aiProvider.js';
 
 export type AiConfigInput = {
+  providerId?: AiProviderId | string;
   providerName: string;
   baseUrl: string;
   model: string;
@@ -13,7 +20,7 @@ export type AiConfigInput = {
   maxConcurrency?: number;
 };
 
-export type ResolvedAiConfig = Required<AiConfigInput>;
+export type ResolvedAiConfig = Required<Omit<AiConfigInput, 'providerId'>> & { providerId: AiProviderId };
 
 type StoredAiConfig = Omit<ResolvedAiConfig, 'apiKey'> & {
   apiKeyEncrypted: EncryptedValue;
@@ -51,8 +58,12 @@ export function createAiConfigStore(options: AiConfigStoreOptions = {}) {
     const baseUrl = env.AI_BASE_URL || stored?.baseUrl || '';
     const model = env.AI_MODEL || stored?.model || '';
     if (!apiKey || !baseUrl || !model) return null;
+    const providerId = normalizeProviderId(
+      env.AI_PROVIDER_ID || stored?.providerId || inferAiProviderId(baseUrl, env.AI_PROVIDER_NAME || stored?.providerName),
+    );
     return {
-      providerName: env.AI_PROVIDER_NAME || stored?.providerName || 'OpenAI compatible',
+      providerId,
+      providerName: env.AI_PROVIDER_NAME || stored?.providerName || getAiProviderPreset(providerId).name,
       baseUrl,
       model,
       apiKey,
@@ -64,17 +75,20 @@ export function createAiConfigStore(options: AiConfigStoreOptions = {}) {
 
   async function getPublic() {
     const config = await resolve();
+    const defaultPreset = getAiProviderPreset('openai');
     return {
       configured: Boolean(config),
-      providerName: config?.providerName ?? '',
-      baseUrl: config?.baseUrl ?? '',
-      model: config?.model ?? '',
+      providerId: config?.providerId ?? defaultPreset.id,
+      providerName: config?.providerName ?? defaultPreset.name,
+      baseUrl: config?.baseUrl ?? defaultPreset.baseUrl,
+      model: config?.model ?? defaultPreset.defaultModel,
       apiKeyMask: config ? maskApiKey(config.apiKey) : '',
       timeoutMs: config?.timeoutMs ?? 45_000,
       dailyTokenBudget: config?.dailyTokenBudget ?? 500_000,
       maxConcurrency: config?.maxConcurrency ?? 2,
       canPersist: Boolean(secret),
       adminProtected: Boolean(adminToken),
+      providerPresets: AI_PROVIDER_PRESETS,
     };
   }
 
@@ -82,6 +96,7 @@ export function createAiConfigStore(options: AiConfigStoreOptions = {}) {
     const candidate = await preview(input, token);
     if (!secret) throw new Error('AI_CONFIG_SECRET 未配置，不能持久化 API Key');
     const stored: StoredAiConfig = {
+      providerId: candidate.providerId,
       providerName: candidate.providerName,
       baseUrl: candidate.baseUrl,
       model: candidate.model,
@@ -99,13 +114,19 @@ export function createAiConfigStore(options: AiConfigStoreOptions = {}) {
   async function preview(input: AiConfigInput, token: string): Promise<ResolvedAiConfig> {
     assertAdminToken(token, adminToken);
     const existing = await resolve();
-    const apiKey = input.apiKey?.trim() || existing?.apiKey || '';
+    const providerId = normalizeProviderId(input.providerId || inferAiProviderId(input.baseUrl, input.providerName));
+    const preset = getAiProviderPreset(providerId);
+    const providerChanged = Boolean(existing && existing.providerId !== providerId);
+    const apiKey = input.apiKey?.trim() || (!providerChanged ? existing?.apiKey : '') || '';
     if (!apiKey) throw new Error('请填写 API Key');
-    const model = input.model.trim();
+    const model = input.model.trim() || preset.defaultModel;
     if (!model) throw new Error('请填写模型名称');
+    const baseUrl = input.baseUrl.trim() || preset.baseUrl;
+    if (!baseUrl) throw new Error('请填写 API 基础地址');
     return {
-      providerName: input.providerName.trim() || 'OpenAI compatible',
-      baseUrl: normalizeBaseUrl(input.baseUrl),
+      providerId,
+      providerName: providerId === 'custom' ? input.providerName.trim() || preset.name : preset.name,
+      baseUrl: normalizeBaseUrl(baseUrl),
       model,
       apiKey,
       timeoutMs: numberValue(input.timeoutMs, undefined, 45_000, 3_000, 180_000),
@@ -115,6 +136,12 @@ export function createAiConfigStore(options: AiConfigStoreOptions = {}) {
   }
 
   return { getPublic, resolve, preview, save };
+}
+
+function normalizeProviderId(value: string): AiProviderId {
+  return AI_PROVIDER_PRESETS.some((provider) => provider.id === value)
+    ? value as AiProviderId
+    : 'custom';
 }
 
 export const aiConfigStore = createAiConfigStore();

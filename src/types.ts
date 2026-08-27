@@ -308,6 +308,7 @@ export type CompanyProfile = {
 
 export type AiStatus = {
   configured: boolean;
+  providerId: 'openai' | 'deepseek' | 'mimo' | 'openrouter' | 'custom';
   providerName: string;
   baseUrl: string;
   model: string;
@@ -317,7 +318,16 @@ export type AiStatus = {
   maxConcurrency: number;
   canPersist: boolean;
   adminProtected: boolean;
+  providerPresets: AiProviderPreset[];
   usage: { estimatedTokens: number; active: number };
+};
+
+export type AiProviderPreset = {
+  id: AiStatus['providerId'];
+  name: string;
+  baseUrl: string;
+  defaultModel: string;
+  models: string[];
 };
 
 export type AiSource = {

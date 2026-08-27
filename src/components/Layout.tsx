@@ -6,10 +6,13 @@ import {
   BookOpenText,
   DatabaseZap,
   Home,
+  Moon,
   Search,
   Star,
+  Sun,
 } from 'lucide-react';
 import { primaryRoutes, routes, secondaryRoutes, type RouteId } from '@/lib/navigation';
+import { useTheme } from '@/hooks/useTheme';
 
 const icons: Record<RouteId, typeof Home> = {
   today: Home,
@@ -23,6 +26,7 @@ const icons: Record<RouteId, typeof Home> = {
 
 export function Layout({ children }: { children: ReactNode }) {
   const location = useLocation();
+  const { isDark, toggleTheme } = useTheme();
   const currentRoute = routes
     .slice()
     .sort((left, right) => right.path.length - left.path.length)
@@ -58,6 +62,10 @@ export function Layout({ children }: { children: ReactNode }) {
           })}
         </nav>
         <div className="border-t border-slate-100 pt-4 text-xs text-slate-400">
+          <button onClick={toggleTheme} className="mb-4 flex min-h-11 w-full items-center justify-between rounded-xl border border-slate-200 bg-slate-50 px-3 text-left text-slate-600 transition hover:border-blue-300" aria-label={isDark ? '切换到明亮模式' : '切换到黑暗模式'}>
+            <span className="flex items-center gap-2">{isDark ? <Moon className="h-4 w-4" /> : <Sun className="h-4 w-4" />}<span className="font-semibold">{isDark ? '黑暗主题' : '明亮主题'}</span></span>
+            <span>点击切换</span>
+          </button>
           <div>AnalyseStrategy v{__APP_VERSION__}</div>
           <div className="mt-1 font-mono">{__GIT_COMMIT__}</div>
           <div className="mt-1">报告内容仅作研究参考</div>
@@ -71,6 +79,9 @@ export function Layout({ children }: { children: ReactNode }) {
               <div className="font-semibold text-slate-950">{currentRoute?.label ?? '今日速览'}</div>
             </div>
             <div className="flex gap-2">
+              <button onClick={toggleTheme} className="flex min-h-10 min-w-10 items-center justify-center rounded-full bg-slate-100 text-slate-700" aria-label={isDark ? '切换到明亮模式' : '切换到黑暗模式'}>
+                {isDark ? <Moon className="h-4 w-4" /> : <Sun className="h-4 w-4" />}
+              </button>
               {secondaryRoutes.map((item) => (
                 <NavLink key={item.id} to={item.path} className="rounded-full bg-slate-100 px-3 py-2 text-xs font-medium text-slate-700">
                   {item.mobileLabel}

@@ -51,7 +51,7 @@ export function createAiService(options: AiServiceOptions = {}) {
     const index = await getIndex();
     const retrieval = retrieveResearch(question, request.scope, buildRetrievalChunks(index.reports, index.opinions));
     if (!retrieval.chunks.length) throw new Error('AI_NO_EVIDENCE:当前报告库没有找到足够相关的来源');
-    const cacheKey = JSON.stringify([index.version, config.model, question, request.scope]);
+    const cacheKey = buildAiCacheKey(index.version, config, question, request.scope);
     const cached = cache.get(cacheKey);
     const sources = retrieval.chunks.map((chunk) => ({
       id: chunk.id,
@@ -93,6 +93,15 @@ export function createAiService(options: AiServiceOptions = {}) {
 }
 
 export const aiService = createAiService();
+
+export function buildAiCacheKey(
+  indexVersion: string | undefined,
+  config: Pick<ResolvedAiConfig, 'providerId' | 'baseUrl' | 'model'>,
+  question: string,
+  scope: ResearchScope,
+) {
+  return JSON.stringify([indexVersion, config.providerId, config.baseUrl, config.model, question, scope]);
+}
 
 function buildMessages(question: string, chunks: ReturnType<typeof buildRetrievalChunks>) {
   const sources = chunks.map((chunk) =>

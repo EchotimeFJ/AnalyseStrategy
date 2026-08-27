@@ -45,7 +45,7 @@ export default function ResearchAssistant() {
             <section className={`rounded-2xl border p-4 ${status.data.configured ? 'border-emerald-200 bg-emerald-50' : 'border-amber-200 bg-amber-50'}`}>
               <div className="flex items-center justify-between gap-3"><Badge tone={status.data.configured ? 'green' : 'amber'}>{status.data.configured ? 'AI 已配置' : 'AI 未配置'}</Badge><button onClick={() => setConfigOpen(true)} className="min-h-10 min-w-10 rounded-full bg-white p-2.5" aria-label="配置研究助手"><Settings2 className="h-4 w-4" /></button></div>
               <div className="mt-3 text-sm font-semibold text-slate-900">{status.data.model || '等待配置模型'}</div>
-              <p className="mt-2 text-xs leading-5 text-slate-600">{status.data.configured ? `${status.data.providerName} · ${status.data.apiKeyMask}` : '基础研究功能完全可用；配置后再启用问答。'}</p>
+              <p className="mt-2 text-xs leading-5 text-slate-600">{status.data.configured ? `${status.data.providerName} 原生适配 · ${status.data.apiKeyMask}` : '支持 DeepSeek、MiMo、OpenRouter 与自定义兼容接口。'}</p>
             </section>
             <section className="rounded-2xl border border-slate-200 bg-white p-4">
               <div className="text-xs font-semibold text-slate-500">检索范围（可选）</div>

@@ -2,28 +2,106 @@ import type { ResolvedAiConfig } from './aiConfig.js';
 
 export type ProviderMessage = { role: 'system' | 'user' | 'assistant'; content: string };
 export type ProviderChatInput = { messages: ProviderMessage[]; maxTokens?: number };
+export type AiProviderId = 'openai' | 'deepseek' | 'mimo' | 'openrouter' | 'custom';
+export type AiProviderPreset = {
+  id: AiProviderId;
+  name: string;
+  baseUrl: string;
+  defaultModel: string;
+  models: string[];
+};
+
+export const AI_PROVIDER_PRESETS: AiProviderPreset[] = [
+  {
+    id: 'openai',
+    name: 'OpenAI',
+    baseUrl: 'https://api.openai.com/v1',
+    defaultModel: 'gpt-4.1-mini',
+    models: ['gpt-4.1-mini', 'gpt-4.1'],
+  },
+  {
+    id: 'deepseek',
+    name: 'DeepSeek',
+    baseUrl: 'https://api.deepseek.com',
+    defaultModel: 'deepseek-v4-pro',
+    models: ['deepseek-v4-pro', 'deepseek-v4-flash'],
+  },
+  {
+    id: 'mimo',
+    name: 'MiMo',
+    baseUrl: 'https://api.xiaomimimo.com/v1',
+    defaultModel: 'mimo-v2.5-pro',
+    models: ['mimo-v2.5-pro', 'mimo-v2.5'],
+  },
+  {
+    id: 'openrouter',
+    name: 'OpenRouter',
+    baseUrl: 'https://openrouter.ai/api/v1',
+    defaultModel: 'openrouter/auto',
+    models: ['openrouter/auto', 'openrouter/free'],
+  },
+  {
+    id: 'custom',
+    name: '自定义兼容接口',
+    baseUrl: '',
+    defaultModel: '',
+    models: [],
+  },
+];
 
 export interface AiProvider {
   test(config: ResolvedAiConfig, signal?: AbortSignal): Promise<void>;
   stream(input: ProviderChatInput, config: ResolvedAiConfig, signal: AbortSignal): AsyncIterable<string>;
 }
 
+export function getAiProviderPreset(value: string | undefined): AiProviderPreset {
+  return AI_PROVIDER_PRESETS.find((provider) => provider.id === value)
+    ?? AI_PROVIDER_PRESETS.find((provider) => provider.id === 'custom')!;
+}
+
+export function inferAiProviderId(baseUrl = '', providerName = ''): AiProviderId {
+  const value = `${baseUrl} ${providerName}`.toLowerCase();
+  if (value.includes('deepseek')) return 'deepseek';
+  if (value.includes('xiaomimimo') || value.includes('mimo')) return 'mimo';
+  if (value.includes('openrouter')) return 'openrouter';
+  if (value.includes('api.openai.com') || providerName.trim().toLowerCase() === 'openai') return 'openai';
+  return 'custom';
+}
+
 export function createOpenAiCompatibleProvider(fetchImpl: typeof fetch = fetch): AiProvider {
   async function request(input: ProviderChatInput, config: ResolvedAiConfig, signal: AbortSignal, stream: boolean) {
+    const providerId = config.providerId ?? inferAiProviderId(config.baseUrl, config.providerName);
+    const headers: Record<string, string> = {
+      'Content-Type': 'application/json',
+      Accept: stream ? 'text/event-stream' : 'application/json',
+    };
+    if (providerId === 'mimo') {
+      headers['api-key'] = config.apiKey;
+    } else {
+      headers.Authorization = `Bearer ${config.apiKey}`;
+    }
+    if (providerId === 'openrouter') {
+      headers['HTTP-Referer'] = 'https://fustar.top/analyse-strategy/';
+      headers['X-OpenRouter-Title'] = 'AnalyseStrategy';
+    }
+
+    const body: Record<string, unknown> = {
+      model: config.model,
+      messages: input.messages,
+      stream,
+      temperature: providerId === 'mimo' ? 1 : 0.2,
+    };
+    if (providerId === 'mimo') {
+      body.top_p = 0.95;
+      body.max_completion_tokens = input.maxTokens ?? 1200;
+    } else {
+      body.max_tokens = input.maxTokens ?? 1200;
+    }
+
     const response = await fetchImpl(chatUrl(config.baseUrl), {
       method: 'POST',
-      headers: {
-        Authorization: `Bearer ${config.apiKey}`,
-        'Content-Type': 'application/json',
-        Accept: stream ? 'text/event-stream' : 'application/json',
-      },
-      body: JSON.stringify({
-        model: config.model,
-        messages: input.messages,
-        stream,
-        temperature: 0.2,
-        max_tokens: input.maxTokens ?? 1200,
-      }),
+      headers,
+      body: JSON.stringify(body),
       signal,
     });
     if (!response.ok) {
