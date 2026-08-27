@@ -1,7 +1,7 @@
 {
-  "name": "trae-project",
+  "name": "analyse-strategy",
   "private": true,
-  "version": "0.1.0",
+  "version": "0.1.1",
   "type": "module",
   "scripts": {
     "client:dev": "vite",

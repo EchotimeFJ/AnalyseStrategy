@@ -81,7 +81,7 @@ AI_CONFIG_ADMIN_TOKEN=<网页修改全局配置时使用的管理令牌>
 git pull --ff-only
 ```
 
-在部分 Trae 沙箱环境中，网页服务进程可能无法写入相邻仓库的 `.git/FETCH_HEAD`。此时系统会使用 `git ls-remote` 对比本地 HEAD 与远端 HEAD：
+在部分受限沙箱环境中，网页服务进程可能无法写入相邻仓库的 `.git/FETCH_HEAD`。此时系统会使用 `git ls-remote` 对比本地 HEAD 与远端 HEAD：
 
 - 如果本地与远端一致，视为已是最新，并继续重建索引。
 - 如果远端已有新提交但沙箱禁止写入 `.git/FETCH_HEAD`，会返回明确错误，提示需要在有权限的终端执行 `git pull --ff-only`，或把 Strategy 目录加入沙箱允许路径。
