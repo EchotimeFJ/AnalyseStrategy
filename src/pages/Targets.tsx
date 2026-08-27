@@ -1,82 +1,36 @@
 import { FormEvent, useEffect, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
+import { Building2, Search } from 'lucide-react';
 import { apiGet, queryString } from '@/lib/api';
-import type { TargetProfile } from '@/types';
+import type { CompanyProfile, OpinionRecord } from '@/types';
 import { Layout, PageHeader } from '@/components/Layout';
 import { Badge, EmptyState, ErrorBlock, LoadingBlock, Panel, StatCard } from '@/components/ui';
-import { ChangeRow, MentionCard, SignalCard } from '@/components/SignalList';
-import { buildReportLink, targetMentionHighlightTerms } from '@/lib/reportLinks';
-
-const LAST_TARGET_QUERY_KEY = 'analyse-strategy:last-target-query';
-
-function readLastTargetQuery() {
-  if (typeof window === 'undefined') {
-    return '';
-  }
-
-  try {
-    return window.sessionStorage.getItem(LAST_TARGET_QUERY_KEY)?.trim() ?? '';
-  } catch {
-    return '';
-  }
-}
-
-function saveLastTargetQuery(value: string) {
-  if (typeof window === 'undefined') {
-    return;
-  }
-
-  try {
-    window.sessionStorage.setItem(LAST_TARGET_QUERY_KEY, value);
-  } catch {
-    // Session storage is a convenience cache; the query still works without it.
-  }
-}
-
-function clearLastTargetQuery() {
-  if (typeof window === 'undefined') {
-    return;
-  }
-
-  try {
-    window.sessionStorage.removeItem(LAST_TARGET_QUERY_KEY);
-  } catch {
-    // Ignore storage cleanup failures.
-  }
-}
+import { buildReportLink } from '@/lib/reportLinks';
 
 export default function Targets() {
-  const [params] = useSearchParams();
-  const [query, setQuery] = useState(() => params.get('q')?.trim() || readLastTargetQuery());
-  const [profile, setProfile] = useState<TargetProfile | null>(null);
+  const [params, setParams] = useSearchParams();
+  const [query, setQuery] = useState(params.get('q') ?? '');
+  const [profiles, setProfiles] = useState<CompanyProfile[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
   useEffect(() => {
-    const initialQuery = params.get('q')?.trim() || readLastTargetQuery();
-    if (initialQuery) {
-      setQuery(initialQuery);
-      void loadProfile(initialQuery);
-    }
-    // 只在首次进入页面时消费 URL/会话查询词，后续由表单控制。
+    const value = params.get('q');
+    if (value) void loadProfile(value);
+    // URL 是首页和搜索页跳转到公司研究的输入源。
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  async function loadProfile(value: string) {
+  async function loadProfile(value = query) {
     const nextQuery = value.trim();
-    if (!nextQuery) {
-      clearLastTargetQuery();
-      setProfile(null);
-      setError('');
-      return;
-    }
+    if (!nextQuery) return;
     setLoading(true);
     setError('');
     try {
-      const nextProfile = await apiGet<TargetProfile>(`/api/targets${queryString({ q: nextQuery })}`);
-      saveLastTargetQuery(nextQuery);
+      const data = await apiGet<CompanyProfile[]>(`/api/companies${queryString({ q: nextQuery })}`);
+      setProfiles(data);
       setQuery(nextQuery);
-      setProfile(nextProfile);
+      setParams({ q: nextQuery });
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : String(reason));
     } finally {
@@ -84,115 +38,71 @@ export default function Targets() {
     }
   }
 
-  async function submit(event?: FormEvent) {
-    event?.preventDefault();
-    await loadProfile(query);
+  function submit(event: FormEvent) {
+    event.preventDefault();
+    void loadProfile();
   }
 
+  const profile = profiles[0];
   return (
     <Layout>
-      <PageHeader
-        eyebrow="Target 360"
-        title="标的分析"
-        description="输入标的名称、英文名或代码，查看它在历史报告中被哪些机构提到过，评级和目标价如何变化。"
-      />
-      <Panel title="查询标的" eyebrow="Target query">
+      <PageHeader eyebrow="Company Research" title="公司研究" description="公司身份优先按上市代码归并，别名和报告中的不同写法会保留为可追溯证据。" />
+      <Panel title="查找公司" eyebrow="Company query">
         <form onSubmit={submit} className="flex flex-col gap-3 sm:flex-row">
-          <input
-            value={query}
-            onChange={(event) => setQuery(event.target.value)}
-            className="h-12 flex-1 rounded-2xl border border-slate-200 bg-white px-4 text-sm outline-none transition focus:border-amber-400"
-            placeholder="例如：英诺赛科 / 2577.HK / SpaceX / 中金公司"
-          />
-          <button className="h-12 rounded-2xl bg-slate-950 px-7 text-sm font-semibold text-white transition hover:bg-slate-800">分析</button>
+          <div className="relative flex-1"><Search className="absolute left-4 top-4 h-4 w-4 text-slate-400" /><input value={query} onChange={(event) => setQuery(event.target.value)} className="min-h-12 w-full rounded-xl border border-slate-200 bg-white pl-11 pr-4 text-sm outline-none focus:border-blue-400" placeholder="公司名称、别名或代码，例如 1768.HK" /></div>
+          <button className="min-h-12 rounded-xl bg-blue-600 px-7 text-sm font-semibold text-white transition hover:bg-blue-700">查看研究</button>
         </form>
       </Panel>
 
       <div className="mt-6 space-y-6">
-        {loading ? <LoadingBlock label="正在整理标的历史..." /> : null}
+        {loading ? <LoadingBlock label="正在归并公司历史观点…" /> : null}
         {error ? <ErrorBlock message={error} /> : null}
-        {profile ? (
-          <>
-            <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-              <StatCard label="标的" value={profile.canonicalName} hint={profile.aliases.slice(0, 4).join(' / ')} />
-              <StatCard label="历史提及" value={profile.mentions.length} hint={`${profile.firstMention ?? '-'} 至 ${profile.latestMention ?? '-'}`} />
-              <StatCard label="覆盖机构" value={profile.institutions.length} hint={profile.institutions.slice(0, 5).join('、')} />
-              <StatCard label="最新评级/目标价" value={profile.summary.latestRating ?? '-'} hint={profile.summary.latestTargetPrice ?? '暂无目标价'} />
-            </div>
-
-            <Panel title="观点变化摘要" eyebrow="Digest">
-              <div className="grid gap-4 xl:grid-cols-[1fr_1fr]">
-                <div className="rounded-2xl bg-slate-50 p-4 text-sm leading-7 text-slate-700">
-                  综合提示：{profile.summary.sentimentHint}。系统按原文提及和关键词抽取，建议点击原报告复核上下文。
-                </div>
-                <div className="flex flex-wrap gap-2">
-                  {profile.summary.ratingDistribution.map((item) => (
-                    <Badge key={item.name} tone="green">
-                      {item.name} {item.count}
-                    </Badge>
-                  ))}
-                </div>
-              </div>
-            </Panel>
-
-            <div className="grid gap-6 xl:grid-cols-[1fr_0.9fr]">
-              <Panel title="评级与目标价变化" eyebrow="Timeline">
-                <div className="space-y-3">
-                  {profile.ratingChanges.length ? (
-                    profile.ratingChanges.map((change, index) => (
-                      <ChangeRow key={`${change.reportId}-${change.date}-${change.institution}-${change.targetName}-${index}`} change={change} />
-                    ))
-                  ) : (
-                    <EmptyState title="暂无可识别变化" description="该标的可能只有单次提及，或原文没有明确评级/目标价。" />
-                  )}
-                </div>
-              </Panel>
-              <Panel title="机构最新观点矩阵" eyebrow="Institution matrix">
-                <div className="space-y-3">
-                  {(profile.matrix[0]?.items ?? []).map((item) => (
-                    <Link
-                      key={`${item.institution}-${item.reportId}`}
-                      to={buildReportLink({
-                        reportId: item.reportId,
-                        lineNumber: item.lineNumber,
-                        highlightTerms: targetMentionHighlightTerms(item),
-                      })}
-                      className="block rounded-2xl border border-slate-200 bg-white/70 p-4 transition hover:border-amber-300 hover:shadow-md"
-                    >
-                      <div className="flex flex-wrap gap-2">
-                        <Badge tone="blue">{item.institution}</Badge>
-                        <Badge tone="amber">{item.date}</Badge>
-                        {item.rating ? <Badge tone="green">{item.rating}</Badge> : null}
-                        {item.targetPrice ? <Badge tone="slate">{item.targetPrice}</Badge> : null}
-                      </div>
-                      <p className="mt-3 line-clamp-3 text-sm leading-6 text-slate-600">{item.excerpt}</p>
-                    </Link>
-                  ))}
-                </div>
-              </Panel>
-            </div>
-
-            <div className="grid gap-6 xl:grid-cols-2">
-              <Panel title="历史提及" eyebrow="Mentions">
-                <div className="space-y-3">
-                  {profile.mentions.slice(0, 12).map((mention, index) => (
-                    <MentionCard key={`${mention.reportId}-${mention.lineNumber}-${mention.institution}-${index}`} mention={mention} />
-                  ))}
-                </div>
-              </Panel>
-              <Panel title="催化剂与风险" eyebrow="Signals">
-                <div className="space-y-3">
-                  {profile.signals.slice(0, 12).map((signal, index) => (
-                    <SignalCard key={`${signal.reportId}-${signal.lineNumber}-${signal.type}-${index}`} item={signal} />
-                  ))}
-                </div>
-              </Panel>
-            </div>
-          </>
-        ) : (
-          <EmptyState title="输入标的开始分析" description="输入名称、英文名或代码后点击分析；系统会在本次浏览会话中保留上一次分析结果。" />
-        )}
+        {!loading && !error && profiles.length > 1 ? (
+          <Panel title="找到多个匹配公司" eyebrow="Matches"><div className="flex flex-wrap gap-2">{profiles.slice(0, 10).map((item) => <button key={item.security.key} onClick={() => { setProfiles([item]); setQuery(item.security.code ?? item.security.displayName); }} className="min-h-10 rounded-full border border-slate-200 px-4 text-sm hover:border-blue-300">{item.security.displayName} {item.security.code}</button>)}</div></Panel>
+        ) : null}
+        {profile ? <CompanyProfileView profile={profile} /> : !loading && !error ? <EmptyState title="输入公司开始研究" description="输入名称、历史别名或上市代码，查看机构观点时间线。" /> : null}
       </div>
     </Layout>
   );
+}
+
+function CompanyProfileView({ profile }: { profile: CompanyProfile }) {
+  return (
+    <>
+      <section className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm sm:p-6">
+        <div className="flex flex-col justify-between gap-5 md:flex-row md:items-start">
+          <div><div className="flex items-center gap-2 text-sm font-semibold text-blue-700"><Building2 className="h-4 w-4" />稳定公司档案</div><h2 className="mt-3 text-3xl font-semibold text-slate-950">{profile.security.displayName}</h2><div className="mt-2 text-sm text-slate-500">{profile.security.code ?? '未识别上市代码'}</div></div>
+          <div className="flex flex-wrap gap-2">{profile.security.aliases.slice(0, 8).map((alias) => <Badge key={alias} tone="slate">{alias}</Badge>)}</div>
+        </div>
+      </section>
+      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+        <StatCard label="最新评级" value={profile.latestRating ?? '—'} hint={`更新于 ${profile.latestMention ?? '-'}`} />
+        <StatCard label="最新目标价" value={profile.latestTargetPrice ?? '—'} hint="保留报告原始币种与单位" />
+        <StatCard label="覆盖机构" value={profile.institutions.length} hint={profile.institutions.slice(0, 5).join('、')} />
+        <StatCard label="历史观点" value={profile.opinions.length} hint={`${profile.firstMention ?? '-'} 至 ${profile.latestMention ?? '-'}`} />
+      </div>
+      <div className="grid gap-6 xl:grid-cols-[1.1fr_0.9fr]">
+        <Panel title="观点时间线" eyebrow="Opinion history"><div className="space-y-3">{profile.opinions.map((opinion) => <OpinionHistory key={opinion.id} opinion={opinion} />)}</div></Panel>
+        <Panel title="机构最新观点" eyebrow="Institution matrix"><div className="space-y-3">{latestByInstitution(profile.opinions).map((opinion) => <OpinionHistory key={opinion.id} opinion={opinion} compact />)}</div></Panel>
+      </div>
+      <div className="grid gap-6 xl:grid-cols-2">
+        <Panel title="催化剂" eyebrow="Catalysts">{profile.catalysts.length ? <div className="space-y-3">{profile.catalysts.map((item) => <OpinionHistory key={item.id} opinion={item} compact />)}</div> : <EmptyState title="暂无明确催化剂" />}</Panel>
+        <Panel title="风险" eyebrow="Risks">{profile.risks.length ? <div className="space-y-3">{profile.risks.map((item) => <OpinionHistory key={item.id} opinion={item} compact />)}</div> : <EmptyState title="暂无明确风险" />}</Panel>
+      </div>
+    </>
+  );
+}
+
+function OpinionHistory({ opinion, compact = false }: { opinion: OpinionRecord; compact?: boolean }) {
+  const source = opinion.evidence[0];
+  return (
+    <Link to={buildReportLink({ reportId: opinion.reportId, lineNumber: source?.lineNumber, highlightTerms: [opinion.security.displayName] })} className="block rounded-2xl border border-slate-200 p-4 transition hover:border-blue-300 hover:shadow-sm">
+      <div className="flex flex-wrap gap-2"><Badge tone="amber">{opinion.reportDate}</Badge><Badge tone="blue">{opinion.institution}</Badge>{opinion.rating ? <Badge tone={opinion.types.includes('positive') ? 'green' : 'slate'}>{opinion.rating}</Badge> : null}{opinion.targetPrice ? <Badge tone="slate">{opinion.targetPrice}</Badge> : null}</div>
+      {!compact ? <p className="mt-3 line-clamp-3 text-sm leading-6 text-slate-600">{source?.excerpt}</p> : null}
+    </Link>
+  );
+}
+
+function latestByInstitution(opinions: OpinionRecord[]) {
+  return [...new Map(opinions.map((opinion) => [opinion.institution, opinion])).values()];
 }

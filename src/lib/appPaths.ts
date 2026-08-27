@@ -5,6 +5,8 @@ export const APP_ROUTES = {
   dashboard: '/',
   reports: '/reports',
   search: '/search',
+  company: '/company',
+  assistant: '/assistant',
   targets: '/targets',
   radar: '/radar',
   watchlist: '/watchlist',

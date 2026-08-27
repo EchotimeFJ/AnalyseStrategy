@@ -16,35 +16,56 @@ export function resolveApiPath(path: string, basePath = getDefaultBasePath()): s
   return `${normalizedBasePath}${normalizedPath}`;
 }
 
-export async function apiGet<T>(path: string): Promise<T> {
-  const response = await fetch(resolveApiPath(path));
-  const payload = (await response.json()) as ApiResponse<T>;
-  if (!response.ok || !payload.success) {
-    throw new Error(payload.error || `请求失败: ${path}`);
-  }
-  return payload.data;
+export async function apiGet<T>(path: string, signal?: AbortSignal): Promise<T> {
+  return request<T>(path, { signal });
 }
 
-export async function apiPost<T>(path: string, body?: unknown): Promise<T> {
-  const response = await fetch(resolveApiPath(path), {
+export async function apiPost<T>(path: string, body?: unknown, signal?: AbortSignal): Promise<T> {
+  return request<T>(path, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(body ?? {}),
+    signal,
   });
-  const payload = (await response.json()) as ApiResponse<T>;
-  if (!response.ok || !payload.success) {
-    throw new Error(payload.error || `请求失败: ${path}`);
+}
+
+export async function apiDelete<T>(path: string): Promise<T> {
+  return request<T>(path, { method: 'DELETE' });
+}
+
+export async function apiPut<T>(path: string, body?: unknown, headers?: Record<string, string>): Promise<T> {
+  return request<T>(path, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json', ...headers },
+    body: JSON.stringify(body ?? {}),
+  });
+}
+
+async function request<T>(path: string, init?: RequestInit): Promise<T> {
+  const response = await fetch(resolveApiPath(path), init);
+  const text = await response.text();
+  let payload: ApiResponse<T> | null = null;
+  try {
+    payload = text ? JSON.parse(text) as ApiResponse<T> : null;
+  } catch {
+    payload = null;
+  }
+  if (!response.ok || !payload?.success) {
+    throw new Error(getApiErrorMessage(payload, response.status));
   }
   return payload.data;
 }
 
-export async function apiDelete<T>(path: string): Promise<T> {
-  const response = await fetch(resolveApiPath(path), { method: 'DELETE' });
-  const payload = (await response.json()) as ApiResponse<T>;
-  if (!response.ok || !payload.success) {
-    throw new Error(payload.error || `请求失败: ${path}`);
+export function getApiErrorMessage(payload: unknown, status: number): string {
+  if (payload && typeof payload === 'object' && 'error' in payload) {
+    const error = (payload as { error?: unknown }).error;
+    if (typeof error === 'string' && error.trim()) return error;
+    if (error && typeof error === 'object' && 'message' in error) {
+      const message = (error as { message?: unknown }).message;
+      if (typeof message === 'string' && message.trim()) return message;
+    }
   }
-  return payload.data;
+  return `服务返回异常（${status}）`;
 }
 
 export function queryString(params: Record<string, string | undefined>) {

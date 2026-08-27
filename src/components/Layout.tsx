@@ -1,58 +1,53 @@
 import type { ReactNode } from 'react';
-import { NavLink } from 'react-router-dom';
+import { NavLink, useLocation } from 'react-router-dom';
 import {
+  Bot,
   Binoculars,
   BookOpenText,
   DatabaseZap,
-  LayoutDashboard,
-  Radar,
+  Home,
   Search,
   Star,
 } from 'lucide-react';
-import { APP_ROUTES } from '@/lib/appPaths';
+import { primaryRoutes, routeById, routes, secondaryRoutes, type RouteId } from '@/lib/navigation';
 
-const navItems = [
-  { to: APP_ROUTES.dashboard, label: '总览', icon: LayoutDashboard },
-  { to: APP_ROUTES.reports, label: '报告阅读', icon: BookOpenText },
-  { to: APP_ROUTES.search, label: '精确搜索', icon: Search },
-  { to: APP_ROUTES.targets, label: '标的分析', icon: Binoculars },
-  { to: APP_ROUTES.radar, label: '研究雷达', icon: Radar },
-  { to: APP_ROUTES.watchlist, label: '关注列表', icon: Star },
-  { to: APP_ROUTES.manage, label: '索引管理', icon: DatabaseZap },
-];
-
-const mobilePrimaryNavPaths = new Set<string>([
-  APP_ROUTES.dashboard,
-  APP_ROUTES.reports,
-  APP_ROUTES.search,
-  APP_ROUTES.targets,
-  APP_ROUTES.manage,
-]);
-
-const mobilePrimaryNav = navItems.filter((item) => mobilePrimaryNavPaths.has(item.to));
+const icons: Record<RouteId, typeof Home> = {
+  today: Home,
+  reports: BookOpenText,
+  search: Search,
+  company: Binoculars,
+  assistant: Bot,
+  watchlist: Star,
+  data: DatabaseZap,
+};
 
 export function Layout({ children }: { children: ReactNode }) {
+  const location = useLocation();
+  const currentRoute = routes
+    .slice()
+    .sort((left, right) => right.path.length - left.path.length)
+    .find((route) => route.path === '/' ? location.pathname === '/' : location.pathname.startsWith(route.path));
   return (
-    <div className="min-h-screen bg-[#f3eee4] text-slate-900">
-      <div className="fixed inset-0 -z-10 bg-[radial-gradient(circle_at_20%_10%,rgba(196,135,58,0.18),transparent_28%),radial-gradient(circle_at_88%_18%,rgba(45,156,219,0.16),transparent_24%),linear-gradient(135deg,#f8f3ea,#eef4f6_55%,#f5efe3)]" />
-      <aside className="fixed left-0 top-0 hidden h-screen w-72 border-r border-white/50 bg-[#102033]/95 p-5 text-white shadow-2xl lg:block">
-        <div className="rounded-[28px] border border-white/10 bg-white/8 p-5">
-          <div className="text-[11px] font-semibold uppercase tracking-[0.28em] text-amber-200">Research Desk</div>
-          <h1 className="mt-3 text-2xl font-semibold leading-tight">机构日报分析平台</h1>
-          <p className="mt-3 text-sm leading-6 text-slate-300">本地 Markdown 报告库、标的追踪与研究雷达。</p>
+    <div className="min-h-screen bg-[var(--canvas)] text-[var(--text)]">
+      <div className="fixed inset-0 -z-10 bg-[radial-gradient(circle_at_12%_8%,rgba(37,99,235,0.08),transparent_30%),radial-gradient(circle_at_92%_14%,rgba(16,185,129,0.07),transparent_25%)]" />
+      <aside className="fixed left-0 top-0 hidden h-screen w-64 border-r border-slate-200 bg-white/95 p-4 shadow-sm backdrop-blur lg:flex lg:flex-col">
+        <div className="rounded-2xl bg-slate-950 p-4 text-white">
+          <div className="text-[10px] font-semibold uppercase tracking-[0.24em] text-sky-300">Research Workspace</div>
+          <h1 className="mt-2 text-lg font-semibold leading-tight">机构研究工作台</h1>
+          <p className="mt-2 text-xs leading-5 text-slate-300">从日报速览到公司观点追踪</p>
         </div>
-        <nav className="mt-6 space-y-1">
-          {navItems.map((item) => {
-            const Icon = item.icon;
+        <nav className="mt-5 flex-1 space-y-1">
+          {routes.map((item, index) => {
+            const Icon = icons[item.id];
             return (
               <NavLink
-                key={item.to}
-                to={item.to}
+                key={item.id}
+                to={item.path}
                 className={({ isActive }) =>
-                  `flex items-center gap-3 rounded-2xl px-4 py-3 text-sm transition ${
+                  `flex min-h-11 items-center gap-3 rounded-xl px-3 py-2.5 text-sm transition ${index === primaryRoutes.length ? 'mt-4 border-t border-slate-100 pt-4' : ''} ${
                     isActive
-                      ? 'bg-amber-200 text-slate-950 shadow-lg shadow-amber-950/10'
-                      : 'text-slate-300 hover:bg-white/10 hover:text-white'
+                      ? 'bg-slate-950 font-semibold text-white shadow-sm'
+                      : 'text-slate-600 hover:bg-slate-100 hover:text-slate-950'
                   }`
                 }
               >
@@ -62,41 +57,54 @@ export function Layout({ children }: { children: ReactNode }) {
             );
           })}
         </nav>
+        <div className="border-t border-slate-100 pt-4 text-xs text-slate-400">
+          <div>AnalyseStrategy v0.1.0</div>
+          <div className="mt-1">报告内容仅作研究参考</div>
+        </div>
       </aside>
-      <div className="lg:ml-72">
-        <header className="sticky top-0 z-20 border-b border-white/60 bg-[#f7f1e8]/80 px-4 py-3 backdrop-blur lg:hidden">
-          <div className="font-semibold">机构日报分析平台</div>
-          <div className="mt-3 flex gap-2 overflow-x-auto pb-1">
-            {navItems.map((item) => (
+      <div className="lg:ml-64">
+        <header className="sticky top-0 z-20 border-b border-slate-200 bg-white/90 px-4 py-3 backdrop-blur lg:hidden">
+          <div className="flex items-center justify-between gap-3">
+            <div>
+              <div className="text-xs text-slate-500">机构研究工作台</div>
+              <div className="font-semibold text-slate-950">{currentRoute?.label ?? '今日速览'}</div>
+            </div>
+            <div className="flex gap-2">
+              {secondaryRoutes.map((item) => (
+                <NavLink key={item.id} to={item.path} className="rounded-full bg-slate-100 px-3 py-2 text-xs font-medium text-slate-700">
+                  {item.mobileLabel}
+                </NavLink>
+              ))}
+            </div>
+          </div>
+          <div className="sr-only">
+            {routes.map((item) => (
               <NavLink
-                key={item.to}
-                to={item.to}
-                className={({ isActive }) =>
-                  `whitespace-nowrap rounded-full px-3 py-1.5 text-xs ${isActive ? 'bg-slate-950 text-white' : 'bg-white text-slate-600'}`
-                }
+                key={item.id}
+                to={item.path}
               >
                 {item.label}
               </NavLink>
             ))}
           </div>
         </header>
-        <main className="mx-auto max-w-7xl px-3 pb-28 pt-5 sm:px-6 lg:px-8 lg:py-10">{children}</main>
+        <main className="page-enter mx-auto max-w-[1440px] px-3 pb-28 pt-5 sm:px-6 lg:px-8 lg:py-8">{children}</main>
       </div>
-      <nav className="fixed inset-x-3 bottom-3 z-30 grid grid-cols-5 rounded-[24px] border border-white/70 bg-[#102033]/95 p-2 text-white shadow-2xl shadow-slate-950/20 backdrop-blur lg:hidden">
-        {mobilePrimaryNav.map((item) => {
-          const Icon = item.icon;
+      <nav className="fixed inset-x-3 bottom-3 z-30 grid grid-cols-5 rounded-2xl border border-slate-200 bg-white/95 p-1.5 shadow-2xl shadow-slate-950/15 backdrop-blur lg:hidden">
+        {primaryRoutes.map((item) => {
+          const Icon = icons[item.id];
           return (
             <NavLink
-              key={item.to}
-              to={item.to}
+              key={item.id}
+              to={item.path}
               className={({ isActive }) =>
-                `flex flex-col items-center gap-1 rounded-2xl px-2 py-2 text-[11px] transition ${
-                  isActive ? 'bg-amber-200 text-slate-950' : 'text-slate-300'
+                `flex min-h-12 flex-col items-center justify-center gap-1 rounded-xl px-1 py-1.5 text-[10px] transition ${
+                  isActive ? 'bg-slate-950 font-semibold text-white' : 'text-slate-500'
                 }`
               }
             >
               <Icon className="h-4 w-4" />
-              <span>{item.label.replace('报告阅读', '报告').replace('精确搜索', '搜索').replace('标的分析', '标的').replace('索引管理', '更新')}</span>
+              <span>{item.mobileLabel}</span>
             </NavLink>
           );
         })}
@@ -116,8 +124,8 @@ export function PageHeader({
 }) {
   return (
     <div className="mb-7">
-      <div className="text-[11px] font-bold uppercase tracking-[0.24em] text-amber-700">{eyebrow}</div>
-      <h1 className="mt-2 text-2xl font-semibold tracking-tight text-slate-950 sm:text-4xl">{title}</h1>
+      <div className="text-[11px] font-bold uppercase tracking-[0.2em] text-blue-700">{eyebrow}</div>
+      <h1 className="mt-2 text-2xl font-semibold tracking-tight text-slate-950 sm:text-3xl">{title}</h1>
       <p className="mt-3 max-w-3xl text-sm leading-7 text-slate-600">{description}</p>
     </div>
   );

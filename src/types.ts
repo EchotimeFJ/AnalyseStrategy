@@ -1,7 +1,7 @@
 export type ApiResponse<T> = {
   success: boolean;
   data: T;
-  error?: string;
+  error?: string | { code?: string; message?: string };
 };
 
 export type CountItem = {

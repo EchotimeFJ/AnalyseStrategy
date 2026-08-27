@@ -2,11 +2,12 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { apiGet } from '@/lib/api';
 import { useAsyncData } from '@/hooks/useAsyncData';
-import type { ReportDetail, ReportSummary } from '@/types';
+import type { ReportDetail, ReportOverview, ReportSummary } from '@/types';
 import { Layout, PageHeader } from '@/components/Layout';
 import { Badge, EmptyState, ErrorBlock, LoadingBlock, Panel } from '@/components/ui';
 import { MarkdownViewer } from '@/components/MarkdownViewer';
 import { getCenteredScrollTop, getSourceLineScrollTop } from '@/lib/reportScroll';
+import { ReportOpinionTable } from '@/components/ReportOpinionTable';
 
 export default function Reports() {
   const [params, setParams] = useSearchParams();
@@ -15,12 +16,17 @@ export default function Reports() {
   const highlightTerms = useMemo(() => params.getAll('highlight').map((item) => item.trim()).filter(Boolean), [params]);
   const reportListRef = useRef<HTMLElement | null>(null);
   const [year, setYear] = useState('');
+  const [visibleCount, setVisibleCount] = useState(48);
   const reportsQuery = useMemo(() => (year ? `/api/reports?year=${year}` : '/api/reports'), [year]);
   const reports = useAsyncData(() => apiGet<ReportSummary[]>(reportsQuery), [reportsQuery]);
   const firstId = reports.data?.[0]?.id;
   const activeId = selectedId || firstId;
   const detail = useAsyncData(
     () => (activeId ? apiGet<ReportDetail>(`/api/reports/${encodeURIComponent(activeId)}`) : Promise.resolve(null)),
+    [activeId],
+  );
+  const overview = useAsyncData(
+    () => (activeId ? apiGet<ReportOverview>(`/api/reports/${encodeURIComponent(activeId)}/overview`) : Promise.resolve(null)),
     [activeId],
   );
 
@@ -78,9 +84,9 @@ export default function Reports() {
   return (
     <Layout>
       <PageHeader
-        eyebrow="Reader"
-        title="报告阅读"
-        description="按日期浏览机构日报，右侧保留 Markdown 原文格式；报告中的机构、标的、评级和目标价由索引自动提取。"
+        eyebrow="Report Library"
+        title="报告库"
+        description="先速览每份报告里的买入、评级和目标价变化，再按来源跳回 Markdown 原文核对。"
       />
       <div className="grid min-w-0 gap-6 xl:grid-cols-[minmax(0,360px)_minmax(0,1fr)]">
         <Panel
@@ -106,7 +112,7 @@ export default function Reports() {
           {reports.loading ? <LoadingBlock label="正在加载报告列表..." /> : null}
           {reports.error ? <ErrorBlock message={reports.error} /> : null}
           <div className="space-y-3">
-            {(reports.data ?? []).map((report) => (
+            {(reports.data ?? []).slice(0, visibleCount).map((report) => (
               <button
                 key={report.id}
                 data-report-id={report.id}
@@ -128,12 +134,16 @@ export default function Reports() {
                 </div>
               </button>
             ))}
+            {(reports.data?.length ?? 0) > visibleCount ? (
+              <button onClick={() => setVisibleCount((value) => value + 48)} className="min-h-11 w-full rounded-xl border border-slate-200 bg-white text-sm font-semibold text-slate-700 hover:border-blue-300">再加载 48 篇</button>
+            ) : null}
           </div>
         </Panel>
 
         <div className="min-w-0 space-y-6">
-          {detail.loading ? <LoadingBlock label="正在加载报告原文..." /> : null}
+          {detail.loading || overview.loading ? <LoadingBlock label="正在加载报告与速览..." /> : null}
           {detail.error ? <ErrorBlock message={detail.error} /> : null}
+          {overview.error ? <ErrorBlock message={overview.error} /> : null}
           {detail.data ? (
             <>
               <Panel title={detail.data.date} eyebrow="Report meta">
@@ -143,6 +153,11 @@ export default function Reports() {
                   <Meta label="源文件" value={detail.data.filePath} />
                 </div>
               </Panel>
+              {overview.data ? (
+                <Panel title="报告观点速览" eyebrow="Quick view">
+                  <ReportOpinionTable overview={overview.data} />
+                </Panel>
+              ) : null}
               <Panel title="Markdown 原文" eyebrow="Original" className="overflow-hidden">
                 <MarkdownViewer markdown={detail.data.markdown} highlightTerms={highlightTerms} />
               </Panel>

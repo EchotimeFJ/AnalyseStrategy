@@ -1,113 +1,47 @@
 import { FormEvent, useEffect, useState } from 'react';
-import { Link } from 'react-router-dom';
-import { Search as SearchIcon } from 'lucide-react';
+import { Link, useSearchParams } from 'react-router-dom';
+import { FileSearch, Search as SearchIcon } from 'lucide-react';
 import { apiGet, queryString } from '@/lib/api';
-import type { SearchHit } from '@/types';
+import type { GroupedSearchResponse, SearchHit } from '@/types';
 import { Layout, PageHeader } from '@/components/Layout';
 import { Badge, EmptyState, ErrorBlock, LoadingBlock, Panel } from '@/components/ui';
 import { buildReportLink, searchHitHighlightTerms } from '@/lib/reportLinks';
 
 const ratingShortcuts = ['买入', '增持', '中性', '持有', '减持', '卖出'];
-const LAST_SEARCH_FILTER_KEY = 'analyse-strategy:last-search-filter';
-
-type SearchFilters = {
-  query: string;
-  mode: string;
-  from: string;
-  to: string;
-};
-
-function readLastSearchFilter(): SearchFilters | null {
-  if (typeof window === 'undefined') {
-    return null;
-  }
-
-  try {
-    const raw = window.sessionStorage.getItem(LAST_SEARCH_FILTER_KEY);
-    return raw ? (JSON.parse(raw) as SearchFilters) : null;
-  } catch {
-    return null;
-  }
-}
-
-function saveLastSearchFilter(value: SearchFilters) {
-  if (typeof window === 'undefined') {
-    return;
-  }
-
-  try {
-    window.sessionStorage.setItem(LAST_SEARCH_FILTER_KEY, JSON.stringify(value));
-  } catch {
-    // Session storage is only used to restore the last successful search.
-  }
-}
-
-function clearLastSearchFilter() {
-  if (typeof window === 'undefined') {
-    return;
-  }
-
-  try {
-    window.sessionStorage.removeItem(LAST_SEARCH_FILTER_KEY);
-  } catch {
-    // Ignore storage cleanup failures.
-  }
-}
 
 export default function SearchPage() {
-  const [query, setQuery] = useState(() => readLastSearchFilter()?.query ?? '');
-  const [mode, setMode] = useState(() => readLastSearchFilter()?.mode ?? 'all');
-  const [from, setFrom] = useState(() => readLastSearchFilter()?.from ?? '');
-  const [to, setTo] = useState(() => readLastSearchFilter()?.to ?? '');
-  const [hits, setHits] = useState<SearchHit[]>([]);
+  const [params, setParams] = useSearchParams();
+  const [query, setQuery] = useState(params.get('q') ?? '');
+  const [mode, setMode] = useState(params.get('mode') ?? 'all');
+  const [from, setFrom] = useState(params.get('from') ?? '');
+  const [to, setTo] = useState(params.get('to') ?? '');
+  const [strict, setStrict] = useState(params.get('raw') === 'true');
+  const [result, setResult] = useState<GroupedSearchResponse | SearchHit[] | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
   useEffect(() => {
-    const cached = readLastSearchFilter();
-    if (cached) {
-      setQuery(cached.query);
-      setMode(cached.mode);
-      setFrom(cached.from);
-      setTo(cached.to);
-      void runSearch(cached);
-    }
-    // 只在首次进入页面时恢复上一次成功搜索的条件。
+    if (params.get('q')) void runSearch(params.get('q') ?? '', params.get('mode') ?? 'all', params.get('raw') === 'true');
+    // URL 参数是页面初次加载和首页跳转的恢复源。
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  async function runSearch(filters: SearchFilters = { query, mode, from, to }) {
-    const nextFilters = {
-      query: filters.query.trim(),
-      mode: filters.mode,
-      from: filters.from.trim(),
-      to: filters.to.trim(),
-    };
-
-    if (!nextFilters.query) {
-      clearLastSearchFilter();
-      setHits([]);
+  async function runSearch(nextQuery = query, nextMode = mode, nextStrict = strict) {
+    const value = nextQuery.trim();
+    if (!value) {
+      setResult(null);
       setError('');
       return;
     }
-
     setLoading(true);
     setError('');
     try {
-      const data = await apiGet<SearchHit[]>(
-        `/api/search${queryString({
-          q: nextFilters.query,
-          mode: nextFilters.mode,
-          from: nextFilters.from,
-          to: nextFilters.to,
-        })}`,
-      );
-      saveLastSearchFilter(nextFilters);
-      setQuery(nextFilters.query);
-      setMode(nextFilters.mode);
-      setFrom(nextFilters.from);
-      setTo(nextFilters.to);
-      setHits(data);
+      const searchParams = { q: value, mode: nextMode, from, to, raw: nextStrict ? 'true' : undefined };
+      const data = nextStrict
+        ? await apiGet<SearchHit[]>(`/api/search${queryString(searchParams)}`)
+        : await apiGet<GroupedSearchResponse>(`/api/search${queryString(searchParams)}`);
+      setResult(data);
+      setParams(searchParams as Record<string, string>);
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : String(reason));
     } finally {
@@ -115,95 +49,85 @@ export default function SearchPage() {
     }
   }
 
-  async function submit(event?: FormEvent) {
-    event?.preventDefault();
-    await runSearch();
-  }
-
-  async function searchRating(rating: string) {
-    const nextQuery = `${rating}评级`;
-    setQuery(nextQuery);
-    setMode('rating');
-    await runSearch({ query: nextQuery, mode: 'rating', from, to });
+  function submit(event: FormEvent) {
+    event.preventDefault();
+    void runSearch();
   }
 
   return (
     <Layout>
-      <PageHeader
-        eyebrow="Exact Search"
-        title="精确搜索"
-        description="普通关键词使用标准化精确匹配；评级词会进入结构化评级索引，例如搜索“买入评级”会返回最近报告中明确提到买入的内容。"
-      />
-      <Panel title="搜索条件" eyebrow="Query">
-        <form onSubmit={submit} className="grid gap-3 lg:grid-cols-[1fr_160px_150px_150px_auto]">
+      <PageHeader eyebrow="Smart Search" title="智能检索" description="输入公司、代码、机构或普通关键词。默认按报告聚合相邻命中，避免同一段内容重复刷屏。" />
+      <Panel title="搜索报告库" eyebrow="Query">
+        <form onSubmit={submit} className="grid gap-3 lg:grid-cols-[1fr_150px_140px_140px_auto]">
           <div className="relative">
             <SearchIcon className="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
-            <input
-              value={query}
-              onChange={(event) => setQuery(event.target.value)}
-              className="h-12 w-full rounded-2xl border border-slate-200 bg-white pl-11 pr-4 text-sm outline-none transition focus:border-amber-400"
-              placeholder="输入标的、代码、关键词，例如 2577.HK / SpaceX / 目标价"
-            />
+            <input value={query} onChange={(event) => setQuery(event.target.value)} className="min-h-12 w-full rounded-xl border border-slate-200 bg-white pl-11 pr-4 text-sm outline-none transition focus:border-blue-400" placeholder="例如 1768.HK / 英诺赛科 / 中金 / 消费复苏" />
           </div>
-          <select value={mode} onChange={(event) => setMode(event.target.value)} className="h-12 rounded-2xl border border-slate-200 bg-white px-3 text-sm">
-            <option value="all">全文</option>
-            <option value="rating">只看评级</option>
-            <option value="target">只看目标价</option>
-            <option value="signal">只看信号</option>
+          <select value={mode} onChange={(event) => setMode(event.target.value)} className="min-h-12 rounded-xl border border-slate-200 bg-white px-3 text-sm">
+            <option value="all">全部内容</option><option value="rating">评级</option><option value="target">目标价</option><option value="signal">风险/催化剂</option>
           </select>
-          <input value={from} onChange={(event) => setFrom(event.target.value)} className="h-12 rounded-2xl border border-slate-200 bg-white px-3 text-sm" placeholder="开始日期" />
-          <input value={to} onChange={(event) => setTo(event.target.value)} className="h-12 rounded-2xl border border-slate-200 bg-white px-3 text-sm" placeholder="结束日期" />
-          <button className="h-12 rounded-2xl bg-slate-950 px-6 text-sm font-semibold text-white transition hover:bg-slate-800">搜索</button>
+          <input type="date" value={from} onChange={(event) => setFrom(event.target.value)} className="min-h-12 rounded-xl border border-slate-200 bg-white px-3 text-sm" aria-label="开始日期" />
+          <input type="date" value={to} onChange={(event) => setTo(event.target.value)} className="min-h-12 rounded-xl border border-slate-200 bg-white px-3 text-sm" aria-label="结束日期" />
+          <button className="min-h-12 rounded-xl bg-blue-600 px-6 text-sm font-semibold text-white transition hover:bg-blue-700">搜索</button>
         </form>
-        <div className="mt-4 flex flex-wrap gap-2">
-          {ratingShortcuts.map((rating) => (
-            <button
-              key={rating}
-              type="button"
-              onClick={() => void searchRating(rating)}
-              className="rounded-full border border-amber-200 bg-amber-50 px-3 py-1.5 text-xs font-semibold text-amber-800 transition hover:border-amber-300 hover:bg-amber-100"
-            >
-              {rating}评级
-            </button>
-          ))}
+        <div className="mt-4 flex flex-col justify-between gap-3 sm:flex-row sm:items-center">
+          <div className="flex flex-wrap gap-2">
+            {ratingShortcuts.map((rating) => <button key={rating} type="button" onClick={() => { setQuery(`${rating}评级`); setMode('rating'); void runSearch(`${rating}评级`, 'rating', strict); }} className="min-h-9 rounded-full bg-slate-100 px-3 text-xs font-semibold text-slate-600 transition hover:bg-slate-200">{rating}</button>)}
+          </div>
+          <label className="flex min-h-10 cursor-pointer items-center gap-2 text-sm text-slate-600">
+            <input type="checkbox" checked={strict} onChange={(event) => { setStrict(event.target.checked); if (query.trim()) void runSearch(query, mode, event.target.checked); }} />严格原文模式
+          </label>
         </div>
       </Panel>
 
       <div className="mt-6">
-        {loading ? <LoadingBlock label="正在精确检索..." /> : null}
+        {loading ? <LoadingBlock label="正在检索报告…" /> : null}
         {error ? <ErrorBlock message={error} /> : null}
-        {!loading && !error ? (
-          <Panel title={`搜索结果 ${hits.length} 条`} eyebrow="Results">
-            {hits.length ? (
-              <div className="space-y-3">
-                {hits.map((hit, index) => (
-                  <Link
-                    key={`${hit.reportId}-${hit.lineNumber}-${hit.matchedText}-${index}`}
-                    to={buildReportLink({
-                      reportId: hit.reportId,
-                      lineNumber: hit.lineNumber,
-                      highlightTerms: searchHitHighlightTerms({
-                        matchedText: hit.matchedText,
-                        query,
-                      }),
-                    })}
-                    className="block rounded-2xl border border-slate-200 bg-white/75 p-4 transition hover:border-amber-300 hover:shadow-md"
-                  >
-                    <div className="flex flex-wrap gap-2">
-                      <Badge tone="amber">{hit.date}</Badge>
-                      <Badge tone="blue">{hit.institution}</Badge>
-                      <Badge tone="slate">第 {hit.lineNumber} 行</Badge>
-                    </div>
-                    <p className="mt-3 text-sm leading-7 text-slate-700">{hit.snippet}</p>
-                  </Link>
-                ))}
-              </div>
-            ) : (
-              <EmptyState title="暂无结果" description="输入关键词后点击搜索；搜索不会做模糊扩展，所以结果为空通常代表原文没有严格包含该词。" />
-            )}
-          </Panel>
-        ) : null}
+        {!loading && !error && result ? Array.isArray(result) ? <RawResults hits={result} query={query} /> : <GroupedResults result={result} query={query} /> : null}
+        {!loading && !error && !result ? <EmptyState title="输入内容开始检索" description="搜索结果会按报告合并；需要逐行核对时再打开严格原文模式。" /> : null}
       </div>
     </Layout>
   );
+}
+
+function GroupedResults({ result, query }: { result: GroupedSearchResponse; query: string }) {
+  const intentLabels = { 'security-code': '证券代码', 'security-name': '公司名称', institution: '机构', text: '原文关键词' };
+  return (
+    <div className="space-y-6">
+      {result.company ? (
+        <Link to={`/company?q=${encodeURIComponent(result.company.security.code ?? result.company.security.displayName)}`} className="block rounded-3xl border border-blue-200 bg-blue-50/50 p-5 transition hover:border-blue-400">
+          <div className="flex flex-wrap items-center gap-2"><Badge tone="blue">公司匹配</Badge><Badge tone="slate">{result.company.security.code ?? '无代码'}</Badge></div>
+          <div className="mt-3 text-xl font-semibold text-slate-950">{result.company.security.displayName}</div>
+          <div className="mt-2 text-sm text-slate-600">最新评级 {result.company.latestRating ?? '—'} · 目标价 {result.company.latestTargetPrice ?? '—'} · {result.company.institutions.length} 家机构</div>
+        </Link>
+      ) : null}
+      <Panel title={`${result.groups.length} 份报告 · ${result.totalHits} 处命中`} eyebrow={`识别为${intentLabels[result.intent.type]}`}>
+        {result.groups.length ? <div className="space-y-4">{result.groups.map((group) => (
+          <article key={group.reportId} className="rounded-2xl border border-slate-200 bg-white p-4">
+            <div className="flex flex-wrap items-center gap-2"><Badge tone="amber">{group.date}</Badge>{group.institutions.map((institution) => <Badge key={institution} tone="blue">{institution}</Badge>)}<span className="text-xs text-slate-400">{group.matchCount} 处命中</span></div>
+            <div className="mt-3 space-y-2">{group.snippets.slice(0, 4).map((snippet) => (
+              <Link key={snippet.startLine} to={buildReportLink({ reportId: group.reportId, lineNumber: snippet.startLine, highlightTerms: [query] })} className="block rounded-xl bg-slate-50 p-3 text-sm leading-7 text-slate-700 transition hover:bg-blue-50">{cleanSnippet(snippet.text)}<span className="ml-2 whitespace-nowrap text-xs font-semibold text-blue-700">第 {snippet.startLine} 行</span></Link>
+            ))}</div>
+          </article>
+        ))}</div> : <EmptyState title="暂无结果" description="尝试缩短关键词、换用公司代码，或取消日期范围。" />}
+      </Panel>
+    </div>
+  );
+}
+
+function RawResults({ hits, query }: { hits: SearchHit[]; query: string }) {
+  return (
+    <Panel title={`严格原文结果 ${hits.length} 条`} eyebrow="Raw source">
+      {hits.length ? <div className="space-y-3">{hits.map((hit, index) => (
+        <Link key={`${hit.reportId}-${hit.lineNumber}-${index}`} to={buildReportLink({ reportId: hit.reportId, lineNumber: hit.lineNumber, highlightTerms: searchHitHighlightTerms({ matchedText: hit.matchedText, query }) })} className="block rounded-2xl border border-slate-200 p-4 transition hover:border-blue-300">
+          <div className="flex flex-wrap gap-2"><Badge tone="amber">{hit.date}</Badge><Badge tone="blue">{hit.institution}</Badge><Badge tone="slate">第 {hit.lineNumber} 行</Badge></div>
+          <p className="mt-3 text-sm leading-7 text-slate-700">{cleanSnippet(hit.snippet)}</p>
+        </Link>
+      ))}</div> : <EmptyState title="暂无结果" />}
+    </Panel>
+  );
+}
+
+function cleanSnippet(value: string) {
+  return value.replace(/==/g, '').replace(/\n+/g, ' · ');
 }
