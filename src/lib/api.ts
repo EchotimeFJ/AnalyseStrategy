@@ -20,10 +20,10 @@ export async function apiGet<T>(path: string, signal?: AbortSignal): Promise<T> 
   return request<T>(path, { signal });
 }
 
-export async function apiPost<T>(path: string, body?: unknown, signal?: AbortSignal): Promise<T> {
+export async function apiPost<T>(path: string, body?: unknown, signal?: AbortSignal, headers?: Record<string, string>): Promise<T> {
   return request<T>(path, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: { 'Content-Type': 'application/json', ...headers },
     body: JSON.stringify(body ?? {}),
     signal,
   });

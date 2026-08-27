@@ -2,13 +2,14 @@ import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { apiGet, apiPost } from '@/lib/api';
 import { useAsyncData } from '@/hooks/useAsyncData';
-import type { IndexStatus, ReportChange, ReportChangeSet, ReportChangeType, StrategyUpdateResult } from '@/types';
+import type { AppVersion, IndexStatus, ReportChange, ReportChangeSet, ReportChangeType, StrategyUpdateResult } from '@/types';
 import { Layout, PageHeader } from '@/components/Layout';
 import { Badge, ErrorBlock, LoadingBlock, Panel, StatCard } from '@/components/ui';
 import { formatDateTime } from '@/lib/format';
 
 export default function IndexPage() {
   const { data, loading, error, setData } = useAsyncData(() => apiGet<IndexStatus>('/api/index'), []);
+  const version = useAsyncData(() => apiGet<AppVersion>('/api/version'), []);
   const [refreshing, setRefreshing] = useState(false);
   const [updating, setUpdating] = useState(false);
   const [refreshError, setRefreshError] = useState('');
@@ -44,9 +45,9 @@ export default function IndexPage() {
   return (
     <Layout>
       <PageHeader
-        eyebrow="Index"
-        title="索引管理"
-        description="查看本地日报目录的索引状态。可以只刷新本地索引，也可以先对 Strategy 仓库执行 git pull --ff-only，再自动重建索引。"
+        eyebrow="Data & Release"
+        title="数据更新"
+        description="更新 Strategy 报告、重建索引，并检查版本、解析问题和待识别实体。Git 更新始终使用 fast-forward only。"
       />
       {loading ? <LoadingBlock label="正在读取索引状态..." /> : null}
       {error ? <ErrorBlock message={error} /> : null}
@@ -57,7 +58,7 @@ export default function IndexPage() {
             <StatCard label="报告数量" value={data.reportCount} />
             <StatCard label="标的提及" value={data.mentionCount} />
             <StatCard label="解析问题" value={data.errors.length} />
-            <StatCard label="最后索引" value={formatDateTime(data.indexedAt)} />
+            <StatCard label="待识别项" value={data.qualityIssues?.length ?? 0} />
           </div>
           <Panel
             title="源目录"
@@ -98,15 +99,29 @@ export default function IndexPage() {
             ) : null}
           </Panel>
 
+          <Panel title="应用版本" eyebrow="Release">
+            <div className="grid gap-3 md:grid-cols-3">
+              <div className="rounded-2xl bg-slate-50 p-4"><div className="text-xs text-slate-500">语义版本</div><div className="mt-2 font-mono text-sm font-semibold">v{version.data?.version ?? __APP_VERSION__}</div></div>
+              <div className="rounded-2xl bg-slate-50 p-4"><div className="text-xs text-slate-500">Git 提交</div><div className="mt-2 font-mono text-sm font-semibold">{version.data?.commit ?? __GIT_COMMIT__}</div></div>
+              <div className="rounded-2xl bg-slate-50 p-4"><div className="text-xs text-slate-500">构建时间</div><div className="mt-2 text-sm font-semibold">{formatDateTime(version.data?.buildTime ?? __BUILD_TIME__)}</div></div>
+            </div>
+          </Panel>
+
           {data.reportChanges ? <ReportChangesPanel changes={data.reportChanges} /> : null}
 
           <Panel title="数据质量" eyebrow="Quality">
-            {data.errors.length ? (
+            {data.errors.length || data.qualityIssues?.length ? (
               <div className="space-y-3">
                 {data.errors.map((item) => (
                   <div key={item.filePath} className="rounded-2xl border border-rose-200 bg-rose-50 p-4">
                     <div className="break-all text-sm font-semibold text-rose-800">{item.filePath}</div>
                     <div className="mt-2 text-sm text-rose-700">{item.message}</div>
+                  </div>
+                ))}
+                {(data.qualityIssues ?? []).slice(0, 80).map((item, index) => (
+                  <div key={`${item.type}-${item.reportId}-${item.lineNumber}-${index}`} className="rounded-2xl border border-amber-200 bg-amber-50 p-4">
+                    <div className="text-sm font-semibold text-amber-900">{item.message}</div>
+                    <div className="mt-2 text-xs text-amber-700">{item.reportId ?? '未知报告'}{item.lineNumber ? ` · 第 ${item.lineNumber} 行` : ''}</div>
                   </div>
                 ))}
               </div>

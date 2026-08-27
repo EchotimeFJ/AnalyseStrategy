@@ -26,8 +26,13 @@ import {
   removeWatchItem,
 } from '../services/localConfig.js';
 import { pullStrategyRepository } from '../services/gitUpdater.js';
+import { getAppVersion } from '../services/version.js';
 
 const router = Router();
+
+router.get('/version', (_req: Request, res: Response): void => {
+  res.json({ success: true, data: getAppVersion() });
+});
 
 router.get('/overview', asyncRoute(async (_req: Request, res: Response): Promise<void> => {
   res.json({ success: true, data: await getOverview() });
@@ -207,6 +212,8 @@ function toIndexStatus(index: IndexState, reportChanges?: ReportChangeSet) {
     reportCount: index.reports.length,
     mentionCount: index.mentions.length,
     errors: index.errors,
+    qualityIssues: index.qualityIssues,
+    indexVersion: index.version,
     reportChanges,
   };
 }

@@ -32,6 +32,9 @@ export default function Watchlist() {
   }
 
   async function remove(id: string) {
+    if (!window.confirm('确认从关注列表移除这家公司？')) {
+      return;
+    }
     await apiDelete(`/api/watchlist/${id}`);
     setData(await apiGet<WatchlistData>('/api/watchlist'));
   }
@@ -89,8 +92,8 @@ export default function Watchlist() {
                       )}
                     </div>
                     <div className="mt-4 flex gap-3">
-                      <Link to={`/targets?q=${encodeURIComponent(item.name)}`} className="text-sm font-semibold text-slate-950 underline underline-offset-4">
-                        查看标的档案
+                      <Link to={`/company?q=${encodeURIComponent(item.name)}`} className="text-sm font-semibold text-slate-950 underline underline-offset-4">
+                        查看公司研究
                       </Link>
                       <a
                         href={resolveApiPath(`/api/export?type=target&q=${encodeURIComponent(item.name)}`)}

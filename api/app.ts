@@ -1,3 +1,5 @@
+import 'dotenv/config'
+
 /**
  * This is a API server
  */
@@ -8,11 +10,8 @@ import express, {
   type NextFunction,
 } from 'express'
 import cors from 'cors'
-import dotenv from 'dotenv'
 import researchRoutes from './routes/research.js'
-
-// load env
-dotenv.config()
+import aiRoutes from './routes/ai.js'
 
 const app: express.Application = express()
 
@@ -24,6 +23,7 @@ app.use(express.urlencoded({ extended: true, limit: '10mb' }))
  * API Routes
  */
 app.use('/api', researchRoutes)
+app.use('/api/ai', aiRoutes)
 
 /**
  * health

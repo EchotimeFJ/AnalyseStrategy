@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { updateDataReducer, type UpdateDataState } from '../src/components/UpdateDataMenu';
+import { updateDataReducer, type UpdateDataState } from '../src/lib/updateDataState';
 
 const idle: UpdateDataState = { status: 'idle', mode: null, result: null, error: '' };
 const confirming = updateDataReducer(idle, { type: 'choose', mode: 'github' });

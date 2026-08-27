@@ -1,0 +1,138 @@
+import fs from 'node:fs/promises';
+import path from 'node:path';
+import { timingSafeEqual } from 'node:crypto';
+import { decryptSecret, encryptSecret, maskApiKey, type EncryptedValue } from './secretStore.js';
+
+export type AiConfigInput = {
+  providerName: string;
+  baseUrl: string;
+  model: string;
+  apiKey?: string;
+  timeoutMs?: number;
+  dailyTokenBudget?: number;
+  maxConcurrency?: number;
+};
+
+export type ResolvedAiConfig = Required<AiConfigInput>;
+
+type StoredAiConfig = Omit<ResolvedAiConfig, 'apiKey'> & {
+  apiKeyEncrypted: EncryptedValue;
+  apiKeyTail: string;
+  updatedAt: string;
+};
+
+type AiConfigStoreOptions = {
+  filePath?: string;
+  secret?: string;
+  adminToken?: string;
+  env?: Record<string, string | undefined>;
+};
+
+const DEFAULT_FILE = path.join(process.cwd(), 'data', 'runtime', 'ai-config.json');
+
+export function createAiConfigStore(options: AiConfigStoreOptions = {}) {
+  const filePath = options.filePath ?? DEFAULT_FILE;
+  const env = options.env ?? process.env;
+  const secret = options.secret ?? env.AI_CONFIG_SECRET ?? '';
+  const adminToken = options.adminToken ?? env.AI_CONFIG_ADMIN_TOKEN ?? '';
+
+  async function readStored(): Promise<StoredAiConfig | null> {
+    try {
+      return JSON.parse(await fs.readFile(filePath, 'utf-8')) as StoredAiConfig;
+    } catch (error) {
+      if (error && typeof error === 'object' && 'code' in error && error.code === 'ENOENT') return null;
+      throw error;
+    }
+  }
+
+  async function resolve(): Promise<ResolvedAiConfig | null> {
+    const stored = await readStored();
+    const apiKey = env.AI_API_KEY || (stored && secret ? decryptSecret(stored.apiKeyEncrypted, secret) : '');
+    const baseUrl = env.AI_BASE_URL || stored?.baseUrl || '';
+    const model = env.AI_MODEL || stored?.model || '';
+    if (!apiKey || !baseUrl || !model) return null;
+    return {
+      providerName: env.AI_PROVIDER_NAME || stored?.providerName || 'OpenAI compatible',
+      baseUrl,
+      model,
+      apiKey,
+      timeoutMs: numberValue(env.AI_TIMEOUT_MS, stored?.timeoutMs, 45_000, 3_000, 180_000),
+      dailyTokenBudget: numberValue(env.AI_DAILY_TOKEN_BUDGET, stored?.dailyTokenBudget, 500_000, 1_000, 50_000_000),
+      maxConcurrency: numberValue(env.AI_MAX_CONCURRENCY, stored?.maxConcurrency, 2, 1, 20),
+    };
+  }
+
+  async function getPublic() {
+    const config = await resolve();
+    return {
+      configured: Boolean(config),
+      providerName: config?.providerName ?? '',
+      baseUrl: config?.baseUrl ?? '',
+      model: config?.model ?? '',
+      apiKeyMask: config ? maskApiKey(config.apiKey) : '',
+      timeoutMs: config?.timeoutMs ?? 45_000,
+      dailyTokenBudget: config?.dailyTokenBudget ?? 500_000,
+      maxConcurrency: config?.maxConcurrency ?? 2,
+      canPersist: Boolean(secret),
+      adminProtected: Boolean(adminToken),
+    };
+  }
+
+  async function save(input: AiConfigInput, token: string): Promise<void> {
+    const candidate = await preview(input, token);
+    if (!secret) throw new Error('AI_CONFIG_SECRET 未配置，不能持久化 API Key');
+    const stored: StoredAiConfig = {
+      providerName: candidate.providerName,
+      baseUrl: candidate.baseUrl,
+      model: candidate.model,
+      apiKeyEncrypted: encryptSecret(candidate.apiKey, secret),
+      apiKeyTail: candidate.apiKey.slice(-4),
+      timeoutMs: candidate.timeoutMs,
+      dailyTokenBudget: candidate.dailyTokenBudget,
+      maxConcurrency: candidate.maxConcurrency,
+      updatedAt: new Date().toISOString(),
+    };
+    await fs.mkdir(path.dirname(filePath), { recursive: true });
+    await fs.writeFile(filePath, `${JSON.stringify(stored, null, 2)}\n`, { encoding: 'utf-8', mode: 0o600 });
+  }
+
+  async function preview(input: AiConfigInput, token: string): Promise<ResolvedAiConfig> {
+    assertAdminToken(token, adminToken);
+    const existing = await resolve();
+    const apiKey = input.apiKey?.trim() || existing?.apiKey || '';
+    if (!apiKey) throw new Error('请填写 API Key');
+    const model = input.model.trim();
+    if (!model) throw new Error('请填写模型名称');
+    return {
+      providerName: input.providerName.trim() || 'OpenAI compatible',
+      baseUrl: normalizeBaseUrl(input.baseUrl),
+      model,
+      apiKey,
+      timeoutMs: numberValue(input.timeoutMs, undefined, 45_000, 3_000, 180_000),
+      dailyTokenBudget: numberValue(input.dailyTokenBudget, undefined, 500_000, 1_000, 50_000_000),
+      maxConcurrency: numberValue(input.maxConcurrency, undefined, 2, 1, 20),
+    };
+  }
+
+  return { getPublic, resolve, preview, save };
+}
+
+export const aiConfigStore = createAiConfigStore();
+
+function assertAdminToken(input: string, expected: string) {
+  if (!expected) throw new Error('AI_CONFIG_ADMIN_TOKEN 未配置');
+  const left = Buffer.from(input);
+  const right = Buffer.from(expected);
+  if (left.length !== right.length || !timingSafeEqual(left, right)) throw new Error('AI 配置管理令牌无效');
+}
+
+function normalizeBaseUrl(value: string) {
+  const url = new URL(value.trim());
+  if (!['https:', 'http:'].includes(url.protocol)) throw new Error('API 基础地址仅支持 HTTP/HTTPS');
+  return url.toString().replace(/\/$/, '');
+}
+
+function numberValue(value: unknown, fallback: number | undefined, defaultValue: number, min: number, max: number) {
+  const parsed = Number(value ?? fallback ?? defaultValue);
+  return Number.isFinite(parsed) ? Math.min(max, Math.max(min, Math.round(parsed))) : defaultValue;
+}

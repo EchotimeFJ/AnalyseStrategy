@@ -205,8 +205,18 @@ export type IndexStatus = {
   reportCount: number;
   mentionCount: number;
   errors: Array<{ filePath: string; message: string }>;
+  qualityIssues?: Array<{
+    type: 'parse-error' | 'unverified-institution' | 'low-confidence-security';
+    reportId?: string;
+    filePath?: string;
+    lineNumber?: number;
+    message: string;
+  }>;
+  indexVersion?: string;
   reportChanges?: ReportChangeSet;
 };
+
+export type AppVersion = { version: string; commit: string; buildTime: string };
 
 export type StrategyUpdateResult = {
   pull: {
@@ -294,4 +304,28 @@ export type CompanyProfile = {
   opinions: OpinionRecord[];
   catalysts: OpinionRecord[];
   risks: OpinionRecord[];
+};
+
+export type AiStatus = {
+  configured: boolean;
+  providerName: string;
+  baseUrl: string;
+  model: string;
+  apiKeyMask: string;
+  timeoutMs: number;
+  dailyTokenBudget: number;
+  maxConcurrency: number;
+  canPersist: boolean;
+  adminProtected: boolean;
+  usage: { estimatedTokens: number; active: number };
+};
+
+export type AiSource = {
+  id: string;
+  reportId: string;
+  date: string;
+  institution: string;
+  securityName: string | null;
+  lineNumber: number;
+  excerpt: string;
 };

@@ -5,6 +5,7 @@ import SearchPage from "@/pages/SearchPage";
 import Targets from "@/pages/Targets";
 import Watchlist from "@/pages/Watchlist";
 import IndexPage from "@/pages/IndexPage";
+import ResearchAssistant from "@/pages/ResearchAssistant";
 import { APP_BASENAME, APP_ROUTES } from "@/lib/appPaths";
 
 export default function App() {
@@ -15,6 +16,7 @@ export default function App() {
         <Route path={APP_ROUTES.reports} element={<Reports />} />
         <Route path={APP_ROUTES.search} element={<SearchPage />} />
         <Route path={APP_ROUTES.company} element={<Targets />} />
+        <Route path={APP_ROUTES.assistant} element={<ResearchAssistant />} />
         <Route path={APP_ROUTES.targets} element={<Navigate to={APP_ROUTES.company} replace />} />
         <Route path={APP_ROUTES.radar} element={<Navigate to={APP_ROUTES.dashboard} replace />} />
         <Route path={APP_ROUTES.watchlist} element={<Watchlist />} />

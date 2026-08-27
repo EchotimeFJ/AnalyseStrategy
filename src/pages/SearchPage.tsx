@@ -1,6 +1,6 @@
 import { FormEvent, useEffect, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
-import { FileSearch, Search as SearchIcon } from 'lucide-react';
+import { Search as SearchIcon } from 'lucide-react';
 import { apiGet, queryString } from '@/lib/api';
 import type { GroupedSearchResponse, SearchHit } from '@/types';
 import { Layout, PageHeader } from '@/components/Layout';

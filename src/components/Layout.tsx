@@ -9,7 +9,7 @@ import {
   Search,
   Star,
 } from 'lucide-react';
-import { primaryRoutes, routeById, routes, secondaryRoutes, type RouteId } from '@/lib/navigation';
+import { primaryRoutes, routes, secondaryRoutes, type RouteId } from '@/lib/navigation';
 
 const icons: Record<RouteId, typeof Home> = {
   today: Home,
@@ -58,7 +58,8 @@ export function Layout({ children }: { children: ReactNode }) {
           })}
         </nav>
         <div className="border-t border-slate-100 pt-4 text-xs text-slate-400">
-          <div>AnalyseStrategy v0.1.0</div>
+          <div>AnalyseStrategy v{__APP_VERSION__}</div>
+          <div className="mt-1 font-mono">{__GIT_COMMIT__}</div>
           <div className="mt-1">报告内容仅作研究参考</div>
         </div>
       </aside>
