@@ -89,4 +89,72 @@ assert.equal(deepSeekPreview?.providerName, 'DeepSeek');
 assert.equal(deepSeekPreview?.baseUrl, 'https://api.deepseek.com');
 assert.equal(deepSeekPreview?.model, 'deepseek-v4-pro');
 
+let reasoningAttempts = 0;
+const reasoningBodies: Array<Record<string, unknown>> = [];
+const reasoningProvider = providerModule.createOpenAiCompatibleProvider(async (_input, init) => {
+  reasoningAttempts += 1;
+  reasoningBodies.push(JSON.parse(String(init?.body)) as Record<string, unknown>);
+  if (reasoningAttempts === 1) {
+    return new Response(
+      'data: {"choices":[{"delta":{"content":"","reasoning":"内部推理"},"finish_reason":null}]}\n\n' +
+      'data: {"choices":[{"delta":{"content":""},"finish_reason":"length"}]}\n\n' +
+      'data: [DONE]\n\n',
+      { status: 200, headers: { 'Content-Type': 'text/event-stream' } },
+    );
+  }
+  return new Response(
+    'data: {"choices":[{"delta":{"content":"可见回答"},"finish_reason":"stop"}]}\n\n' +
+    'data: [DONE]\n\n',
+    { status: 200, headers: { 'Content-Type': 'text/event-stream' } },
+  );
+});
+let recoveredAnswer = '';
+for await (const delta of reasoningProvider.stream(
+  { messages: [{ role: 'user', content: '分析最新报告' }] },
+  config('openrouter', 'https://openrouter.ai/api/v1', 'z-ai/glm-5.3-flash'),
+  new AbortController().signal,
+)) {
+  recoveredAnswer += delta;
+}
+assert.equal(recoveredAnswer, '可见回答');
+assert.equal(reasoningAttempts, 2);
+assert.deepEqual(reasoningBodies[0].reasoning, { effort: 'low', exclude: true });
+assert.equal(reasoningBodies[0].max_tokens, 2400);
+assert.equal(reasoningBodies[1].max_tokens, 3600);
+
+const streamErrorProvider = providerModule.createOpenAiCompatibleProvider(async () => new Response(
+  'data: {"error":{"code":429,"message":"供应商繁忙"}}\n\n' +
+  'data: [DONE]\n\n',
+  { status: 200, headers: { 'Content-Type': 'text/event-stream' } },
+));
+await assert.rejects(async () => {
+  for await (const _delta of streamErrorProvider.stream(
+    { messages: [{ role: 'user', content: '测试流错误' }] },
+    config('openrouter', 'https://openrouter.ai/api/v1', 'openrouter/auto'),
+    new AbortController().signal,
+  )) {
+    // Consume the real stream so provider-side SSE errors surface.
+  }
+}, /AI_PROVIDER_ERROR:429:供应商繁忙/);
+
+let emptyAttempts = 0;
+const emptyProvider = providerModule.createOpenAiCompatibleProvider(async () => {
+  emptyAttempts += 1;
+  return new Response(
+    'data: {"choices":[{"delta":{"content":"","reasoning":"仍在推理"},"finish_reason":"length"}]}\n\n' +
+    'data: [DONE]\n\n',
+    { status: 200, headers: { 'Content-Type': 'text/event-stream' } },
+  );
+});
+await assert.rejects(async () => {
+  for await (const _delta of emptyProvider.stream(
+    { messages: [{ role: 'user', content: '测试空回答' }] },
+    config('openrouter', 'https://openrouter.ai/api/v1', 'z-ai/glm-5.3-flash'),
+    new AbortController().signal,
+  )) {
+    // Consume both attempts; a silent empty stream is a user-visible failure.
+  }
+}, /AI_EMPTY_COMPLETION:模型推理耗尽了输出额度/);
+assert.equal(emptyAttempts, 2);
+
 console.log('ai provider adapter tests passed');
