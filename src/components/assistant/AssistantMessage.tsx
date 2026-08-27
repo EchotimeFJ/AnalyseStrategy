@@ -1,10 +1,8 @@
 import { useState } from 'react';
 import { AlertCircle, Bot, Check, Copy, RefreshCw, Square } from 'lucide-react';
-import ReactMarkdown from 'react-markdown';
-import remarkGfm from 'remark-gfm';
-import { Link } from 'react-router-dom';
-import { linkifyChatCitations } from '@/lib/chatCitations';
+import { createRemarkChatCitations } from '@/lib/chatCitations';
 import type { ChatMessage, ChatPhase } from '@/hooks/useAiChat';
+import { MarkdownContent } from '@/components/MarkdownContent';
 import { AssistantSources } from './AssistantSources';
 
 const phaseLabels: Record<Exclude<ChatPhase, 'idle'>, string> = {
@@ -36,7 +34,6 @@ export function AssistantMessage({
   }
 
   const sources = message.sources ?? [];
-  const markdown = linkifyChatCitations(message.content, sources);
   const activePhase = phase === 'idle' ? 'generating' : phase;
 
   async function copy() {
@@ -57,19 +54,14 @@ export function AssistantMessage({
       </div>
       <div className="min-w-0 flex-1">
         {message.content ? (
-          <div className="assistant-markdown text-[15px] leading-7 text-slate-700">
-            <ReactMarkdown
-              remarkPlugins={[remarkGfm]}
-              components={{
-                a: ({ href, children }) => href?.startsWith('/')
-                  ? <Link to={href} className="assistant-citation">{children}</Link>
-                  : <a href={href} target="_blank" rel="noreferrer">{children}</a>,
-              }}
-            >
-              {markdown}
-            </ReactMarkdown>
-            {message.pending ? <span className="assistant-stream-caret" aria-label="正在生成" /> : null}
-          </div>
+          <MarkdownContent
+            markdown={message.content}
+            variant="assistant"
+            className="assistant-markdown text-[15px] leading-7 text-slate-700"
+            internalLinkClassName="assistant-citation"
+            remarkPlugins={[createRemarkChatCitations(sources)]}
+            trailing={message.pending ? <span className="assistant-stream-caret" aria-label="正在生成" /> : null}
+          />
         ) : message.pending ? (
           <div className="assistant-thinking" role="status">
             <span className="assistant-thinking-orb" />

@@ -1,9 +1,7 @@
-import ReactMarkdown from 'react-markdown';
-import remarkGfm from 'remark-gfm';
 import type { Root } from 'mdast';
-import type { Components } from 'react-markdown';
 import type { Plugin } from 'unified';
 import { protectReportMarkdown } from '@/lib/markdownPreprocess';
+import { MarkdownContent } from '@/components/MarkdownContent';
 
 type MarkdownNode = {
   type: string;
@@ -187,45 +185,16 @@ function normalizeHighlightTerms(terms: string[]) {
   );
 }
 
-function lineProps(node: unknown) {
-  const markdownNode = node as MarkdownNode | undefined;
-  const startLine = markdownNode?.position?.start?.line;
-  const endLine = markdownNode?.position?.end?.line ?? startLine;
-
-  if (!startLine) {
-    return {};
-  }
-
-  return {
-    id: `report-line-${startLine}`,
-    'data-line-start': startLine,
-    'data-line-end': endLine,
-  };
-}
-
-const sourceLineComponents: Components = {
-  h1: ({ node, ...props }) => <h1 {...lineProps(node)} {...props} />,
-  h2: ({ node, ...props }) => <h2 {...lineProps(node)} {...props} />,
-  h3: ({ node, ...props }) => <h3 {...lineProps(node)} {...props} />,
-  h4: ({ node, ...props }) => <h4 {...lineProps(node)} {...props} />,
-  p: ({ node, ...props }) => <p {...lineProps(node)} {...props} />,
-  li: ({ node, ...props }) => <li {...lineProps(node)} {...props} />,
-  blockquote: ({ node, ...props }) => <blockquote {...lineProps(node)} {...props} />,
-  table: ({ node, ...props }) => <table {...lineProps(node)} {...props} />,
-  pre: ({ node, ...props }) => <pre {...lineProps(node)} {...props} />,
-};
-
 export function MarkdownViewer({ markdown, highlightTerms = [] }: { markdown: string; highlightTerms?: string[] }) {
   const protectedMarkdown = protectReportMarkdown(markdown);
 
   return (
-    <article className="markdown-body">
-      <ReactMarkdown
-        components={sourceLineComponents}
-        remarkPlugins={[remarkGfm, remarkHighlightMarkers, createRemarkTargetHighlights(highlightTerms)]}
-      >
-        {protectedMarkdown}
-      </ReactMarkdown>
-    </article>
+    <MarkdownContent
+      markdown={protectedMarkdown}
+      variant="report"
+      className="markdown-body"
+      sourceLines
+      remarkPlugins={[remarkHighlightMarkers, createRemarkTargetHighlights(highlightTerms)]}
+    />
   );
 }
