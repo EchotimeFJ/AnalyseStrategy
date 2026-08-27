@@ -9,6 +9,9 @@ import {
   type SearchHit,
   type TargetMention,
 } from './reportParser.js';
+import type { DataQualityIssue, OpinionRecord, SecurityEntity } from '../domain/research.js';
+import { mergeSecurityEntities, resolveInstitution, securityKey } from './entityResolver.js';
+import { extractOpinions } from './opinionExtractor.js';
 import { readUserConfig, type WatchItem } from './localConfig.js';
 import { getReportDir } from '../runtimeConfig.js';
 
@@ -16,6 +19,10 @@ export type IndexState = {
   sourceDir: string;
   reports: ReportDocument[];
   mentions: TargetMention[];
+  opinions: OpinionRecord[];
+  entities: Map<string, SecurityEntity>;
+  qualityIssues: DataQualityIssue[];
+  version?: string;
   indexedAt?: string;
   errors: Array<{ filePath: string; message: string }>;
 };
@@ -73,6 +80,9 @@ let state: IndexState = {
   sourceDir: getReportDir(),
   reports: [],
   mentions: [],
+  opinions: [],
+  entities: new Map(),
+  qualityIssues: [],
   errors: [],
 };
 
@@ -109,15 +119,73 @@ export async function rebuildIndex(): Promise<IndexState> {
     }
   }
 
-  const mentions = reports.flatMap((report) => extractTargetMentions(report));
+  const rawOpinions = reports.flatMap((report) => extractOpinions(report));
+  const entities = mergeSecurityEntities(
+    rawOpinions.map((opinion) => ({
+      name: opinion.security.displayName,
+      code: opinion.security.code,
+      aliases: opinion.security.aliases,
+    })),
+  );
+  const opinions = rawOpinions.map((opinion) => ({
+    ...opinion,
+    security: entities.get(opinion.security.key) ?? opinion.security,
+  }));
+  const mentions = reports.flatMap((report) => extractTargetMentions(report)).map((mention) => {
+    const key = securityKey({ code: mention.code, name: mention.targetName });
+    const entity = entities.get(key);
+    const institution = resolveInstitution(mention.institution);
+    return {
+      ...mention,
+      institution: institution.canonicalName || mention.institution,
+      targetName: entity?.displayName ?? mention.targetName,
+      aliases: entity?.aliases ?? mention.aliases,
+      code: entity?.code ?? mention.code,
+    };
+  });
+  const qualityIssues = buildQualityIssues(reports, opinions);
+  const indexedAt = new Date().toISOString();
   state = {
     sourceDir,
     reports: reports.sort((left, right) => left.date.localeCompare(right.date)),
     mentions,
-    indexedAt: new Date().toISOString(),
+    opinions,
+    entities,
+    qualityIssues,
+    version: indexedAt,
+    indexedAt,
     errors,
   };
   return state;
+}
+
+function buildQualityIssues(reports: ReportDocument[], opinions: OpinionRecord[]): DataQualityIssue[] {
+  const issues: DataQualityIssue[] = [];
+  const seenInstitutions = new Set<string>();
+  for (const report of reports) {
+    for (const block of report.institutions) {
+      const institution = resolveInstitution(block.institution);
+      if (institution.verified || seenInstitutions.has(institution.rawName)) continue;
+      seenInstitutions.add(institution.rawName);
+      issues.push({
+        type: 'unverified-institution',
+        reportId: report.id,
+        filePath: report.filePath,
+        lineNumber: block.startLine,
+        message: `待识别机构：${institution.rawName}`,
+      });
+    }
+  }
+  for (const opinion of opinions) {
+    if (opinion.security.confidence !== 'low') continue;
+    issues.push({
+      type: 'low-confidence-security',
+      reportId: opinion.reportId,
+      lineNumber: opinion.evidence[0]?.lineNumber,
+      message: `低置信证券：${opinion.security.displayName}`,
+    });
+  }
+  return issues;
 }
 
 export function diffReportChanges(before: IndexState, after: IndexState): ReportChangeSet {
