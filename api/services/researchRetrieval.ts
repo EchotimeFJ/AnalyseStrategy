@@ -9,6 +9,13 @@ export type ResearchScope = {
   institution?: string;
 };
 
+export type ResearchIntent = {
+  scope: ResearchScope;
+  currentDate: string;
+  latestReportDate: string | null;
+  mode: 'default' | 'latest' | 'week';
+};
+
 export type RetrievalChunk = {
   id: string;
   reportId: string;
@@ -61,7 +68,7 @@ export function retrieveResearch(
   });
   const scored = filtered
     .map((chunk) => ({ ...chunk, score: relevanceScore(query, chunk) }))
-    .filter((chunk) => chunk.score > 0 || Boolean(scope.securityKey || scope.institution))
+    .filter((chunk) => chunk.score > 0 || Boolean(scope.from || scope.to || scope.securityKey || scope.institution))
     .sort((left, right) => right.score - left.score || right.date.localeCompare(left.date));
 
   const selected: RetrievalChunk[] = [];
@@ -80,6 +87,46 @@ export function retrieveResearch(
   return { chunks: selected, totalChars };
 }
 
+export function resolveResearchIntent(
+  query: string,
+  scope: ResearchScope,
+  chunks: RetrievalChunk[],
+  now = new Date(),
+): ResearchIntent {
+  const latestReportDate = chunks.reduce<string | null>(
+    (latest, chunk) => !latest || chunk.date > latest ? chunk.date : latest,
+    null,
+  );
+  const currentDate = new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'Asia/Shanghai',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).format(now);
+  const mode = /最近\s*(?:一|1)?\s*周|近\s*(?:7|七)\s*天|本周/.test(query)
+    ? 'week'
+    : /今天|今日|最新|当日/.test(query)
+      ? 'latest'
+      : 'default';
+  if (!latestReportDate || scope.from || scope.to || mode === 'default') {
+    return { scope: { ...scope }, currentDate, latestReportDate, mode };
+  }
+  if (mode === 'week') {
+    return {
+      scope: { ...scope, from: shiftDate(latestReportDate, -6), to: latestReportDate },
+      currentDate,
+      latestReportDate,
+      mode,
+    };
+  }
+  return {
+    scope: { ...scope, from: latestReportDate, to: latestReportDate },
+    currentDate,
+    latestReportDate,
+    mode,
+  };
+}
+
 function relevanceScore(query: string, chunk: RetrievalChunk) {
   const normalizedQuery = normalizeText(query);
   const haystack = normalizeText(`${chunk.securityName ?? ''} ${chunk.institution} ${chunk.text}`);
@@ -96,4 +143,10 @@ function queryTokens(value: string) {
     if (!/[\u4e00-\u9fa5]/.test(word) || word.length <= 4) return [word];
     return Array.from({ length: word.length - 1 }, (_, index) => word.slice(index, index + 2));
   }))];
+}
+
+function shiftDate(value: string, days: number) {
+  const date = new Date(`${value}T00:00:00Z`);
+  date.setUTCDate(date.getUTCDate() + days);
+  return date.toISOString().slice(0, 10);
 }

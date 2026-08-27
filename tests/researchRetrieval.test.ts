@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { buildReportFromMarkdown } from '../api/services/reportParser';
 import { extractOpinions } from '../api/services/opinionExtractor';
-import { buildRetrievalChunks, retrieveResearch } from '../api/services/researchRetrieval';
+import { buildRetrievalChunks, resolveResearchIntent, retrieveResearch } from '../api/services/researchRetrieval';
 
 const report = buildReportFromMarkdown({
   id: '2026-08-26',
@@ -35,5 +35,41 @@ assert.ok(result.totalChars <= 300);
 
 const outOfRange = retrieveResearch('鸣鸣很忙', { from: '2027-01-01' }, chunks);
 assert.equal(outOfRange.chunks.length, 0);
+
+const datedChunks = [
+  { ...chunks[0], id: 'latest', reportId: '2026-08-26', date: '2026-08-26', institution: '高盛', securityName: '鸣鸣很忙', text: '维持买入评级，目标价上调。' },
+  { ...chunks[0], id: 'older', reportId: '2026-08-19', date: '2026-08-19', institution: '花旗', securityName: '谨慎科技', text: '维持中性评级。' },
+];
+
+const latestIntent = resolveResearchIntent(
+  '今天的报告有什么值得关注',
+  {},
+  datedChunks,
+  new Date('2026-08-27T08:00:00+08:00'),
+);
+assert.equal(latestIntent.mode, 'latest');
+assert.equal(latestIntent.currentDate, '2026-08-27');
+assert.equal(latestIntent.latestReportDate, '2026-08-26');
+assert.deepEqual(latestIntent.scope, { from: '2026-08-26', to: '2026-08-26' });
+const latestResults = retrieveResearch('今天', latestIntent.scope, datedChunks);
+assert.deepEqual(latestResults.chunks.map((chunk) => chunk.id), ['latest']);
+
+const weekIntent = resolveResearchIntent(
+  '最近一周有哪些新增买入？',
+  {},
+  datedChunks,
+  new Date('2026-08-27T08:00:00+08:00'),
+);
+assert.equal(weekIntent.mode, 'week');
+assert.deepEqual(weekIntent.scope, { from: '2026-08-20', to: '2026-08-26' });
+
+const explicitScope = { from: '2026-07-01', to: '2026-07-31' };
+const explicitIntent = resolveResearchIntent(
+  '最新报告',
+  explicitScope,
+  datedChunks,
+  new Date('2026-08-27T08:00:00+08:00'),
+);
+assert.deepEqual(explicitIntent.scope, explicitScope);
 
 console.log('research retrieval tests passed');

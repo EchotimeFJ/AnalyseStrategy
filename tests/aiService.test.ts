@@ -9,8 +9,10 @@ const config = {
   timeoutMs: 5_000, dailyTokenBudget: 100_000, maxConcurrency: 2,
 };
 let capturedAuthorization = '';
+let capturedBody: Record<string, unknown> = {};
 const provider = createOpenAiCompatibleProvider(async (_input, init) => {
   capturedAuthorization = new Headers(init?.headers).get('Authorization') ?? '';
+  capturedBody = JSON.parse(String(init?.body)) as Record<string, unknown>;
   return new Response(
     'data: {"choices":[{"delta":{"content":"有来源"}}]}\n\n' +
     'data: {"choices":[{"delta":{"content":"的回答"}}]}\n\n' +
@@ -24,10 +26,15 @@ const report = buildReportFromMarkdown({
   markdown: '# 中金\n\n鸣鸣很忙 (1768.HK)\n维持买入评级，目标价 8.20 港元。\n风险：同店销售放缓。',
 });
 const opinions = extractOpinions(report);
+const olderReport = buildReportFromMarkdown({
+  id: '2026-08-25', filePath: '/tmp/2026-08-25.md',
+  markdown: '# 花旗\n\n谨慎科技 (9999.HK)\n维持中性评级，目标价 5 港元。',
+});
 const service = createAiService({
   configStore: { resolve: async () => config, getPublic: async () => ({ configured: true }) },
   provider,
-  getIndex: async () => ({ reports: [report], opinions, version: 'v1' }),
+  getIndex: async () => ({ reports: [olderReport, report], opinions: [...extractOpinions(olderReport), ...opinions], version: 'v1' }),
+  now: () => new Date('2026-08-27T08:00:00+08:00'),
 });
 
 const prepared = await service.prepareChat({ question: '鸣鸣很忙有什么风险？', scope: { securityKey: 'code:1768.HK' }, ip: '127.0.0.1' });
@@ -36,6 +43,16 @@ let answer = '';
 for await (const delta of prepared.stream) answer += delta;
 assert.equal(answer, '有来源的回答');
 assert.equal(capturedAuthorization, 'Bearer sk-secret');
+
+const latest = await service.prepareChat({ question: '今天的报告有什么值得关注？', scope: {}, ip: '127.0.0.3' });
+assert.ok(latest.sources.length > 0);
+assert.ok(latest.sources.every((source) => source.date === '2026-08-26'));
+let latestAnswer = '';
+for await (const delta of latest.stream) latestAnswer += delta;
+assert.equal(latestAnswer, '有来源的回答');
+const prompt = JSON.stringify(capturedBody.messages);
+assert.match(prompt, /当前日期：2026-08-27/);
+assert.match(prompt, /报告库最新日期：2026-08-26/);
 
 assert.notEqual(
   buildAiCacheKey('v1', config, '同一个问题', {}),
