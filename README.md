@@ -66,10 +66,10 @@ data/user-config.json
 
 ```text
 AI_CONFIG_SECRET=<用于加密运行时 API Key 的随机长密钥>
-AI_CONFIG_ADMIN_TOKEN=<网页修改全局配置时使用的管理令牌>
+AI_CONFIG_ADMIN_TOKEN=<网页测试或修改全局 AI 配置时使用的管理员密码>
 ```
 
-之后可以在“研究助手”页面选择 OpenAI、DeepSeek、MiMo、OpenRouter，或填写其他 OpenAI-compatible 服务的基础地址、模型和 API Key。DeepSeek、MiMo 与 OpenRouter 使用各自当前的官方地址、模型预设和请求头；仍可手动修改基础地址与模型。密钥使用 AES-256-GCM 加密后写入 Git 忽略的 `data/runtime/ai-config.json`；接口只返回掩码，不返回明文。
+之后可以在“研究助手”页面选择 OpenAI、DeepSeek、MiMo、OpenRouter，或填写其他 OpenAI-compatible 服务的基础地址、模型和 API Key。测试或保存时需要管理员密码，普通访客使用已经配置好的研究助手不需要密码。DeepSeek、MiMo 与 OpenRouter 使用各自当前的官方地址、模型预设和请求头；仍可手动修改基础地址与模型。密钥使用 AES-256-GCM 加密后写入 Git 忽略的 `data/runtime/ai-config.json`；接口只返回掩码，不返回明文。
 
 原生预设参考：
 
@@ -77,7 +77,7 @@ AI_CONFIG_ADMIN_TOKEN=<网页修改全局配置时使用的管理令牌>
 - MiMo：`https://api.xiaomimimo.com/v1`，默认 `mimo-v2.5-pro`；Token Plan 使用控制台提供的专属地址
 - OpenRouter：`https://openrouter.ai/api/v1`，默认 `openrouter/auto`，也支持任意 `author/model` 标识
 
-也可以完全用服务器环境变量配置：`AI_PROVIDER_ID`、`AI_PROVIDER_NAME`、`AI_BASE_URL`、`AI_MODEL`、`AI_API_KEY`、`AI_TIMEOUT_MS`、`AI_DAILY_TOKEN_BUDGET` 和 `AI_MAX_CONCURRENCY`。`AI_PROVIDER_ID` 可取 `openai`、`deepseek`、`mimo`、`openrouter`、`custom`，环境变量优先于网页保存值。
+也可以完全用服务器环境变量配置：`AI_PROVIDER_ID`、`AI_PROVIDER_NAME`、`AI_BASE_URL`、`AI_MODEL`、`AI_API_KEY`、`AI_TIMEOUT_MS`、`AI_DAILY_TOKEN_BUDGET` 和 `AI_MAX_CONCURRENCY`。后三个运维参数不在网页表单中展示。`AI_PROVIDER_ID` 可取 `openai`、`deepseek`、`mimo`、`openrouter`、`custom`，环境变量优先于网页保存值。
 
 明亮/黑暗主题可在桌面侧边栏或手机顶部切换，选择只保存在当前浏览器中。
 

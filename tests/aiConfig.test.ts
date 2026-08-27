@@ -21,10 +21,10 @@ await assert.rejects(
 const store = createAiConfigStore({ filePath, secret: 'encryption-key', adminToken: 'admin', env: {} });
 const preview = await store.preview({ providerName: 'Provider', baseUrl: 'https://example.com/v1', model: 'model', apiKey: 'sk-preview' }, 'admin');
 assert.equal(preview.apiKey, 'sk-preview');
-await assert.rejects(store.preview({ providerName: 'Provider', baseUrl: 'https://example.com/v1', model: 'model', apiKey: 'sk-preview' }, 'wrong'), /管理令牌/);
+await assert.rejects(store.preview({ providerName: 'Provider', baseUrl: 'https://example.com/v1', model: 'model', apiKey: 'sk-preview' }, 'wrong'), /管理员密码/);
 await assert.rejects(
   store.save({ providerName: 'Provider', baseUrl: 'https://example.com/v1', model: 'model', apiKey: 'sk-test' }, 'wrong'),
-  /管理令牌/,
+  /管理员密码/,
 );
 await store.save({
   providerName: 'Provider',

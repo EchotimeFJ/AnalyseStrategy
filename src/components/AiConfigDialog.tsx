@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { KeyRound, X } from 'lucide-react';
 import { apiPost, apiPut } from '@/lib/api';
+import { buildAiConfigInput } from '@/lib/aiConfigForm';
 import type { AiProviderPreset, AiStatus } from '@/types';
 
 const providerNotes: Partial<Record<AiStatus['providerId'], string>> = {
@@ -17,9 +18,6 @@ export function AiConfigDialog({ open, status, onClose, onSaved }: { open: boole
   const [model, setModel] = useState('');
   const [apiKey, setApiKey] = useState('');
   const [adminToken, setAdminToken] = useState('');
-  const [timeoutMs, setTimeoutMs] = useState(45_000);
-  const [dailyTokenBudget, setDailyTokenBudget] = useState(500_000);
-  const [maxConcurrency, setMaxConcurrency] = useState(2);
   const [busy, setBusy] = useState<'test' | 'save' | ''>('');
   const [message, setMessage] = useState('');
 
@@ -29,15 +27,12 @@ export function AiConfigDialog({ open, status, onClose, onSaved }: { open: boole
     setProviderName(status.providerName || 'OpenAI compatible');
     setBaseUrl(status.baseUrl || 'https://api.openai.com/v1');
     setModel(status.model || '');
-    setTimeoutMs(status.timeoutMs || 45_000);
-    setDailyTokenBudget(status.dailyTokenBudget || 500_000);
-    setMaxConcurrency(status.maxConcurrency || 2);
   }, [status]);
 
   if (!open) return null;
   const providerPresets = status?.providerPresets ?? [];
   const selectedPreset = providerPresets.find((provider) => provider.id === providerId);
-  const input = { providerId, providerName, baseUrl, model, apiKey, timeoutMs, dailyTokenBudget, maxConcurrency };
+  const input = buildAiConfigInput({ providerId, providerName, baseUrl, model, apiKey });
   const headers = { 'X-AI-Admin-Token': adminToken };
 
   function selectProvider(provider: AiProviderPreset) {
@@ -94,10 +89,8 @@ export function AiConfigDialog({ open, status, onClose, onSaved }: { open: boole
           <Field label="模型"><><input list={`provider-models-${providerId}`} value={model} onChange={(e) => setModel(e.target.value)} placeholder={selectedPreset?.defaultModel || '输入模型名称'} /><datalist id={`provider-models-${providerId}`}>{selectedPreset?.models.map((modelName) => <option key={modelName} value={modelName} />)}</datalist></></Field>
           <Field label="API 基础地址" wide><input value={baseUrl} onChange={(e) => setBaseUrl(e.target.value)} placeholder="https://api.openai.com/v1" /></Field>
           <Field label={`API Key ${status?.apiKeyMask ? `（当前 ${status.apiKeyMask}）` : ''}`} wide><input type="password" value={apiKey} onChange={(e) => setApiKey(e.target.value)} placeholder={status?.configured ? '留空则保留现有密钥' : '输入 API Key'} autoComplete="new-password" /></Field>
-          <Field label="超时（毫秒）"><input type="number" value={timeoutMs} onChange={(e) => setTimeoutMs(Number(e.target.value))} /></Field>
-          <Field label="最大并发"><input type="number" value={maxConcurrency} onChange={(e) => setMaxConcurrency(Number(e.target.value))} /></Field>
-          <Field label="每日 Token 预算"><input type="number" value={dailyTokenBudget} onChange={(e) => setDailyTokenBudget(Number(e.target.value))} /></Field>
-          <Field label="配置管理令牌"><input type="password" value={adminToken} onChange={(e) => setAdminToken(e.target.value)} autoComplete="off" /></Field>
+          <Field label="管理员密码" wide><input type="password" value={adminToken} onChange={(e) => setAdminToken(e.target.value)} placeholder="输入网站管理员密码" autoComplete="current-password" /></Field>
+          <p className="-mt-2 text-xs leading-5 text-slate-500 sm:col-span-2">仅在测试、保存或修改全站 AI 配置时需要；普通访客使用研究助手无需填写。</p>
         </div>
         {!status?.canPersist ? <p className="mt-4 rounded-xl bg-amber-50 p-3 text-sm text-amber-800">服务器尚未设置 AI_CONFIG_SECRET，不能在网页保存密钥；可以先使用服务器环境变量配置。</p> : null}
         {message ? <p className={`mt-4 rounded-xl p-3 text-sm ${message.includes('成功') ? 'bg-emerald-50 text-emerald-700' : 'bg-rose-50 text-rose-700'}`}>{message}</p> : null}

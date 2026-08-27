@@ -150,7 +150,7 @@ function assertAdminToken(input: string, expected: string) {
   if (!expected) throw new Error('AI_CONFIG_ADMIN_TOKEN 未配置');
   const left = Buffer.from(input);
   const right = Buffer.from(expected);
-  if (left.length !== right.length || !timingSafeEqual(left, right)) throw new Error('AI 配置管理令牌无效');
+  if (left.length !== right.length || !timingSafeEqual(left, right)) throw new Error('管理员密码错误，请检查后重试');
 }
 
 function normalizeBaseUrl(value: string) {
