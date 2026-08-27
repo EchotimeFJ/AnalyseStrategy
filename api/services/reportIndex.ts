@@ -18,6 +18,7 @@ import type {
 } from '../domain/research.js';
 import { mergeSecurityEntities, resolveInstitution, securityKey } from './entityResolver.js';
 import { extractOpinions } from './opinionExtractor.js';
+import { classifySearchIntent, groupSearchHits } from './searchService.js';
 import { readUserConfig, type WatchItem } from './localConfig.js';
 import { getReportDir } from '../runtimeConfig.js';
 
@@ -351,6 +352,7 @@ export async function searchReports(input: {
   to?: string;
   institution?: string;
   mode?: string;
+  raw?: boolean;
 }) {
   const index = await ensureIndex();
   const filteredReports = index.reports.filter((report) => {
@@ -367,13 +369,33 @@ export async function searchReports(input: {
   });
 
   const ratingQuery = parseRatingQuery(input.q, input.mode);
+  let hits: SearchHit[];
   if (ratingQuery) {
     const reportIds = new Set(filteredReports.map((report) => report.id));
-    return searchRatingMentions(index.mentions, reportIds, ratingQuery).slice(0, 500);
+    hits = searchRatingMentions(index.mentions, reportIds, ratingQuery).slice(0, 500);
+  } else {
+    hits = filterSearchMode(
+      createExactSearch(sortReportsDesc(filteredReports))(input.q ?? ''),
+      input.mode,
+    ).slice(0, 500);
   }
 
-  const hits = createExactSearch(sortReportsDesc(filteredReports))(input.q ?? '');
-  return filterSearchMode(hits, input.mode).slice(0, 500);
+  if (input.raw) return hits;
+
+  const intent = classifySearchIntent(input.q ?? '', {
+    securities: [...index.entities.values()],
+    institutions: [...new Set(index.opinions.filter((item) => item.institutionVerified).map((item) => item.institution))],
+  });
+  const company = intent.securityKey
+    ? (await getCompanyProfiles(input.q ?? '')).find((item) => item.security.key === intent.securityKey) ?? null
+    : null;
+  return {
+    query: input.q ?? '',
+    intent,
+    totalHits: hits.length,
+    groups: groupSearchHits(hits),
+    company,
+  };
 }
 
 export async function getTargetProfile(query: string) {
@@ -484,8 +506,8 @@ export async function exportData(type: string, query?: string) {
     return toCsv(profile.mentions);
   }
   if (type === 'search' && query) {
-    const hits = await searchReports({ q: query });
-    return toCsv(hits);
+    const hits = await searchReports({ q: query, raw: true });
+    return toCsv(Array.isArray(hits) ? hits : []);
   }
   const summary = await getSummary();
   return JSON.stringify(summary, null, 2);

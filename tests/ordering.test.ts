@@ -33,7 +33,7 @@ const { rebuildIndex, searchReports, getTargetProfile } = await import('../api/s
 
 await rebuildIndex();
 
-const searchHits = await searchReports({ q: '小米集团' });
+const searchHits = await searchReports({ q: '小米集团', raw: true });
 assert.equal(searchHits[0].date, '2025-12-04');
 assert.equal(searchHits.at(-1)?.date, '2025-09-10');
 

@@ -46,14 +46,14 @@ const { rebuildIndex, searchReports } = await import('../api/services/reportInde
 
 await rebuildIndex();
 
-const buyHits = await searchReports({ q: '买入评级' });
+const buyHits = await searchReports({ q: '买入评级', raw: true });
 assert.equal(buyHits.length, 2);
 assert.equal(buyHits[0].date, '2026-07-08');
 assert.equal(buyHits[0].institution, '花旗');
 assert.match(buyHits[0].snippet, /新标的/);
 assert.equal(buyHits[1].date, '2026-01-01');
 
-const sellHits = await searchReports({ q: '卖出评级' });
+const sellHits = await searchReports({ q: '卖出评级', raw: true });
 assert.equal(sellHits.length, 1);
 assert.equal(sellHits[0].date, '2026-07-09');
 assert.match(sellHits[0].snippet, /谨慎标的/);

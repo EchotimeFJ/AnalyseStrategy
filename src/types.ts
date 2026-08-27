@@ -80,6 +80,34 @@ export type SearchHit = {
   matchedText: string;
 };
 
+export type SearchIntent = {
+  type: 'security-code' | 'security-name' | 'institution' | 'text';
+  query: string;
+  securityKey?: string;
+  institution?: string;
+};
+
+export type SearchResultGroup = {
+  reportId: string;
+  date: string;
+  institutions: string[];
+  matchCount: number;
+  snippets: Array<{
+    startLine: number;
+    endLine: number;
+    lineNumbers: number[];
+    text: string;
+  }>;
+};
+
+export type GroupedSearchResponse = {
+  query: string;
+  intent: SearchIntent;
+  totalHits: number;
+  groups: SearchResultGroup[];
+  company: CompanyProfile | null;
+};
+
 export type TargetChange = {
   targetName: string;
   institution: string;

@@ -82,6 +82,7 @@ router.get('/search', asyncRoute(async (req: Request, res: Response): Promise<vo
       to: asString(req.query.to),
       institution: asString(req.query.institution),
       mode: asString(req.query.mode),
+      raw: asBoolean(req.query.raw),
     }),
   });
 }));
@@ -215,6 +216,10 @@ function asString(value: unknown): string | undefined {
     return value.trim();
   }
   return undefined;
+}
+
+function asBoolean(value: unknown): boolean {
+  return value === 'true' || value === '1';
 }
 
 export default router;
