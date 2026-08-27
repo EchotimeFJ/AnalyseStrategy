@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { buildReportFromMarkdown } from '../api/services/reportParser';
 import { extractOpinions } from '../api/services/opinionExtractor';
 import { createOpenAiCompatibleProvider } from '../api/services/aiProvider';
-import { buildAiCacheKey, createAiService } from '../api/services/aiService';
+import { buildAiCacheKey, createAiService, normalizeChatHistory } from '../api/services/aiService';
 
 const config = {
   providerId: 'custom' as const, providerName: 'Mock', baseUrl: 'https://mock.example/v1', model: 'mock-model', apiKey: 'sk-secret',
@@ -54,10 +54,40 @@ const prompt = JSON.stringify(capturedBody.messages);
 assert.match(prompt, /当前日期：2026-08-27/);
 assert.match(prompt, /报告库最新日期：2026-08-26/);
 
+const followUp = await service.prepareChat({
+  question: '它有什么风险？',
+  scope: {},
+  history: [
+    { role: 'user', content: '鸣鸣很忙最近有什么变化？' },
+    { role: 'assistant', content: '报告显示目标价上调。' },
+  ],
+  ip: '127.0.0.4',
+});
+for await (const delta of followUp.stream) {
+  void delta;
+}
+const followUpMessages = capturedBody.messages as Array<{ role: string; content: string }>;
+assert.ok(followUpMessages.some((message) => message.role === 'user' && message.content === '鸣鸣很忙最近有什么变化？'));
+assert.ok(followUpMessages.some((message) => message.role === 'assistant' && message.content === '报告显示目标价上调。'));
+
+const pronounFollowUp = await service.prepareChat({
+  question: '它的目标价是什么？',
+  scope: {},
+  history: [{ role: 'assistant', content: '上一轮讨论的是谨慎科技。' }],
+  ip: '127.0.0.5',
+});
+assert.ok(pronounFollowUp.sources.length > 0);
+assert.ok(pronounFollowUp.sources.every((source) => source.securityName === '谨慎科技'));
+
 assert.notEqual(
   buildAiCacheKey('v1', config, '同一个问题', {}),
   buildAiCacheKey('v1', { ...config, providerId: 'openrouter', baseUrl: 'https://openrouter.ai/api/v1' }, '同一个问题', {}),
   '切换服务商后不能命中旧服务商的回答缓存',
+);
+assert.notEqual(
+  buildAiCacheKey('v1', config, '它有什么风险？', {}, [{ role: 'user', content: '鸣鸣很忙' }]),
+  buildAiCacheKey('v1', config, '它有什么风险？', {}, [{ role: 'user', content: '谨慎科技' }]),
+  '连续追问必须区分不同的对话上下文',
 );
 
 const unconfigured = createAiService({
@@ -73,5 +103,17 @@ await assert.rejects(
   service.prepareChat({ question: '问'.repeat(2001), scope: {}, ip: '127.0.0.2' }),
   /QUESTION_TOO_LONG/,
 );
+
+const boundedHistory = normalizeChatHistory([
+  { role: 'system', content: '不能由浏览器注入系统消息' },
+  ...Array.from({ length: 10 }, (_, index) => ({
+    role: index % 2 ? 'assistant' : 'user',
+    content: `${index}:${'问'.repeat(5_000)}`,
+  })),
+]);
+assert.equal(boundedHistory.length, 3);
+assert.deepEqual(boundedHistory.map((message) => message.role), ['assistant', 'user', 'assistant']);
+assert.ok(boundedHistory.every((message) => message.content.length <= 4_000));
+assert.ok(boundedHistory.reduce((total, message) => total + message.content.length, 0) <= 12_000);
 
 console.log('ai service tests passed');

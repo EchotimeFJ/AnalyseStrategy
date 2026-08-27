@@ -127,6 +127,39 @@ export function resolveResearchIntent(
   };
 }
 
+export function resolveFollowUpScope(
+  query: string,
+  scope: ResearchScope,
+  history: Array<{ role: 'user' | 'assistant'; content: string }>,
+  chunks: RetrievalChunk[],
+): ResearchScope {
+  const referencesPriorSecurity = /它|该公司|这家公司|这个公司|上述公司|前者|后者/.test(query)
+    || /^(?:关于)?其(?!他|中|实|余|次)/.test(query);
+  if (scope.securityKey || !referencesPriorSecurity) return { ...scope };
+  const securities = new Map<string, { securityKey: string; terms: string[] }>();
+  for (const chunk of chunks) {
+    if (!chunk.securityKey) continue;
+    const current = securities.get(chunk.securityKey) ?? { securityKey: chunk.securityKey, terms: [] };
+    const code = chunk.securityKey.startsWith('code:') ? chunk.securityKey.slice(5) : '';
+    current.terms = [...new Set([...current.terms, chunk.securityName ?? '', code].map(normalizeText).filter(Boolean))];
+    securities.set(chunk.securityKey, current);
+  }
+  for (let historyIndex = history.length - 1; historyIndex >= 0; historyIndex -= 1) {
+    const content = normalizeText(history[historyIndex].content);
+    let matchedKey = '';
+    let matchedAt = -1;
+    for (const security of securities.values()) {
+      const latestMention = Math.max(...security.terms.map((term) => content.lastIndexOf(term)));
+      if (latestMention > matchedAt) {
+        matchedAt = latestMention;
+        matchedKey = security.securityKey;
+      }
+    }
+    if (matchedKey && matchedAt >= 0) return { ...scope, securityKey: matchedKey };
+  }
+  return { ...scope };
+}
+
 function relevanceScore(query: string, chunk: RetrievalChunk) {
   const normalizedQuery = normalizeText(query);
   const haystack = normalizeText(`${chunk.securityName ?? ''} ${chunk.institution} ${chunk.text}`);

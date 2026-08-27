@@ -26,6 +26,7 @@ router.post('/chat', async (req: Request, res: Response): Promise<void> => {
     const prepared = await aiService.prepareChat({
       question: String(req.body.question ?? ''),
       scope: typeof req.body.scope === 'object' && req.body.scope ? req.body.scope : {},
+      history: req.body.history,
       ip: req.ip || req.socket.remoteAddress || 'unknown',
       signal: controller.signal,
     });

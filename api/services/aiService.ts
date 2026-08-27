@@ -1,9 +1,10 @@
 import type { ResolvedAiConfig } from './aiConfig.js';
 import { aiConfigStore } from './aiConfig.js';
-import { createOpenAiCompatibleProvider, type AiProvider } from './aiProvider.js';
+import { createOpenAiCompatibleProvider, type AiProvider, type ProviderMessage } from './aiProvider.js';
 import { ensureIndex } from './reportIndex.js';
 import {
   buildRetrievalChunks,
+  resolveFollowUpScope,
   resolveResearchIntent,
   retrieveResearch,
   type ResearchIntent,
@@ -18,6 +19,7 @@ type ConfigStore = {
 };
 
 type AiIndex = { reports: ReportDocument[]; opinions: OpinionRecord[]; version?: string };
+type ChatHistoryMessage = { role: 'user' | 'assistant'; content: string };
 type AiServiceOptions = {
   configStore?: ConfigStore;
   provider?: AiProvider;
@@ -25,7 +27,7 @@ type AiServiceOptions = {
   now?: () => Date;
 };
 
-type ChatRequest = { question: string; scope: ResearchScope; ip: string; signal?: AbortSignal };
+type ChatRequest = { question: string; scope: ResearchScope; history?: unknown; ip: string; signal?: AbortSignal };
 
 export function createAiService(options: AiServiceOptions = {}) {
   const configStore = options.configStore ?? aiConfigStore;
@@ -57,11 +59,13 @@ export function createAiService(options: AiServiceOptions = {}) {
     if (estimatedTokens >= config.dailyTokenBudget) throw new Error('AI_DAILY_BUDGET:今日 AI 额度已用完');
 
     const index = await getIndex();
+    const history = normalizeChatHistory(request.history);
     const chunks = buildRetrievalChunks(index.reports, index.opinions);
-    const intent = resolveResearchIntent(question, request.scope, chunks, now());
-    const retrieval = retrieveResearch(question, intent.scope, chunks);
+    const contextualScope = resolveFollowUpScope(question, request.scope, history, chunks);
+    const intent = resolveResearchIntent(question, contextualScope, chunks, now());
+    const retrieval = retrieveResearch(buildRetrievalQuery(question, history), intent.scope, chunks);
     if (!retrieval.chunks.length) throw new Error('AI_NO_EVIDENCE:当前报告库没有找到足够相关的来源');
-    const cacheKey = buildAiCacheKey(index.version, config, question, intent.scope);
+    const cacheKey = buildAiCacheKey(index.version, config, question, intent.scope, history);
     const cached = cache.get(cacheKey);
     const sources = retrieval.chunks.map((chunk) => ({
       id: chunk.id,
@@ -77,7 +81,7 @@ export function createAiService(options: AiServiceOptions = {}) {
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), config.timeoutMs);
     const signal = request.signal ? AbortSignal.any([request.signal, controller.signal]) : controller.signal;
-    const messages = buildMessages(question, retrieval.chunks, intent);
+    const messages = buildMessages(question, retrieval.chunks, intent, history);
     const upstream = provider.stream({ messages }, config, signal);
 
     async function* trackedStream() {
@@ -88,8 +92,8 @@ export function createAiService(options: AiServiceOptions = {}) {
           answer += delta;
           yield delta;
         }
-        estimatedTokens += Math.ceil((question.length + retrieval.totalChars + answer.length) / 4);
-        cache.set(cacheKey, answer);
+        estimatedTokens += Math.ceil((question.length + history.reduce((total, message) => total + message.content.length, 0) + retrieval.totalChars + answer.length) / 4);
+        if (answer.trim()) cache.set(cacheKey, answer);
         if (cache.size > 80) cache.delete(cache.keys().next().value as string);
       } finally {
         active = Math.max(0, active - 1);
@@ -109,11 +113,39 @@ export function buildAiCacheKey(
   config: Pick<ResolvedAiConfig, 'providerId' | 'baseUrl' | 'model'>,
   question: string,
   scope: ResearchScope,
+  history: ProviderMessage[] = [],
 ) {
-  return JSON.stringify([indexVersion, config.providerId, config.baseUrl, config.model, question, scope]);
+  return JSON.stringify([indexVersion, config.providerId, config.baseUrl, config.model, question, scope, history]);
 }
 
-function buildMessages(question: string, chunks: ReturnType<typeof buildRetrievalChunks>, intent: ResearchIntent) {
+export function normalizeChatHistory(value: unknown): ChatHistoryMessage[] {
+  if (!Array.isArray(value)) return [];
+  const candidates = value.flatMap((item): ChatHistoryMessage[] => {
+    if (!item || typeof item !== 'object') return [];
+    const role = (item as { role?: unknown }).role;
+    const rawContent = (item as { content?: unknown }).content;
+    if ((role !== 'user' && role !== 'assistant') || typeof rawContent !== 'string') return [];
+    const content = rawContent.trim().slice(0, 4_000);
+    return content ? [{ role, content }] : [];
+  }).slice(-8);
+  const selected: ChatHistoryMessage[] = [];
+  let totalChars = 0;
+  for (let index = candidates.length - 1; index >= 0 && totalChars < 12_000; index -= 1) {
+    const remaining = 12_000 - totalChars;
+    const content = candidates[index].content.slice(0, remaining);
+    if (!content) continue;
+    selected.unshift({ ...candidates[index], content });
+    totalChars += content.length;
+  }
+  return selected;
+}
+
+function buildMessages(
+  question: string,
+  chunks: ReturnType<typeof buildRetrievalChunks>,
+  intent: ResearchIntent,
+  history: ProviderMessage[],
+) {
   const sources = chunks.map((chunk, index) =>
     `<source id="${index + 1}" report="${chunk.reportId}" date="${chunk.date}" institution="${chunk.institution}" line="${chunk.startLine}">\n${chunk.text}\n</source>`,
   ).join('\n\n');
@@ -128,8 +160,14 @@ function buildMessages(question: string, chunks: ReturnType<typeof buildRetrieva
         '使用清晰简洁的 Markdown。优先给出：核心结论、值得关注、买入观点、催化剂、风险；没有对应证据的栏目不要硬凑。直接输出最终答案，不展示内部思考过程。',
       ].join('\n'),
     },
-    { role: 'user' as const, content: `问题：${question}\n\n可用来源：\n${sources}` },
+    ...history,
+    { role: 'user' as const, content: `本轮问题：${question}\n\n本轮可用来源：\n${sources}` },
   ];
+}
+
+function buildRetrievalQuery(question: string, history: ProviderMessage[]) {
+  const context = history.slice(-4).map((message) => message.content.slice(0, 600));
+  return [...context, question].join('\n');
 }
 
 async function* stringStream(value: string) {

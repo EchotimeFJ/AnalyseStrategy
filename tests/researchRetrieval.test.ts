@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { buildReportFromMarkdown } from '../api/services/reportParser';
 import { extractOpinions } from '../api/services/opinionExtractor';
-import { buildRetrievalChunks, resolveResearchIntent, retrieveResearch } from '../api/services/researchRetrieval';
+import { buildRetrievalChunks, resolveFollowUpScope, resolveResearchIntent, retrieveResearch } from '../api/services/researchRetrieval';
 
 const report = buildReportFromMarkdown({
   id: '2026-08-26',
@@ -37,8 +37,8 @@ const outOfRange = retrieveResearch('鸣鸣很忙', { from: '2027-01-01' }, chun
 assert.equal(outOfRange.chunks.length, 0);
 
 const datedChunks = [
-  { ...chunks[0], id: 'latest', reportId: '2026-08-26', date: '2026-08-26', institution: '高盛', securityName: '鸣鸣很忙', text: '维持买入评级，目标价上调。' },
-  { ...chunks[0], id: 'older', reportId: '2026-08-19', date: '2026-08-19', institution: '花旗', securityName: '谨慎科技', text: '维持中性评级。' },
+  { ...chunks[0], id: 'latest', reportId: '2026-08-26', date: '2026-08-26', institution: '高盛', securityKey: 'code:1768.HK', securityName: '鸣鸣很忙', text: '维持买入评级，目标价上调。' },
+  { ...chunks[0], id: 'older', reportId: '2026-08-19', date: '2026-08-19', institution: '花旗', securityKey: 'code:9999.HK', securityName: '谨慎科技', text: '维持中性评级。' },
 ];
 
 const latestIntent = resolveResearchIntent(
@@ -71,5 +71,26 @@ const explicitIntent = resolveResearchIntent(
   new Date('2026-08-27T08:00:00+08:00'),
 );
 assert.deepEqual(explicitIntent.scope, explicitScope);
+
+const followUpScope = resolveFollowUpScope(
+  '它有什么风险？',
+  {},
+  [{ role: 'assistant', content: '鸣鸣很忙目标价上调，但仍需注意同店销售。' }],
+  datedChunks,
+);
+assert.deepEqual(followUpScope, { securityKey: 'code:1768.HK' });
+assert.deepEqual(
+  resolveFollowUpScope('它有什么风险？', { securityKey: 'code:9999.HK' }, [], datedChunks),
+  { securityKey: 'code:9999.HK' },
+);
+assert.deepEqual(
+  resolveFollowUpScope(
+    '尤其需要关注哪些风险？',
+    {},
+    [{ role: 'assistant', content: '鸣鸣很忙目标价上调。' }],
+    datedChunks,
+  ),
+  {},
+);
 
 console.log('research retrieval tests passed');

@@ -128,12 +128,12 @@ const streamErrorProvider = providerModule.createOpenAiCompatibleProvider(async 
   { status: 200, headers: { 'Content-Type': 'text/event-stream' } },
 ));
 await assert.rejects(async () => {
-  for await (const _delta of streamErrorProvider.stream(
+  for await (const delta of streamErrorProvider.stream(
     { messages: [{ role: 'user', content: '测试流错误' }] },
     config('openrouter', 'https://openrouter.ai/api/v1', 'openrouter/auto'),
     new AbortController().signal,
   )) {
-    // Consume the real stream so provider-side SSE errors surface.
+    void delta;
   }
 }, /AI_PROVIDER_ERROR:429:供应商繁忙/);
 
@@ -147,12 +147,12 @@ const emptyProvider = providerModule.createOpenAiCompatibleProvider(async () => 
   );
 });
 await assert.rejects(async () => {
-  for await (const _delta of emptyProvider.stream(
+  for await (const delta of emptyProvider.stream(
     { messages: [{ role: 'user', content: '测试空回答' }] },
     config('openrouter', 'https://openrouter.ai/api/v1', 'z-ai/glm-5.3-flash'),
     new AbortController().signal,
   )) {
-    // Consume both attempts; a silent empty stream is a user-visible failure.
+    void delta;
   }
 }, /AI_EMPTY_COMPLETION:模型推理耗尽了输出额度/);
 assert.equal(emptyAttempts, 2);
