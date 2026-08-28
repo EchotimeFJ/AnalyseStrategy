@@ -14,6 +14,7 @@ import {
 import { primaryRoutes, routes, secondaryRoutes, type RouteId } from '@/lib/navigation';
 import { useTheme } from '@/hooks/useTheme';
 import { ReleaseStamp } from '@/components/ReleaseStamp';
+import { BackToTopButton } from '@/components/BackToTopButton';
 
 const icons: Record<RouteId, typeof Home> = {
   today: Home,
@@ -63,6 +64,7 @@ export function Layout({ children }: { children: ReactNode }) {
           })}
         </nav>
         <div className="min-w-0 border-t border-slate-100 pt-4 text-xs text-slate-400">
+          <BackToTopButton />
           <button onClick={toggleTheme} className="mb-4 flex min-h-11 w-full items-center justify-between rounded-xl border border-slate-200 bg-slate-50 px-3 text-left text-slate-600 transition hover:border-blue-300" aria-label={isDark ? '切换到明亮模式' : '切换到黑暗模式'}>
             <span className="flex items-center gap-2">{isDark ? <Moon className="h-4 w-4" /> : <Sun className="h-4 w-4" />}<span className="font-semibold">{isDark ? '黑暗主题' : '明亮主题'}</span></span>
             <span>点击切换</span>
