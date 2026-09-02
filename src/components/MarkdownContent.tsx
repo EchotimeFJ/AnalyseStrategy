@@ -3,6 +3,7 @@ import remarkGfm from 'remark-gfm';
 import { Link } from 'react-router-dom';
 import type { ReactNode } from 'react';
 import type { Components, Options } from 'react-markdown';
+import { remarkMarkdownTags } from '@/lib/markdownTags';
 
 export type MarkdownVariant = 'report' | 'assistant';
 
@@ -37,7 +38,7 @@ export function MarkdownContent({
 
   return (
     <article className={classes}>
-      <ReactMarkdown components={mergedComponents} remarkPlugins={[remarkGfm, ...remarkPlugins]}>{markdown}</ReactMarkdown>
+      <ReactMarkdown components={mergedComponents} remarkPlugins={[remarkGfm, remarkMarkdownTags, ...remarkPlugins]}>{markdown}</ReactMarkdown>
       {trailing}
     </article>
   );
@@ -54,15 +55,17 @@ function createComponents({
 }): Components {
   const line = (node: unknown) => sourceLines ? sourceLineProps(node) : {};
   const common: Components = {
-    a: ({ href, children, title }) => {
+    a: ({ href, children, title, className }) => {
       if (!href) return <span>{children}</span>;
+      const isMarkdownTag = className?.split(/\s+/).includes('markdown-tag');
       if (href.startsWith('/')) {
-        return <Link to={href} title={title} className={internalLinkClassName}>{children}</Link>;
+        const internalClassName = [className, isMarkdownTag ? undefined : internalLinkClassName].filter(Boolean).join(' ') || undefined;
+        return <Link to={href} title={title} className={internalClassName}>{children}</Link>;
       }
       if (/^https?:\/\//i.test(href)) {
-        return <a href={href} title={title} target="_blank" rel="noopener noreferrer">{children}</a>;
+        return <a href={href} title={title} className={className} target="_blank" rel="noopener noreferrer">{children}</a>;
       }
-      return <a href={href} title={title}>{children}</a>;
+      return <a href={href} title={title} className={className}>{children}</a>;
     },
     table: ({ node, children }) => (
       <div

@@ -1,4 +1,12 @@
 import path from 'node:path';
+import { unified } from 'unified';
+import remarkParse from 'remark-parse';
+import {
+  extractMarkdownTagOccurrences,
+  findMarkdownTags,
+  markdownTagMatches,
+  type MarkdownTagOccurrence,
+} from '../../src/lib/markdownTags.js';
 
 export type SignalType = 'catalyst' | 'risk' | 'valuation' | 'financial' | 'macro';
 
@@ -19,6 +27,7 @@ export type ReportDocument = {
   lines: string[];
   lineCount: number;
   title: string;
+  tags: MarkdownTagOccurrence[];
   institutions: InstitutionBlock[];
   updatedAt?: string;
 };
@@ -104,6 +113,7 @@ export function normalizeText(value: string): string {
 export function buildReportFromMarkdown(input: BuildReportInput): ReportDocument {
   const lines = input.markdown.split(/\r?\n/);
   const date = extractDate(input.filePath, input.id);
+  const markdownTree = unified().use(remarkParse).parse(input.markdown);
   const institutions = extractInstitutionBlocks(lines).map((block) => ({
     ...block,
     content: lines.slice(block.startLine - 1, block.endLine).join('\n'),
@@ -118,8 +128,37 @@ export function buildReportFromMarkdown(input: BuildReportInput): ReportDocument
     lines,
     lineCount: lines.length,
     title: path.basename(input.filePath),
+    tags: extractMarkdownTagOccurrences(markdownTree),
     institutions,
     updatedAt: input.updatedAt,
+  };
+}
+
+export function createTagSearch(reports: ReportDocument[]) {
+  return (query: string): SearchHit[] => {
+    const rawQuery = query.trim().startsWith('#') ? query.trim() : `#${query.trim()}`;
+    const queryMatch = findMarkdownTags(rawQuery)[0];
+    if (!queryMatch || queryMatch.start !== 0 || queryMatch.end !== rawQuery.length) return [];
+
+    const hits: SearchHit[] = [];
+    for (const report of reports) {
+      const matchingLines = new Set(
+        report.tags
+          .filter((tag) => markdownTagMatches(tag.name, queryMatch.name))
+          .map((tag) => tag.lineNumber),
+      );
+      for (const lineNumber of matchingLines) {
+        hits.push({
+          reportId: report.id,
+          date: report.date,
+          institution: findInstitutionForLine(report, lineNumber),
+          lineNumber,
+          snippet: buildSnippet(report.lines, lineNumber - 1),
+          matchedText: rawQuery,
+        });
+      }
+    }
+    return hits;
   };
 }
 

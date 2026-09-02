@@ -65,7 +65,7 @@ export default function SearchPage() {
             <input value={query} onChange={(event) => setQuery(event.target.value)} className="min-h-12 w-full rounded-xl border border-slate-200 bg-white pl-11 pr-4 text-sm outline-none transition focus:border-blue-400" placeholder="例如 1768.HK / 英诺赛科 / 中金 / 消费复苏" />
           </div>
           <select value={mode} onChange={(event) => setMode(event.target.value)} className="min-h-12 rounded-xl border border-slate-200 bg-white px-3 text-sm">
-            <option value="all">全部内容</option><option value="rating">评级</option><option value="target">目标价</option><option value="signal">风险/催化剂</option>
+            <option value="all">全部内容</option><option value="tag">标签</option><option value="rating">评级</option><option value="target">目标价</option><option value="signal">风险/催化剂</option>
           </select>
           <input type="date" value={from} onChange={(event) => setFrom(event.target.value)} className="min-h-12 rounded-xl border border-slate-200 bg-white px-3 text-sm" aria-label="开始日期" />
           <input type="date" value={to} onChange={(event) => setTo(event.target.value)} className="min-h-12 rounded-xl border border-slate-200 bg-white px-3 text-sm" aria-label="结束日期" />
@@ -84,14 +84,14 @@ export default function SearchPage() {
       <div className="mt-6">
         {loading ? <LoadingBlock label="正在检索报告…" /> : null}
         {error ? <ErrorBlock message={error} /> : null}
-        {!loading && !error && result ? Array.isArray(result) ? <RawResults hits={result} query={query} /> : <GroupedResults result={result} query={query} /> : null}
+        {!loading && !error && result ? Array.isArray(result) ? <RawResults hits={result} query={query} /> : <GroupedResults result={result} query={query} mode={mode} /> : null}
         {!loading && !error && !result ? <EmptyState title="输入内容开始检索" description="搜索结果会按报告合并；需要逐行核对时再打开严格原文模式。" /> : null}
       </div>
     </Layout>
   );
 }
 
-function GroupedResults({ result, query }: { result: GroupedSearchResponse; query: string }) {
+function GroupedResults({ result, query, mode }: { result: GroupedSearchResponse; query: string; mode: string }) {
   const intentLabels = { 'security-code': '证券代码', 'security-name': '公司名称', institution: '机构', text: '原文关键词' };
   return (
     <div className="space-y-6">
@@ -102,7 +102,7 @@ function GroupedResults({ result, query }: { result: GroupedSearchResponse; quer
           <div className="mt-2 text-sm text-slate-600">最新评级 {result.company.latestRating ?? '—'} · 目标价 {result.company.latestTargetPrice ?? '—'} · {result.company.institutions.length} 家机构</div>
         </Link>
       ) : null}
-      <Panel title={`${result.groups.length} 份报告 · ${result.totalHits} 处命中`} eyebrow={`识别为${intentLabels[result.intent.type]}`}>
+      <Panel title={`${result.groups.length} 份报告 · ${result.totalHits} 处命中`} eyebrow={mode === 'tag' ? '标签匹配' : `识别为${intentLabels[result.intent.type]}`}>
         {result.groups.length ? <div className="space-y-4">{result.groups.map((group) => (
           <article key={group.reportId} className="rounded-2xl border border-slate-200 bg-white p-4">
             <div className="flex flex-wrap items-center gap-2"><Badge tone="amber">{group.date}</Badge>{group.institutions.map((institution) => <Badge key={institution} tone="blue">{institution}</Badge>)}<span className="text-xs text-slate-400">{group.matchCount} 处命中</span></div>

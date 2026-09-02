@@ -40,6 +40,12 @@ await fs.writeFile(
 鸣鸣很忙 (1768.HK)
 维持买入评级。鸣鸣很忙的门店继续扩张。
 鸣鸣很忙的供应链效率改善。
+
+#高盛 #行业/半导体
+\`#高盛\`
+\`\`\`text
+#高盛
+\`\`\`
 `,
   'utf-8',
 );
@@ -56,6 +62,14 @@ assert.equal(grouped.company.security.code, '1768.HK');
 const raw = await searchReports({ q: '鸣鸣很忙', raw: true });
 assert.equal(Array.isArray(raw), true);
 assert.ok(raw.length >= 2);
+
+const tagResults = await searchReports({ q: '#高盛', mode: 'tag' });
+assert.equal(Array.isArray(tagResults), false);
+assert.equal(tagResults.totalHits, 1);
+assert.equal(tagResults.groups[0].snippets[0].startLine, 7);
+
+const nestedTagResults = await searchReports({ q: '#行业', mode: 'tag' });
+assert.equal(nestedTagResults.totalHits, 1);
 
 await fs.rm(tmpRoot, { recursive: true, force: true });
 

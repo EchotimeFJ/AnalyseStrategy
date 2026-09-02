@@ -255,6 +255,36 @@ a:focus-visible {
   overflow-wrap: anywhere;
 }
 
+.markdown-content a.markdown-tag {
+  display: inline-flex;
+  align-items: center;
+  max-width: 100%;
+  margin: 0.08rem 0.12rem;
+  border: 1px solid rgba(124, 58, 237, 0.14);
+  border-radius: 999px;
+  background: rgba(124, 58, 237, 0.1);
+  padding: 0.05rem 0.55rem;
+  color: #6d28d9;
+  font-family: inherit;
+  font-size: 0.9em;
+  font-weight: 650;
+  line-height: 1.65;
+  text-decoration: none;
+  text-overflow: ellipsis;
+  vertical-align: 0.08em;
+  white-space: nowrap;
+  overflow: hidden;
+  overflow-wrap: normal;
+  transition: border-color 160ms ease, background-color 160ms ease, color 160ms ease, box-shadow 160ms ease;
+}
+
+.markdown-content a.markdown-tag:hover {
+  border-color: rgba(109, 40, 217, 0.32);
+  background: rgba(124, 58, 237, 0.17);
+  color: #5b21b6;
+  box-shadow: 0 4px 14px rgba(91, 33, 182, 0.12);
+}
+
 .markdown-content blockquote {
   border-left: 3px solid #93c5fd;
   border-radius: 0 0.75rem 0.75rem 0;
@@ -337,6 +367,19 @@ a:focus-visible {
 
 .dark .markdown-content {
   color: #d6e0ee;
+}
+
+.dark .markdown-content a.markdown-tag {
+  border-color: rgba(167, 139, 250, 0.16);
+  background: rgba(124, 58, 237, 0.2);
+  color: #b69cff;
+}
+
+.dark .markdown-content a.markdown-tag:hover {
+  border-color: rgba(196, 181, 253, 0.34);
+  background: rgba(124, 58, 237, 0.32);
+  color: #d8ccff;
+  box-shadow: 0 4px 16px rgba(76, 29, 149, 0.28);
 }
 
 .dark .markdown-content h1,

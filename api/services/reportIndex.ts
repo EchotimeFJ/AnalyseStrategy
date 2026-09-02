@@ -3,6 +3,7 @@ import path from 'node:path';
 import {
   buildReportFromMarkdown,
   createExactSearch,
+  createTagSearch,
   extractTargetMentions,
   normalizeText,
   type ReportDocument,
@@ -370,7 +371,9 @@ export async function searchReports(input: {
 
   const ratingQuery = parseRatingQuery(input.q, input.mode);
   let hits: SearchHit[];
-  if (ratingQuery) {
+  if (input.mode === 'tag') {
+    hits = createTagSearch(sortReportsDesc(filteredReports))(input.q ?? '').slice(0, 500);
+  } else if (ratingQuery) {
     const reportIds = new Set(filteredReports.map((report) => report.id));
     hits = searchRatingMentions(index.mentions, reportIds, ratingQuery).slice(0, 500);
   } else {

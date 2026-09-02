@@ -53,7 +53,7 @@ function countHighlightMarkers(node: MarkdownNode): number {
 }
 
 function transformHighlightMarkers(node: MarkdownNode, state: HighlightState) {
-  if (!Array.isArray(node.children)) {
+  if (isMarkdownTagNode(node) || !Array.isArray(node.children)) {
     return;
   }
 
@@ -113,7 +113,7 @@ function createHighlightNode(value: string): MarkdownNode {
 }
 
 function transformTargetHighlights(node: MarkdownNode, terms: string[]) {
-  if (!Array.isArray(node.children)) {
+  if (isMarkdownTagNode(node) || !Array.isArray(node.children)) {
     return;
   }
 
@@ -127,6 +127,13 @@ function transformTargetHighlights(node: MarkdownNode, terms: string[]) {
     transformTargetHighlights(markdownChild, terms);
     return [markdownChild];
   }) as typeof node.children;
+}
+
+function isMarkdownTagNode(node: MarkdownNode) {
+  const className = node.data?.hProperties?.className;
+  return Array.isArray(className)
+    ? className.includes('markdown-tag')
+    : typeof className === 'string' && className.split(/\s+/).includes('markdown-tag');
 }
 
 function splitTextByTarget(value: string, terms: string[]): MarkdownNode[] {
