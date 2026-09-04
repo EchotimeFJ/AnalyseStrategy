@@ -45,6 +45,7 @@ app.use(
 app.use((error: Error, req: Request, res: Response, next: NextFunction) => {
   void req
   void next
+  res.setHeader('Cache-Control', 'no-store')
   const isIndexUnavailable = 'code' in error && error.code === 'ENOENT'
   res.status(500).json({
     success: false,

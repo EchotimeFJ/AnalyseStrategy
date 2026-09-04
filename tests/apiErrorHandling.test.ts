@@ -11,6 +11,7 @@ try {
   assert.ok(address && typeof address === 'object');
   const response = await fetch(`http://127.0.0.1:${address.port}/api/overview`);
   assert.equal(response.status, 500);
+  assert.equal(response.headers.get('cache-control'), 'no-store');
   assert.deepEqual(await response.json(), {
     success: false,
     error: {

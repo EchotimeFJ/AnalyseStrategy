@@ -27,6 +27,7 @@ import {
 } from '../services/localConfig.js';
 import { pullStrategyRepository } from '../services/gitUpdater.js';
 import { getAppVersion } from '../services/version.js';
+import { sendCachedReport } from '../services/reportHttpCache.js';
 
 const router = Router();
 
@@ -34,8 +35,9 @@ router.get('/version', (_req: Request, res: Response): void => {
   res.json({ success: true, data: getAppVersion() });
 });
 
-router.get('/overview', asyncRoute(async (_req: Request, res: Response): Promise<void> => {
-  res.json({ success: true, data: await getOverview() });
+router.get('/overview', asyncRoute(async (req: Request, res: Response): Promise<void> => {
+  const index = await ensureIndex();
+  await sendCachedReport(req, res, index, () => getOverview(index));
 }));
 
 router.get('/summary', asyncRoute(async (_req: Request, res: Response): Promise<void> => {
@@ -43,31 +45,31 @@ router.get('/summary', asyncRoute(async (_req: Request, res: Response): Promise<
 }));
 
 router.get('/reports', asyncRoute(async (req: Request, res: Response): Promise<void> => {
-  res.json({
-    success: true,
-    data: await getReports({
-      year: asString(req.query.year),
-      institution: asString(req.query.institution),
-    }),
-  });
+  const index = await ensureIndex();
+  await sendCachedReport(req, res, index, () => getReports({
+    year: asString(req.query.year), institution: asString(req.query.institution),
+  }, index));
 }));
 
 router.get('/reports/:id', asyncRoute(async (req: Request, res: Response): Promise<void> => {
-  const report = await getReportById(req.params.id);
-  if (!report) {
+  const index = await ensureIndex();
+  if (!index.reports.some((report) => report.id === req.params.id)) {
+    res.setHeader('Cache-Control', 'no-store');
     res.status(404).json({ success: false, error: '报告不存在' });
     return;
   }
-  res.json({ success: true, data: report });
+  await sendCachedReport(req, res, index, () => getReportById(req.params.id, index));
 }));
 
 router.get('/reports/:id/overview', asyncRoute(async (req: Request, res: Response): Promise<void> => {
-  const overview = await getReportOverview(req.params.id);
+  const index = await ensureIndex();
+  const overview = await getReportOverview(req.params.id, index);
   if (!overview) {
+    res.setHeader('Cache-Control', 'no-store');
     res.status(404).json({ success: false, error: { code: 'REPORT_NOT_FOUND', message: '报告不存在' } });
     return;
   }
-  res.json({ success: true, data: overview });
+  await sendCachedReport(req, res, index, () => Promise.resolve(overview));
 }));
 
 router.get('/companies', asyncRoute(async (req: Request, res: Response): Promise<void> => {
@@ -171,7 +173,7 @@ router.get('/index', asyncRoute(async (_req: Request, res: Response): Promise<vo
 }));
 
 router.post('/reindex', asyncRoute(async (_req: Request, res: Response): Promise<void> => {
-  const previous = await ensureIndex();
+  const previous = await ensureIndex({ checkSource: false });
   const index = await rebuildIndex();
   const reportChanges = diffReportChanges(previous, index);
   res.json({
@@ -181,7 +183,7 @@ router.post('/reindex', asyncRoute(async (_req: Request, res: Response): Promise
 }));
 
 router.post('/update-strategy', asyncRoute(async (_req: Request, res: Response): Promise<void> => {
-  const previous = await ensureIndex();
+  const previous = await ensureIndex({ checkSource: false });
   const pull = await pullStrategyRepository();
   if (!pull.success) {
     res.status(500).json({ success: false, error: pull.stderr, data: pull });
@@ -214,6 +216,7 @@ function toIndexStatus(index: IndexState, reportChanges?: ReportChangeSet) {
     errors: index.errors,
     qualityIssues: index.qualityIssues,
     indexVersion: index.version,
+    cache: index.cache,
     reportChanges,
   };
 }

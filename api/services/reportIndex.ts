@@ -1,5 +1,6 @@
 import fs from 'node:fs/promises';
 import path from 'node:path';
+import { randomUUID } from 'node:crypto';
 import {
   buildReportFromMarkdown,
   createExactSearch,
@@ -22,6 +23,7 @@ import { extractOpinions } from './opinionExtractor.js';
 import { classifySearchIntent, groupSearchHits } from './searchService.js';
 import { readUserConfig, type WatchItem } from './localConfig.js';
 import { getReportDir } from '../runtimeConfig.js';
+import { readSourceManifest, readReportSnapshot, writeReportSnapshot, type SourceManifest } from './reportCache.js';
 
 export type IndexState = {
   sourceDir: string;
@@ -33,7 +35,18 @@ export type IndexState = {
   version?: string;
   indexedAt?: string;
   errors: Array<{ filePath: string; message: string }>;
+  sourceFingerprint?: string;
+  views?: IndexViews;
+  cache?: { origin: 'disk' | 'rebuilt'; persisted: boolean; savedAt?: string; warning?: string };
 };
+
+type IndexOverview = {
+  sourceDir: string; indexedAt?: string; indexVersion?: string;
+  reportCount: number; securityCount: number; opinionCount: number;
+  errorCount: number; qualityIssueCount: number; latestDate?: string;
+  positiveOpinions: OpinionRecord[]; reportOverviews: ReportOverview[];
+};
+type IndexViews = { summaries: ReportSummary[]; reportOverviews: ReportOverview[]; overview: IndexOverview };
 
 export type ReportSummary = {
   id: string;
@@ -94,16 +107,77 @@ let state: IndexState = {
   errors: [],
 };
 
-export async function ensureIndex(): Promise<IndexState> {
-  if (!state.indexedAt) {
-    await rebuildIndex();
+let initializing: Promise<IndexState> | undefined;
+let checkingSource: Promise<IndexState> | undefined;
+let buildingIndex: Promise<IndexState> | undefined;
+let nextSourceCheck = 0;
+
+export async function ensureIndex(options: { checkSource?: boolean } = {}): Promise<IndexState> {
+  if (state.indexedAt) {
+    // Readers keep using the last complete generation while a rebuild is running.
+    if (options.checkSource === false || buildingIndex || checkingSource || Date.now() < nextSourceCheck) return state;
+    checkingSource = (async () => {
+      try {
+        const manifest = await readSourceManifest(getReportDir());
+        if (manifest.fingerprint !== state.sourceFingerprint || manifest.sourceDir !== state.sourceDir) {
+          return await buildFreshIndex();
+        }
+        if (state.cache?.persisted) delete state.cache.warning;
+      } catch {
+        if (state.cache) state.cache.warning = '报告文件检查或重建失败，继续使用上一份完整索引。';
+      }
+      return state;
+    })().finally(() => {
+      checkingSource = undefined;
+      scheduleSourceCheck();
+    });
+    return checkingSource;
   }
-  return state;
+  if (initializing) return initializing;
+  initializing = (async () => {
+    const manifest = await readSourceManifest(getReportDir());
+    const restored = await readReportSnapshot(manifest);
+    if (restored && (await readSourceManifest(manifest.sourceDir)).fingerprint === manifest.fingerprint) {
+      state = restored;
+      return state;
+    }
+    return buildFreshIndex();
+  })().finally(() => {
+    initializing = undefined;
+    scheduleSourceCheck();
+  });
+  return initializing;
 }
 
 export async function rebuildIndex(): Promise<IndexState> {
-  const sourceDir = getReportDir();
-  const files = await scanMarkdownFiles(sourceDir);
+  // Initialization can restore a disk snapshot, so it is not itself a forced build.
+  if (initializing) await initializing.catch(() => undefined);
+  return buildFreshIndex();
+}
+
+async function buildFreshIndex(): Promise<IndexState> {
+  for (let attempt = 0; attempt < 3; attempt += 1) {
+    if (!buildingIndex) {
+      // Keep the actual build rejection separate from automatic readers' stale fallback.
+      buildingIndex = (async () => buildAndSaveIndex(await readSourceManifest(getReportDir())))()
+        .finally(() => { buildingIndex = undefined; scheduleSourceCheck(); });
+    }
+    const result = await buildingIndex;
+    const current = await readSourceManifest(getReportDir());
+    if (current.sourceDir === result.sourceDir && current.fingerprint === result.sourceFingerprint) return result;
+    // Files may have changed during async snapshot persistence or before a later
+    // caller joined. That caller must get a build covering its current source.
+  }
+  throw new Error('Report files keep changing during rebuild; retry after the source update finishes');
+}
+
+function scheduleSourceCheck() {
+  const configured = Number(process.env.REPORT_INDEX_CHECK_MS ?? 30_000);
+  nextSourceCheck = Date.now() + (Number.isFinite(configured) && configured >= 0 ? configured : 30_000);
+}
+
+async function buildAndSaveIndex(manifest: SourceManifest): Promise<IndexState> {
+  const { sourceDir, files } = manifest;
   const reports: ReportDocument[] = [];
   const errors: IndexState['errors'] = [];
 
@@ -153,17 +227,31 @@ export async function rebuildIndex(): Promise<IndexState> {
   });
   const qualityIssues = buildQualityIssues(reports, opinions);
   const indexedAt = new Date().toISOString();
-  state = {
+  if (errors.length) throw new Error(`Report rebuild failed: ${errors.length} unreadable reports`);
+  if ((await readSourceManifest(sourceDir)).fingerprint !== manifest.fingerprint) {
+    throw new Error('Report files changed during rebuild; retry when the update has finished');
+  }
+  const next: IndexState = {
     sourceDir,
     reports: reports.sort((left, right) => left.date.localeCompare(right.date)),
     mentions,
     opinions,
     entities,
     qualityIssues,
-    version: indexedAt,
+    version: `${indexedAt}-${randomUUID()}`,
     indexedAt,
     errors,
+    sourceFingerprint: manifest.fingerprint,
+    cache: { origin: 'rebuilt', persisted: false },
   };
+  next.views = buildIndexViews(next);
+  try {
+    await writeReportSnapshot(next);
+    next.cache = { origin: 'rebuilt', persisted: true, savedAt: indexedAt };
+  } catch {
+    next.cache!.warning = '索引已更新，但服务器缓存写入失败；重启后需要重新构建。';
+  }
+  state = next;
   return state;
 }
 
@@ -236,7 +324,7 @@ export async function getSummary() {
     index.opinions.filter((item) => item.institutionVerified).map((item) => item.institution),
     (item) => item,
   );
-  const latestReports = getReportSummaries(index.reports).slice(-8).reverse();
+  const latestReports = getIndexViews(index).summaries.slice(-8).reverse();
 
   return {
     sourceDir: index.sourceDir,
@@ -253,14 +341,29 @@ export async function getSummary() {
   };
 }
 
-export async function getOverview() {
-  const index = await ensureIndex();
+export async function getOverview(snapshot?: IndexState) {
+  const index = snapshot ?? await ensureIndex();
+  return getIndexViews(index).overview;
+}
+
+function buildIndexViews(index: IndexState): IndexViews {
   const reports = index.reports.slice().sort((left, right) => compareDateDesc(left.date, right.date));
-  const reportOverviews = reports.slice(0, 12).map((report) => buildReportOverview(report, index.opinions));
+  const opinionsByReport = new Map<string, OpinionRecord[]>();
+  for (const opinion of index.opinions) {
+    const group = opinionsByReport.get(opinion.reportId) ?? [];
+    group.push(opinion);
+    opinionsByReport.set(opinion.reportId, group);
+  }
+  const reportOverviews = reports.map((report) => buildReportOverview(report, opinionsByReport.get(report.id) ?? []));
+  const mentionCounts = new Map<string, number>();
+  for (const mention of index.mentions) mentionCounts.set(mention.reportId, (mentionCounts.get(mention.reportId) ?? 0) + 1);
+  const summaries = index.reports.map((report) => ({
+    ...toReportSummary(report, []), targetCount: mentionCounts.get(report.id) ?? 0,
+  }));
   const positiveOpinions = dedupeOpinions(index.opinions.filter((opinion) => opinion.types.includes('positive')))
     .sort(compareOpinionsDesc)
     .slice(0, 30);
-  return {
+  const overview: IndexOverview = {
     sourceDir: index.sourceDir,
     indexedAt: index.indexedAt,
     indexVersion: index.version,
@@ -271,14 +374,18 @@ export async function getOverview() {
     qualityIssueCount: index.qualityIssues.length,
     latestDate: reports[0]?.date,
     positiveOpinions,
-    reportOverviews,
+    reportOverviews: reportOverviews.slice(0, 12),
   };
+  return { summaries, reportOverviews, overview };
 }
 
-export async function getReportOverview(reportId: string): Promise<ReportOverview | null> {
-  const index = await ensureIndex();
-  const report = index.reports.find((item) => item.id === reportId);
-  return report ? buildReportOverview(report, index.opinions) : null;
+function getIndexViews(index: IndexState) {
+  return index.views ?? (index.views = buildIndexViews(index));
+}
+
+export async function getReportOverview(reportId: string, snapshot?: IndexState): Promise<ReportOverview | null> {
+  const index = snapshot ?? await ensureIndex();
+  return getIndexViews(index).reportOverviews.find((item) => item.reportId === reportId) ?? null;
 }
 
 export async function getCompanyProfiles(query = ''): Promise<CompanyProfile[]> {
@@ -319,22 +426,22 @@ export async function getDataQuality() {
   };
 }
 
-export async function getReports(filters: { year?: string; institution?: string } = {}) {
-  const index = await ensureIndex();
-  let reports = index.reports;
+export async function getReports(filters: { year?: string; institution?: string } = {}, snapshot?: IndexState) {
+  const index = snapshot ?? await ensureIndex();
+  let reports = getIndexViews(index).summaries;
   if (filters.year) {
     reports = reports.filter((report) => report.year === filters.year);
   }
   if (filters.institution) {
     reports = reports.filter((report) =>
-      report.institutions.some((item) => item.institution === filters.institution),
+      report.institutions.includes(filters.institution!),
     );
   }
-  return getReportSummaries(reports).reverse();
+  return reports.slice().reverse();
 }
 
-export async function getReportById(id: string) {
-  const index = await ensureIndex();
+export async function getReportById(id: string, snapshot?: IndexState) {
+  const index = snapshot ?? await ensureIndex();
   const report = index.reports.find((item) => item.id === id);
   if (!report) {
     return undefined;
@@ -516,10 +623,6 @@ export async function exportData(type: string, query?: string) {
   return JSON.stringify(summary, null, 2);
 }
 
-function getReportSummaries(reports: ReportDocument[]): ReportSummary[] {
-  return reports.map((report) => toReportSummary(report, state.mentions));
-}
-
 function buildReportOverview(report: ReportDocument, opinions: OpinionRecord[]): ReportOverview {
   const reportOpinions = dedupeOpinions(opinions.filter((opinion) => opinion.reportId === report.id));
   const securities = [...new Map(reportOpinions.map((opinion) => [opinion.security.key, opinion.security])).values()];
@@ -603,23 +706,6 @@ function toReportChange(
 
 function compareReportChangesDesc(left: ReportChange, right: ReportChange): number {
   return compareDateDesc(left.date, right.date) || left.id.localeCompare(right.id);
-}
-
-async function scanMarkdownFiles(dir: string): Promise<string[]> {
-  const entries = await fs.readdir(dir, { withFileTypes: true });
-  const nested = await Promise.all(
-    entries.map(async (entry) => {
-      const fullPath = path.join(dir, entry.name);
-      if (entry.isDirectory()) {
-        return scanMarkdownFiles(fullPath);
-      }
-      if (entry.isFile() && entry.name.endsWith('.md')) {
-        return [fullPath];
-      }
-      return [];
-    }),
-  );
-  return nested.flat().sort();
 }
 
 function makeReportId(root: string, filePath: string): string {

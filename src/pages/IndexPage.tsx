@@ -6,6 +6,7 @@ import type { AppVersion, IndexStatus, ReportChange, ReportChangeSet, ReportChan
 import { Layout, PageHeader } from '@/components/Layout';
 import { Badge, ErrorBlock, LoadingBlock, Panel, StatCard } from '@/components/ui';
 import { formatDateTime } from '@/lib/format';
+import { ReportCacheStatus } from '@/components/ReportCacheStatus';
 
 export default function IndexPage() {
   const { data, loading, error, setData } = useAsyncData(() => apiGet<IndexStatus>('/api/index'), []);
@@ -85,9 +86,10 @@ export default function IndexPage() {
             <div className="break-all rounded-2xl bg-slate-50 p-4 font-mono text-sm text-slate-700">{data.sourceDir}</div>
             <div className="mt-4 flex flex-wrap gap-2">
               <Badge tone={data.errors.length ? 'red' : 'green'}>{data.errors.length ? '存在解析问题' : '索引正常'}</Badge>
-              <Badge tone="blue">新增内容需手动刷新</Badge>
+              <Badge tone="blue">访问时定期检查报告变化</Badge>
               <Badge tone="amber">Git pull 使用 --ff-only</Badge>
             </div>
+            <ReportCacheStatus cache={data.cache} />
             {lastPull ? (
               <div className="mt-4 rounded-2xl border border-emerald-200 bg-emerald-50 p-4 text-sm text-emerald-800">
                 <div className="font-semibold">Git 更新完成</div>

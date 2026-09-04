@@ -214,6 +214,7 @@ export type IndexStatus = {
   }>;
   indexVersion?: string;
   reportChanges?: ReportChangeSet;
+  cache?: { origin: 'disk' | 'rebuilt'; persisted: boolean; savedAt?: string; warning?: string };
 };
 
 export type AppVersion = { version: string; commit: string; buildTime: string };
