@@ -15,6 +15,8 @@
 
 ## 本地运行
 
+使用 Node.js 24 LTS（`.nvmrc` 固定为 `24.20.0`）或兼容的新版本。
+
 ```bash
 npm ci
 REPORT_AUTO_UPDATE=false REPORT_DIR=/path/to/reports npm run dev
@@ -61,6 +63,7 @@ AI 未配置、失败或额度耗尽时，报告阅读与搜索仍可使用。�
 
 ```bash
 git pull --ff-only
+export PATH="/opt/AnalyseStrategy-runtime/node-v24.20.0-linux-x64/bin:$PATH"
 npm ci
 export APP_GIT_COMMIT="$(git rev-parse HEAD)"
 export APP_BUILD_TIME="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
@@ -70,6 +73,8 @@ pm2 save
 ```
 
 使用单个 PM2 fork 实例，保证定时任务和本地额度记录只有一个服务进程负责。不要直接扩成多实例；扩容前需要共享调度锁、额度存储和限流存储。Vercel 请求入口不启动定时任务。
+
+生产配置使用本项目独立的 Node.js 24.20.0，不替换系统 Node 或其他网站的运行时。首次部署需从 Node.js 官方下载对应的 Linux x64 二进制，按官方 `SHASUMS256.txt` 校验后解压到 `/opt/AnalyseStrategy-runtime/`。通过 `deploy/harden-nginx.py /etc/nginx/conf.d/websites.conf` 可更新现有的本应用代理区域；脚本会备份、检查配置并在检查失败时恢复。
 
 Nginx 的 `/analyse-strategy/api/` 代理到 `127.0.0.1:3003/api/`。启用 `TRUST_PROXY_LOOPBACK=true` 时，Nginx 必须把 `X-Forwarded-For` 覆盖为 `$remote_addr`；不能直接相信客户端传来的 IP。API 端口不对公网开放。
 
