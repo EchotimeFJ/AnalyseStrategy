@@ -12,6 +12,7 @@ import {
 } from './researchRetrieval.js';
 import type { OpinionRecord } from '../domain/research.js';
 import type { ReportDocument } from './reportParser.js';
+import { createAiUsage } from './aiUsage.js';
 
 type ConfigStore = {
   resolve(): Promise<ResolvedAiConfig | null>;
@@ -25,6 +26,7 @@ type AiServiceOptions = {
   provider?: AiProvider;
   getIndex?: () => Promise<AiIndex>;
   now?: () => Date;
+  usageFile?: string;
 };
 
 type ChatRequest = { question: string; scope: ResearchScope; history?: unknown; ip: string; signal?: AbortSignal };
@@ -37,18 +39,15 @@ export function createAiService(options: AiServiceOptions = {}) {
   const recentByIp = new Map<string, number[]>();
   const cache = new Map<string, string>();
   let active = 0;
-  let usageDay = dayKey();
-  let estimatedTokens = 0;
+  const usage = createAiUsage(options.usageFile, now);
 
   async function status() {
-    if (usageDay !== dayKey()) {
-      usageDay = dayKey();
-      estimatedTokens = 0;
-    }
-    return { ...(await configStore.getPublic() as object), usage: { estimatedTokens, active } };
+    return { ...(await configStore.getPublic() as object), usage: { estimatedTokens: (await usage.read()).estimatedTokens, active } };
   }
 
   async function prepareChat(request: ChatRequest) {
+    if (typeof request.question !== 'string' || !request.scope || typeof request.scope !== 'object' || Array.isArray(request.scope) ||
+      Object.values(request.scope).some((value) => value !== undefined && (typeof value !== 'string' || value.length > 200))) throw new Error('QUESTION_INVALID:问题或筛选条件格式不正确');
     const question = request.question.trim();
     if (!question) throw new Error('QUESTION_REQUIRED:请输入问题');
     if (question.length > 2_000) throw new Error('QUESTION_TOO_LONG:问题不能超过 2000 个字符');
@@ -56,51 +55,71 @@ export function createAiService(options: AiServiceOptions = {}) {
     if (!config) throw new Error('AI_NOT_CONFIGURED:研究助手尚未配置');
     assertRate(request.ip, recentByIp);
     if (active >= config.maxConcurrency) throw new Error('AI_BUSY:当前问答较多，请稍后重试');
-    if (estimatedTokens >= config.dailyTokenBudget) throw new Error('AI_DAILY_BUDGET:今日 AI 额度已用完');
-
-    const index = await getIndex();
-    const history = normalizeChatHistory(request.history);
-    const chunks = buildRetrievalChunks(index.reports, index.opinions);
-    const contextualScope = resolveFollowUpScope(question, request.scope, history, chunks);
-    const intent = resolveResearchIntent(question, contextualScope, chunks, now());
-    const retrieval = retrieveResearch(buildRetrievalQuery(question, history), intent.scope, chunks);
-    if (!retrieval.chunks.length) throw new Error('AI_NO_EVIDENCE:当前报告库没有找到足够相关的来源');
-    const cacheKey = buildAiCacheKey(index.version, config, question, intent.scope, history);
-    const cached = cache.get(cacheKey);
-    const sources = retrieval.chunks.map((chunk) => ({
-      id: chunk.id,
-      reportId: chunk.reportId,
-      date: chunk.date,
-      institution: chunk.institution,
-      securityName: chunk.securityName,
-      lineNumber: chunk.startLine,
-      excerpt: chunk.text.slice(0, 360),
-    }));
-    if (cached) return { sources, stream: stringStream(cached), cached: true };
-
+    active += 1;
+    let released = false;
     const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), config.timeoutMs);
     const signal = request.signal ? AbortSignal.any([request.signal, controller.signal]) : controller.signal;
-    const messages = buildMessages(question, retrieval.chunks, intent, history);
-    const upstream = provider.stream({ messages }, config, signal);
-
-    async function* trackedStream() {
-      active += 1;
-      let answer = '';
-      try {
-        for await (const delta of upstream) {
-          answer += delta;
-          yield delta;
-        }
-        estimatedTokens += Math.ceil((question.length + history.reduce((total, message) => total + message.content.length, 0) + retrieval.totalChars + answer.length) / 4);
-        if (answer.trim()) cache.set(cacheKey, answer);
-        if (cache.size > 80) cache.delete(cache.keys().next().value as string);
-      } finally {
-        active = Math.max(0, active - 1);
-        clearTimeout(timeout);
+    const release = () => {
+      if (released) return;
+      released = true;
+      active -= 1;
+      clearTimeout(timeout);
+      signal.removeEventListener('abort', release);
+    };
+    const timeout = setTimeout(() => controller.abort(), config.timeoutMs);
+    signal.addEventListener('abort', release, { once: true });
+    try {
+      signal.throwIfAborted();
+      const index = await getIndex();
+      signal.throwIfAborted();
+      const history = normalizeChatHistory(request.history);
+      const chunks = buildRetrievalChunks(index.reports, index.opinions);
+      const contextualScope = resolveFollowUpScope(question, request.scope, history, chunks);
+      const intent = resolveResearchIntent(question, contextualScope, chunks, now());
+      const retrieval = retrieveResearch(buildRetrievalQuery(question, history), intent.scope, chunks);
+      if (!retrieval.chunks.length) throw new Error('AI_NO_EVIDENCE:当前报告库没有找到足够相关的来源');
+      const cacheKey = buildAiCacheKey(index.version, config, question, intent.scope, history);
+      const cached = cache.get(cacheKey);
+      const sources = retrieval.chunks.map((chunk) => ({
+        id: chunk.id,
+        reportId: chunk.reportId,
+        date: chunk.date,
+        institution: chunk.institution,
+        securityName: chunk.securityName,
+        lineNumber: chunk.startLine,
+        excerpt: chunk.text.slice(0, 360),
+      }));
+      if (cached) {
+        release();
+        return { sources, stream: stringStream(cached), cached: true };
       }
+      const messages = buildMessages(question, retrieval.chunks, intent, history);
+      // Reserve a conservative allowance before contacting the provider, including
+      // both possible attempts (2400 + 3600 output tokens). Failed/disconnected
+      // requests retain their reservation so retries cannot bypass the daily cap.
+      const reserved = 2 * Buffer.byteLength(JSON.stringify(messages), 'utf8') + 6000 + 1024;
+      await usage.reserve(reserved, config.dailyTokenBudget);
+      signal.throwIfAborted();
+      const upstream = provider.stream({ messages }, config, signal);
+
+      async function* trackedStream() {
+        let answer = '';
+        try {
+          for await (const delta of upstream) {
+            answer += delta;
+            yield delta;
+          }
+          if (answer.trim()) cache.set(cacheKey, answer);
+          if (cache.size > 80) cache.delete(cache.keys().next().value as string);
+        } finally {
+          release();
+        }
+      }
+      return { sources, stream: trackedStream(), cached: false };
+    } catch (error) {
+      release();
+      throw error;
     }
-    return { sources, stream: trackedStream(), cached: false };
   }
 
   return { status, prepareChat, provider };
@@ -176,12 +195,10 @@ async function* stringStream(value: string) {
 
 function assertRate(ip: string, store: Map<string, number[]>) {
   const now = Date.now();
+  for (const [key, values] of store) if (!values.length || now - values[values.length - 1] >= 60_000) store.delete(key);
+  if (!store.has(ip) && store.size >= 10_000) throw new Error('AI_RATE_LIMIT:请求过于频繁，请稍后重试');
   const recent = (store.get(ip) ?? []).filter((time) => now - time < 60_000);
   if (recent.length >= 12) throw new Error('AI_RATE_LIMIT:请求过于频繁，请稍后重试');
   recent.push(now);
   store.set(ip, recent);
-}
-
-function dayKey() {
-  return new Date().toISOString().slice(0, 10);
 }

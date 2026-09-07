@@ -13,9 +13,7 @@ export default defineConfig({
   plugins: [
     react({
       babel: {
-        plugins: [
-          'react-dev-locator',
-        ],
+        plugins: process.env.NODE_ENV === 'production' ? [] : ['react-dev-locator'],
       },
     }),
     tsconfigPaths(),

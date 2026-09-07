@@ -16,7 +16,7 @@ export const routes: AppRouteMeta[] = [
   { id: 'company', path: '/company', label: '公司研究', mobileLabel: '公司', description: '查看单一公司的历史观点', nav: 'primary' },
   { id: 'assistant', path: '/assistant', label: '研究助手', mobileLabel: 'AI', description: '基于报告内容进行可追溯问答', nav: 'primary' },
   { id: 'watchlist', path: '/watchlist', label: '关注列表', mobileLabel: '关注', description: '跟踪重点公司的新增变化', nav: 'secondary' },
-  { id: 'data', path: '/manage', label: '数据更新', mobileLabel: '更新', description: '更新报告、重建索引与检查质量', nav: 'secondary' },
+  { id: 'data', path: '/manage', label: '数据与版本', mobileLabel: '版本', description: '查看数据和网站的最近发布时间', nav: 'secondary' },
 ];
 
 export const routeById = Object.fromEntries(routes.map((route) => [route.id, route])) as Record<RouteId, AppRouteMeta>;

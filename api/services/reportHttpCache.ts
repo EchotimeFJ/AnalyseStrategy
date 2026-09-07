@@ -3,6 +3,7 @@ import { gzip } from 'node:zlib';
 import { promisify } from 'node:util';
 import type { Request, Response } from 'express';
 import type { IndexState } from './reportIndex.js';
+import { publicJsonReplacer } from '../security.js';
 
 const compress = promisify(gzip);
 const MAX_BYTES = 32 * 1024 * 1024;
@@ -30,7 +31,7 @@ export async function sendCachedReport(
   if (!pending) {
     const target = generation;
     pending = (async () => {
-      const identity = Buffer.from(JSON.stringify({ success: true, data: await load() }));
+      const identity = Buffer.from(JSON.stringify({ success: true, data: await load() }, publicJsonReplacer));
       const compressed = await compress(identity);
       return {
         identity,

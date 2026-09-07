@@ -11,7 +11,9 @@ await fs.mkdir(source);
 const file = path.join(source, '2026-09-01.md');
 await fs.writeFile(file, '# 高盛\n\n小米集团 (1810.HK)\n维持买入评级，目标价65港元。\n#高盛 #AI\n');
 process.env.REPORT_DIR = source;
+process.env.ADMIN_TOKEN = 'http-cache-test-admin';
 process.env.REPORT_INDEX_CACHE_DIR = path.join(root, 'cache');
+process.env.REPORT_PUBLICATION_FILE = path.join(root, 'publication.json');
 process.env.REPORT_INDEX_CHECK_MS = '0';
 const { default: app } = await import('../api/app');
 const server = app.listen(0);
@@ -69,7 +71,7 @@ try {
   assert.equal(ai.headers['x-report-cache'], undefined, 'AI responses must not enter the report cache');
 
   await fs.writeFile(file, '# 高盛\n\n小米集团 (1810.HK)\n上调买入评级，目标价80港元。\n#高盛 #AI\n');
-  const rebuilt = await request('/api/reindex', {}, 'POST');
+  const rebuilt = await request('/api/reindex', { 'X-Admin-Token': 'http-cache-test-admin' }, 'POST');
   assert.equal(rebuilt.status, 200);
   assert.equal(JSON.parse(rebuilt.body.toString()).data.reportChanges.modified.length, 1,
     'manual reindex compares against the previous generation before any automatic refresh');

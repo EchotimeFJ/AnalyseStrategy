@@ -43,7 +43,7 @@ export function ChatComposer({
             }}
             rows={1}
             className="max-h-[180px] min-h-12 flex-1 resize-none bg-transparent px-2 py-3 text-[15px] leading-6 text-slate-800 outline-none"
-            placeholder={disabled ? '请先配置 AI 服务' : '问问报告库中的公司、趋势、买入观点…'}
+            placeholder={disabled ? '研究助手暂未开放' : '问问报告库中的公司、趋势、买入观点…'}
             disabled={disabled}
           />
           {streaming ? (

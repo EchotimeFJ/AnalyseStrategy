@@ -41,7 +41,7 @@ export function createAiConfigStore(options: AiConfigStoreOptions = {}) {
   const filePath = options.filePath ?? DEFAULT_FILE;
   const env = options.env ?? process.env;
   const secret = options.secret ?? env.AI_CONFIG_SECRET ?? '';
-  const adminToken = options.adminToken ?? env.AI_CONFIG_ADMIN_TOKEN ?? '';
+  const adminToken = options.adminToken ?? (env.ADMIN_TOKEN || env.AI_CONFIG_ADMIN_TOKEN || '');
 
   async function readStored(): Promise<StoredAiConfig | null> {
     try {

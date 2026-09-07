@@ -5,7 +5,6 @@ import {
   Menu,
   MessageSquarePlus,
   PanelLeftClose,
-  Settings2,
   SlidersHorizontal,
   Sparkles,
   Trash2,
@@ -16,7 +15,6 @@ import { useAsyncData } from '@/hooks/useAsyncData';
 import { useAiChat, type ChatSession } from '@/hooks/useAiChat';
 import type { AiStatus, TodayOverview } from '@/types';
 import { Layout } from '@/components/Layout';
-import { AiConfigDialog } from '@/components/AiConfigDialog';
 import { ErrorBlock, LoadingBlock } from '@/components/ui';
 import { AssistantMessage } from '@/components/assistant/AssistantMessage';
 import { ChatComposer } from '@/components/assistant/ChatComposer';
@@ -37,7 +35,6 @@ export default function ResearchAssistant() {
   const [to, setTo] = useState('');
   const [security, setSecurity] = useState('');
   const [institution, setInstitution] = useState('');
-  const [configOpen, setConfigOpen] = useState(false);
   const [historyOpen, setHistoryOpen] = useState(false);
   const [filtersOpen, setFiltersOpen] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -85,7 +82,6 @@ export default function ResearchAssistant() {
             onNew={chat.newChat}
             onSelect={chat.selectSession}
             onDelete={chat.deleteSession}
-            onConfig={() => setConfigOpen(true)}
           />
         </div>
 
@@ -102,7 +98,6 @@ export default function ResearchAssistant() {
                 onNew={() => { chat.newChat(); setHistoryOpen(false); }}
                 onSelect={(id) => { chat.selectSession(id); setHistoryOpen(false); }}
                 onDelete={chat.deleteSession}
-                onConfig={() => { setConfigOpen(true); setHistoryOpen(false); }}
                 onClose={() => setHistoryOpen(false)}
               />
             </div>
@@ -119,7 +114,7 @@ export default function ResearchAssistant() {
                   <div className="truncate text-sm font-semibold text-slate-950">{activeSession?.title || '研究助手'}</div>
                   <div className="mt-0.5 flex items-center gap-1.5 text-[11px] text-slate-500">
                     <span className={`h-1.5 w-1.5 rounded-full ${status.data?.configured ? 'bg-emerald-500' : 'bg-amber-500'}`} />
-                    {status.data?.configured ? `${status.data.providerName} · ${status.data.model}` : '等待配置 AI 服务'}
+                    {status.data?.configured ? `${status.data.providerName} · ${status.data.model}` : '研究助手暂未开放'}
                   </div>
                 </div>
               </div>
@@ -128,7 +123,6 @@ export default function ResearchAssistant() {
                   <SlidersHorizontal className="h-4 w-4" /><span className="hidden sm:inline">检索范围</span>
                   {activeFilterCount ? <span className="flex h-5 min-w-5 items-center justify-center rounded-full bg-blue-600 px-1 text-[10px] text-white">{activeFilterCount}</span> : null}
                 </button>
-                <button type="button" onClick={() => setConfigOpen(true)} className="flex h-10 w-10 items-center justify-center rounded-xl bg-slate-100 text-slate-600" aria-label="配置研究助手"><Settings2 className="h-4 w-4" /></button>
               </div>
             </div>
             <div className={`assistant-filter-grid ${filtersOpen ? 'assistant-filter-grid-open' : ''}`} aria-hidden={!filtersOpen}>
@@ -162,7 +156,6 @@ export default function ResearchAssistant() {
                   configured={Boolean(status.data?.configured)}
                   latestDate={overview.loading ? '正在读取' : overview.data?.latestDate || '暂不可用'}
                   onPrompt={(prompt) => ask(prompt)}
-                  onConfig={() => setConfigOpen(true)}
                 />
               ) : (
                 <div className="space-y-6 pb-4">
@@ -190,7 +183,6 @@ export default function ResearchAssistant() {
           />
         </section>
       </div>
-      <AiConfigDialog open={configOpen} status={status.data} onClose={() => setConfigOpen(false)} onSaved={(next) => status.setData(next)} />
     </Layout>
   );
 }
@@ -199,12 +191,10 @@ function EmptyAssistant({
   configured,
   latestDate,
   onPrompt,
-  onConfig,
 }: {
   configured: boolean;
   latestDate: string;
   onPrompt: (prompt: string) => void;
-  onConfig: () => void;
 }) {
   return (
     <div className="my-auto flex flex-1 flex-col items-center justify-center py-6 text-center sm:py-10">
@@ -224,7 +214,7 @@ function EmptyAssistant({
           ))}
         </div>
       ) : (
-        <button type="button" onClick={onConfig} className="mt-7 min-h-11 rounded-xl bg-blue-600 px-5 text-sm font-semibold text-white shadow-lg shadow-blue-600/20">配置 AI 服务</button>
+        <p className="mt-7 text-sm text-slate-500">研究助手暂未开放，请稍后再来。</p>
       )}
     </div>
   );
@@ -239,7 +229,6 @@ function ConversationRail({
   onNew,
   onSelect,
   onDelete,
-  onConfig,
   onClose,
 }: {
   sessions: ChatSession[];
@@ -250,7 +239,6 @@ function ConversationRail({
   onNew: () => void;
   onSelect: (id: string) => void;
   onDelete: (id: string) => void;
-  onConfig: () => void;
   onClose?: () => void;
 }) {
   return (
@@ -277,7 +265,6 @@ function ConversationRail({
       <div className="mt-3 rounded-2xl border border-slate-200 bg-slate-50 p-3">
         <div className="flex items-center gap-2 text-xs font-semibold text-slate-700"><span className={`h-2 w-2 rounded-full ${configured ? 'bg-emerald-500' : 'bg-amber-500'}`} />{configured ? 'AI 服务正常' : 'AI 尚未配置'}</div>
         {configured ? <div className="mt-2 truncate text-[10px] text-slate-500">{provider} · {model}</div> : null}
-        <button type="button" onClick={onConfig} className="mt-3 flex min-h-10 w-full items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white text-xs font-semibold text-slate-600"><Settings2 className="h-3.5 w-3.5" />全局配置</button>
       </div>
     </aside>
   );

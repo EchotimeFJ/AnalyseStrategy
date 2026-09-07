@@ -150,7 +150,7 @@ export default function Reports() {
                 <div className="grid gap-3 md:grid-cols-3">
                   <Meta label="机构" value={`${detail.data.institutions.length} 家`} />
                   <Meta label="标的提及" value={`${detail.data.mentions.length} 条`} />
-                  <Meta label="源文件" value={detail.data.filePath} />
+                  <Meta label="报告编号" value={detail.data.id} />
                 </div>
               </Panel>
               {overview.data ? (

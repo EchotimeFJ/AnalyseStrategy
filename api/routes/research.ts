@@ -14,7 +14,6 @@ import {
   getSummary,
   getTargetProfile,
   getWatchlistView,
-  rebuildIndex,
   searchReports,
   type IndexState,
   type ReportChangeSet,
@@ -25,11 +24,16 @@ import {
   readUserConfig,
   removeWatchItem,
 } from '../services/localConfig.js';
-import { pullStrategyRepository } from '../services/gitUpdater.js';
+import { dataUpdater } from '../services/dataUpdate.js';
 import { getAppVersion } from '../services/version.js';
 import { sendCachedReport } from '../services/reportHttpCache.js';
 
 const router = Router();
+
+router.get('/publication', asyncRoute(async (_req, res) => {
+  res.setHeader('Cache-Control', 'no-store');
+  res.json({ success: true, data: await dataUpdater.status() });
+}));
 
 router.get('/version', (_req: Request, res: Response): void => {
   res.json({ success: true, data: getAppVersion() });
@@ -174,31 +178,17 @@ router.get('/index', asyncRoute(async (_req: Request, res: Response): Promise<vo
 
 router.post('/reindex', asyncRoute(async (_req: Request, res: Response): Promise<void> => {
   const previous = await ensureIndex({ checkSource: false });
-  const index = await rebuildIndex();
-  const reportChanges = diffReportChanges(previous, index);
+  await dataUpdater.reindex();
+  const index = await ensureIndex({ checkSource: false });
+  const result = toIndexStatus(index, diffReportChanges(previous, index));
   res.json({
     success: true,
-    data: toIndexStatus(index, reportChanges),
+    data: result,
   });
 }));
 
 router.post('/update-strategy', asyncRoute(async (_req: Request, res: Response): Promise<void> => {
-  const previous = await ensureIndex({ checkSource: false });
-  const pull = await pullStrategyRepository();
-  if (!pull.success) {
-    res.status(500).json({ success: false, error: pull.stderr, data: pull });
-    return;
-  }
-
-  const index = await rebuildIndex();
-  const reportChanges = diffReportChanges(previous, index);
-  res.json({
-    success: true,
-    data: {
-      pull,
-      index: toIndexStatus(index, reportChanges),
-    },
-  });
+  res.json({ success: true, data: await dataUpdater.update() });
 }));
 
 function asyncRoute(handler: (req: Request, res: Response) => Promise<void>): RequestHandler {

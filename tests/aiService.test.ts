@@ -1,4 +1,9 @@
 import assert from 'node:assert/strict';
+import fs from 'node:fs/promises';
+import os from 'node:os';
+import path from 'node:path';
+const testRoot = await fs.mkdtemp(path.join(os.tmpdir(), 'ai-service-'));
+const usageFile = path.join(testRoot, 'usage.json');
 import { buildReportFromMarkdown } from '../api/services/reportParser';
 import { extractOpinions } from '../api/services/opinionExtractor';
 import { createOpenAiCompatibleProvider } from '../api/services/aiProvider';
@@ -31,6 +36,7 @@ const olderReport = buildReportFromMarkdown({
   markdown: '# 花旗\n\n谨慎科技 (9999.HK)\n维持中性评级，目标价 5 港元。',
 });
 const service = createAiService({
+  usageFile,
   configStore: { resolve: async () => config, getPublic: async () => ({ configured: true }) },
   provider,
   getIndex: async () => ({ reports: [olderReport, report], opinions: [...extractOpinions(olderReport), ...opinions], version: 'v1' }),
@@ -91,6 +97,7 @@ assert.notEqual(
 );
 
 const unconfigured = createAiService({
+  usageFile,
   configStore: { resolve: async () => null, getPublic: async () => ({ configured: false }) },
   provider,
   getIndex: async () => ({ reports: [report], opinions, version: 'v1' }),
@@ -116,4 +123,5 @@ assert.deepEqual(boundedHistory.map((message) => message.role), ['assistant', 'u
 assert.ok(boundedHistory.every((message) => message.content.length <= 4_000));
 assert.ok(boundedHistory.reduce((total, message) => total + message.content.length, 0) <= 12_000);
 
+await fs.rm(testRoot, { recursive: true, force: true });
 console.log('ai service tests passed');

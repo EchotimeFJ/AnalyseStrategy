@@ -6,15 +6,13 @@ import { useAsyncData } from '@/hooks/useAsyncData';
 import type { OpinionRecord, TodayOverview } from '@/types';
 import { Layout } from '@/components/Layout';
 import { Badge, EmptyState, ErrorBlock, LoadingBlock, Panel, StatCard } from '@/components/ui';
-import { UpdateDataMenu } from '@/components/UpdateDataMenu';
-import { formatDateTime } from '@/lib/format';
+import { PublicationStatus } from '@/components/PublicationStatus';
 import { buildReportLink } from '@/lib/reportLinks';
 
 export default function Dashboard() {
   const navigate = useNavigate();
   const [query, setQuery] = useState('');
-  const [revision, setRevision] = useState(0);
-  const overview = useAsyncData(() => apiGet<TodayOverview>('/api/overview'), [revision]);
+  const overview = useAsyncData(() => apiGet<TodayOverview>('/api/overview'), []);
 
   function search(event: FormEvent) {
     event.preventDefault();
@@ -31,7 +29,6 @@ export default function Dashboard() {
             <h1 className="mt-3 text-2xl font-semibold tracking-tight text-slate-950 sm:text-4xl">先看今天最值得注意的观点</h1>
             <p className="mt-3 max-w-2xl text-sm leading-7 text-slate-600">报告速览、买入观点和公司历史已经按来源整理好。所有结论都可以回到原文核对。</p>
           </div>
-          <UpdateDataMenu onUpdated={() => setRevision((value) => value + 1)} />
         </div>
         <form onSubmit={search} className="mt-6 flex max-w-3xl gap-2 rounded-2xl border border-slate-200 bg-slate-50 p-2 focus-within:border-blue-400 focus-within:bg-white">
           <Search className="ml-2 mt-2.5 h-5 w-5 shrink-0 text-slate-400" />
@@ -41,7 +38,7 @@ export default function Dashboard() {
         {overview.data ? (
           <div className="mt-5 flex flex-wrap gap-x-5 gap-y-2 text-xs text-slate-500">
             <span>最新报告 {overview.data.latestDate ?? '-'}</span>
-            <span>索引于 {formatDateTime(overview.data.indexedAt)} 更新</span>
+            <PublicationStatus />
             <span className={overview.data.errorCount ? 'text-amber-700' : 'text-emerald-700'}>{overview.data.errorCount ? `${overview.data.errorCount} 个读取问题` : '数据状态正常'}</span>
           </div>
         ) : null}

@@ -10,14 +10,33 @@ import express, {
   type NextFunction,
 } from 'express'
 import cors from 'cors'
+import helmet from 'helmet'
+import { publicJsonReplacer, requireAdmin, requestLimit, validateQuery } from './security.js'
 import researchRoutes from './routes/research.js'
 import aiRoutes from './routes/ai.js'
 
 const app: express.Application = express()
 
-app.use(cors())
-app.use(express.json({ limit: '10mb' }))
-app.use(express.urlencoded({ extended: true, limit: '10mb' }))
+app.disable('x-powered-by')
+app.set('query parser', 'simple')
+app.set('json replacer', publicJsonReplacer)
+app.set('trust proxy', process.env.TRUST_PROXY_LOOPBACK === 'true' ? 'loopback' : false)
+app.use(helmet())
+const allowedOrigins = (process.env.ALLOWED_ORIGINS || '').split(',').map((value) => value.trim()).filter(Boolean)
+app.use(cors({ origin: (origin, callback) => callback(null, Boolean(origin && allowedOrigins.includes(origin))) }))
+app.use('/api', requestLimit(120), validateQuery)
+app.use('/api/search', requestLimit(20))
+app.use('/api/export', requestLimit(4))
+app.use('/api/ai/chat', requestLimit(6))
+app.use('/api/ai/config', requestLimit(5))
+// Deny writes before parsing bodies or doing any expensive work. An absent
+// administrator secret disables management rather than opening it to visitors.
+app.use('/api', (req, res, next) => {
+  if (!['GET', 'HEAD', 'OPTIONS'].includes(req.method) && !(req.method === 'POST' && req.path === '/ai/chat')) {
+    requireAdmin(req, res, next)
+  } else next()
+})
+app.use(express.json({ limit: '64kb', strict: true }))
 
 /**
  * API Routes
@@ -47,6 +66,11 @@ app.use((error: Error, req: Request, res: Response, next: NextFunction) => {
   void next
   res.setHeader('Cache-Control', 'no-store')
   const isIndexUnavailable = 'code' in error && error.code === 'ENOENT'
+  const parseStatus = 'status' in error ? error.status : undefined
+  if (parseStatus === 400 || parseStatus === 413) {
+    res.status(parseStatus).json({ success: false, error: { code: 'INVALID_BODY', message: parseStatus === 413 ? '请求内容过大' : '请求格式不正确' } })
+    return
+  }
   res.status(500).json({
     success: false,
     error: isIndexUnavailable

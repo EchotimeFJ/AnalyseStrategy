@@ -1,150 +1,90 @@
 # AnalyseStrategy
 
-AnalyseStrategy 是一个双端友好的机构研究工作台，用来整理、阅读和检索
-Strategy 仓库中的 Markdown 日报。服务器默认读取 `/opt/Strategy/港A美/机构日报`，本地可通过环境变量覆盖。
+机构研究工作台，用来阅读、检索和对照 Strategy 仓库中的 Markdown 日报。前端使用 React、Vite 和 TypeScript，后端使用 Express。公开页面支持报告速览、公司历史、标签检索和可选的 AI 研究助手。
 
-平台会把分散的日报解析成可追踪的研究资产，包括报告、机构、标的、评级、目标价、催化剂和风险信号。前端使用 React + Vite + TypeScript，后端使用 Express + TypeScript。
+## 数据自动更新
 
-## 功能概览
+服务器启动后检查一次 GitHub，此后每小时检查一次。任务在服务器进程内运行，不依赖浏览器访问或本地电脑在线。仅拉取 Strategy 报告仓库，不自动部署应用代码。
 
-- 今日速览：直接查看最新报告、买入/积极观点、评级与目标价变化，并可在首页更新数据。
-- 报告库：每份报告先展示公司、评级、目标价、风险和催化剂速览，再阅读 Markdown 原文。
-- 智能检索：识别公司、代码、机构或普通关键词，默认按报告聚合；严格原文模式保留逐行核对。
-- 公司研究：上市代码优先归并同一公司的不同名称，展示机构观点历史、目标价、催化剂和风险。
-- 研究助手：可选的全局 AI 增量层，先检索报告再流式回答，并给出可点击来源。
-- 关注列表：维护重点标的池，并优先查看关注标的的变化。
-- 数据更新：刷新本地索引，或对 Strategy 仓库执行 `git pull --ff-only` 后重建，并展示报告 diff、解析质量和应用版本。
-
-## 交互规则
-
-- AI 未配置、失败或额度耗尽时，所有非 AI 功能保持可用。
-- 研究助手会话只保存在当前浏览器，不在服务器共享聊天历史。
-- 证券识别优先使用标准化上市代码；名称和报告错写作为别名保留。
-- 所有搜索结果、评级变化、历史提及和雷达内容按时间逆序展示，最新内容在前。
-- Markdown 中成对 `==` 包裹的内容会渲染为高亮，跨行内容也会保留原始换行。
-- 每次“仅刷新索引”或“Git 更新并重建”后，页面会展示报告变更 diff：新增报告、修改报告、删除报告。新增和修改项可以直接点击进入报告阅读页。
+- Git 使用 `pull --ff-only`，不强制覆盖分支或本地修改。服务器需要可用的只读 Git 凭据。
+- 数据未变化时不重建。变化后先生成完整候选快照，最后原子切换包含发布时间的发布记录。
+- 定时和管理员更新共用串行任务；Git 修改文件期间，读请求继续使用上一份完整索引。
+- 拉取、解析或缓存保存失败时保留上一份可用索引；记录失败日志，下一小时重试。公开页面提示更新延迟，不显示内部错误。
+- `data/runtime/publication.json` 保存数据内容指纹、发布时间和快照指针，快照位于同目录的 `publication.json.snapshots/`。启动优先恢复最近成功发布的快照，即使报告仓库已前进也不会加载失败的候选数据。无新内容、服务重启和无变化检查均不改变发布时间。
+- 网页只显示数据最近发布时间和独立的网站版本发布时间，没有更新、重建或全局配置按钮。关注列表为管理员维护的共享只读列表。
 
 ## 本地运行
 
 ```bash
-npm install
-npm run dev
+npm ci
+REPORT_AUTO_UPDATE=false REPORT_DIR=/path/to/reports npm run dev
 ```
 
-启动后访问：
+访问 `http://localhost:5173/analyse-strategy/`。前端默认端口为 `5173`，API 默认绑定 `127.0.0.1:3003`。本地如需真实自动拉取，设置 `STRATEGY_DIR`，再启用 `REPORT_AUTO_UPDATE=true`。
 
-```text
-http://localhost:5173/
-```
+## 公开访问保护
 
-默认端口：
+所有管理写接口必须携带服务器管理员凭据。未配置凭据时拒绝写入；凭据不放在前端、URL、Git 或公开日志里。
 
-- 前端 Vite：`5173`
-- 后端 API：`3003`
+| 操作 | 权限或限制 |
+| --- | --- |
+| 更新报告、重建、修改关注列表或别名 | `X-Admin-Token`，对应 `ADMIN_TOKEN`；未设置时兼容 `AI_CONFIG_ADMIN_TOKEN` |
+| 保存或测试 AI 配置 | 同一管理员凭据；兼容 `X-AI-Admin-Token` 请求头 |
+| 所有 API | 每个 IP 每分钟最多 120 次 |
+| 搜索、导出、AI 问答 | 分别为每个 IP 每分钟 20、4、6 次 |
+| AI 配置接口 | 每个 IP 每分钟 5 次，失败尝试也计数 |
+| 请求体、查询参数 | JSON 最大 64 KiB；每项查询参数最多 500 字符 |
 
-## 数据源
+超限返回 `429` 和 `Retry-After`。JSON、压缩缓存和导出内容不包含服务器绝对路径。公开 AI 状态不返回密钥尾号、供应商基础地址或运行额度。外部供应商和服务器错误不直接返回给访客。
 
-服务器默认日报目录：
+默认不开放跨站浏览器读取；确需跨站时设置 `ALLOWED_ORIGINS`。CORS 不能代替鉴权，也无法阻止非浏览器爬虫。Markdown 不启用原始 HTML，生产构建不注入本地源码定位信息。
 
-```text
-/opt/Strategy/港A美/机构日报
-```
+公开可读的报告无法完全防止复制或分布式抓取。现有限流用于降低滥用和资源消耗，不能替代网络层 DDoS 防护。需要更强的访客识别时，可在反向代理前增加 WAF、挑战验证或登录。
 
-后端会扫描该目录下的 Markdown 文件，并按文件日期、机构标题、正文段落和结构化字段生成内存索引。
+## AI 研究助手
 
-本地用户配置位于：
+AI 未配置、失败或额度耗尽时，报告阅读与搜索仍可使用。对话只保存在当前浏览器中。
 
-```text
-data/user-config.json
-```
+服务器环境变量支持 `AI_PROVIDER_ID`、`AI_PROVIDER_NAME`、`AI_BASE_URL`、`AI_MODEL` 和 `AI_API_KEY`。也可由管理员使用受保护的配置接口；运行时密钥通过 `AI_CONFIG_SECRET` 加密保存在 `data/runtime/ai-config.json`。各项配置及默认值见 `.env.example`。
 
-其中保存关注列表和别名配置。
+并发名额在检索开始前占用。每日额度先预留后调用，按输入 UTF-8 字节数及两次可能的输出上限保守估计；异常、断连和失败不会退回预留额度，以免通过反复中断绕过限制。该额度用于限制调用，不代表供应商账单上的实际 token 数。
 
-## 服务器报告缓存
+预留记录存储在 `data/runtime/ai-usage.json`，重启保留，每天按上海时区切换日期。记录损坏或写入失败会拒绝新调用。仍应在供应商侧设置费用上限。`AI_TIMEOUT_MS`、`AI_DAILY_TOKEN_BUDGET`、`AI_MAX_CONCURRENCY` 只在服务器设置。
 
-重建索引成功后，会把报告、标签、结构化观点及固定速览写入服务器的压缩快照，默认目录为 `data/runtime/report-cache/`。该目录已被 Git 忽略，不应映射到 Nginx 静态目录；缓存中不包含 AI 配置、API Key、会话或关注列表。
+## 缓存与部署
 
-- 服务重启后先检查源文件清单，再恢复有效快照，无需重新解析全部报告。
-- 应用版本、`APP_GIT_COMMIT`、缓存格式或报告目录发生变化时，旧快照失效。文件新增、删除及修改通过路径、大小和修改时间等元数据识别。
-- 有访问时最多每 30 秒检查一次报告变化；手动“仅刷新索引”或“Git 更新并重建”会立即更新。冷启动和并发重建共用同一个任务。
-- 新快照先写临时文件，再原子替换旧快照。读取失败或源文件在重建期间变化时，保留旧索引；缓存损坏时重新构建。写盘失败时继续提供新内存索引，并在“数据更新”页提示。
-- 首页 `/api/overview`、报告列表、单篇报告及报告速览共用按索引版本隔离的响应缓存。支持 gzip、`ETag` 和 `private, no-cache`：浏览器保留内容，每次访问校验，未变化时返回 304。响应缓存每代最多 128 项、32 MiB，旧索引释放后可被回收。
-- AI 接口、配置、关注列表以及错误响应不进入报告响应缓存。搜索仍按当前索引执行。
+已发布快照由发布记录指向，校验格式和完整性后恢复；应用升级后，后台会重建候选索引，成功才替换发布记录。本地按需构建的缓存位于 `data/runtime/report-cache/`，还会校验应用版本、源码提交和报告文件指纹。快照不包含 AI 配置、聊天或管理员凭据。固定报告接口支持 gzip、ETag、304 和 HEAD，缓存最多 128 项、32 MiB。
 
-可选环境变量：`REPORT_INDEX_CACHE_DIR` 自定义快照目录，`REPORT_INDEX_CHECK_MS` 设置检查间隔（毫秒，默认 `30000`）。缓存为可重建数据，不替代 Strategy 原始报告备份。
+生产环境的自动更新由后台任务负责，访问不会另外触发源文件检查。本地关闭自动任务时，仍可通过 `REPORT_INDEX_CHECK_MS` 设置访问时的检查间隔。
 
-发布时先运行测试和构建，再用正确的 `APP_GIT_COMMIT` 重启服务。首次访问会为新版本生成快照；同版本再次重启后，“数据更新”页应显示“已从服务器缓存恢复”。
-
-## 可选 AI 研究助手
-
-复制 `.env.example` 中的 AI 配置。推荐至少设置：
-
-```text
-AI_CONFIG_SECRET=<用于加密运行时 API Key 的随机长密钥>
-AI_CONFIG_ADMIN_TOKEN=<网页测试或修改全局 AI 配置时使用的管理员密码>
-```
-
-之后可以在“研究助手”页面选择 OpenAI、DeepSeek、MiMo、OpenRouter，或填写其他 OpenAI-compatible 服务的基础地址、模型和 API Key。测试或保存时需要管理员密码，普通访客使用已经配置好的研究助手不需要密码。DeepSeek、MiMo 与 OpenRouter 使用各自当前的官方地址、模型预设和请求头；仍可手动修改基础地址与模型。密钥使用 AES-256-GCM 加密后写入 Git 忽略的 `data/runtime/ai-config.json`；接口只返回掩码，不返回明文。
-
-原生预设参考：
-
-- DeepSeek：`https://api.deepseek.com`，默认 `deepseek-v4-pro`
-- MiMo：`https://api.xiaomimimo.com/v1`，默认 `mimo-v2.5-pro`；Token Plan 使用控制台提供的专属地址
-- OpenRouter：`https://openrouter.ai/api/v1`，默认 `openrouter/auto`，也支持任意 `author/model` 标识
-
-也可以完全用服务器环境变量配置：`AI_PROVIDER_ID`、`AI_PROVIDER_NAME`、`AI_BASE_URL`、`AI_MODEL`、`AI_API_KEY`、`AI_TIMEOUT_MS`、`AI_DAILY_TOKEN_BUDGET` 和 `AI_MAX_CONCURRENCY`。后三个运维参数不在网页表单中展示。`AI_PROVIDER_ID` 可取 `openai`、`deepseek`、`mimo`、`openrouter`、`custom`，环境变量优先于网页保存值。
-
-明亮/黑暗主题可在桌面侧边栏或手机顶部切换，选择只保存在当前浏览器中。
-
-## Git 更新说明
-
-索引管理页的“Git 更新并重建”会尝试在 Strategy 仓库执行：
+发布顺序为 GitHub → 服务器。先测试、构建、推送并核对 GitHub `main`，然后在 `/opt/AnalyseStrategy` 执行：
 
 ```bash
 git pull --ff-only
+npm ci
+export APP_GIT_COMMIT="$(git rev-parse HEAD)"
+export APP_BUILD_TIME="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+npm run build
+pm2 startOrReload deploy/ecosystem.config.cjs --update-env
+pm2 save
 ```
 
-在部分受限沙箱环境中，网页服务进程可能无法写入相邻仓库的 `.git/FETCH_HEAD`。此时系统会使用 `git ls-remote` 对比本地 HEAD 与远端 HEAD：
+使用单个 PM2 fork 实例，保证定时任务和本地额度记录只有一个服务进程负责。不要直接扩成多实例；扩容前需要共享调度锁、额度存储和限流存储。Vercel 请求入口不启动定时任务。
 
-- 如果本地与远端一致，视为已是最新，并继续重建索引。
-- 如果远端已有新提交但沙箱禁止写入 `.git/FETCH_HEAD`，会返回明确错误，提示需要在有权限的终端执行 `git pull --ff-only`，或把 Strategy 目录加入沙箱允许路径。
+Nginx 的 `/analyse-strategy/api/` 代理到 `127.0.0.1:3003/api/`。启用 `TRUST_PROXY_LOOPBACK=true` 时，Nginx 必须把 `X-Forwarded-For` 覆盖为 `$remote_addr`；不能直接相信客户端传来的 IP。API 端口不对公网开放。
 
-## 常用命令
+在本应用的静态文件 location 中引入 `deploy/nginx-security.conf`，提供 CSP、防嵌入和其他安全响应头。静态目录只能映射 `dist/`，不能映射仓库根目录或 `data/`。
+
+报告源、管理员配置、AI 额度记录，以及发布记录与它指向的快照需要一起备份；本地按需缓存可重建。排障日志查看 `pm2 logs analyse-api`，公开健康接口为 `/api/health`。
+
+## 验证
 
 ```bash
 npm test
 npm run lint
 npm run check
 npm run build
+npm audit
 ```
 
-命令说明：
-
-- `npm test`：运行全部 `tests/*.test.ts`，覆盖解析、检索、AI 配置/流式问答和版本。
-- `npm run lint`：运行 ESLint。
-- `npm run check`：运行 TypeScript 类型检查。
-- `npm run build`：运行生产构建。
-
-## 主要目录
-
-```text
-api/
-  routes/                 API 路由
-  services/               报告解析、索引、检索、AI、Git 更新和本地配置服务
-src/
-  components/             通用 UI、布局、Markdown 渲染和信号卡片
-  pages/                  今日速览、报告、检索、公司、研究助手、关注、数据页面
-  lib/                    API 请求和格式化工具
-tests/                    回归测试
-.trae/documents/          产品和技术设计文档
-```
-
-## 技术栈
-
-- React 18
-- Vite
-- TypeScript
-- Express
-- Tailwind CSS
-- react-markdown
-- remark-gfm
+测试覆盖实际 Git 拉取、无变化检查、定时触发、失败保留、发布记录恢复、匿名写入拒绝、伪造转发头限流、公开响应去除路径、AI 并发与额度恢复，以及原有的解析、检索、Markdown、缓存和界面逻辑。

@@ -49,17 +49,18 @@ function revision() {
   return `${SCHEMA_VERSION}:${app.version}:${app.commit}`;
 }
 
-export async function readReportSnapshot(manifest: SourceManifest): Promise<IndexState | null> {
+export async function readReportSnapshot(manifest: SourceManifest, options: { file?: string; published?: boolean } = {}): Promise<IndexState | null> {
   try {
-    const file = reportCachePath(manifest.sourceDir);
+    const file = options.file ?? reportCachePath(manifest.sourceDir);
     if ((await fs.stat(file)).size > MAX_SNAPSHOT_BYTES) return null;
     const content = await decompress(await fs.readFile(file), { maxOutputLength: MAX_SNAPSHOT_BYTES });
     const envelope = JSON.parse(content.toString('utf8'));
-    if (envelope.revision !== revision() || envelope.sourceDir !== manifest.sourceDir ||
-      envelope.fingerprint !== manifest.fingerprint || typeof envelope.payload !== 'string' ||
+    const compatible = options.published ? String(envelope.revision).startsWith(`${SCHEMA_VERSION}:`) : envelope.revision === revision();
+    if (!compatible || envelope.sourceDir !== manifest.sourceDir ||
+      !options.published && envelope.fingerprint !== manifest.fingerprint || typeof envelope.payload !== 'string' ||
       envelope.digest !== digest(envelope.payload)) return null;
     const data = JSON.parse(envelope.payload);
-    if (!validSnapshot(data) || data.sourceDir !== manifest.sourceDir || data.sourceFingerprint !== manifest.fingerprint) return null;
+    if (!validSnapshot(data) || data.sourceDir !== manifest.sourceDir || !options.published && data.sourceFingerprint !== manifest.fingerprint) return null;
     return {
       ...data,
       reports: data.reports.map((report) => {
@@ -77,8 +78,8 @@ export async function readReportSnapshot(manifest: SourceManifest): Promise<Inde
   }
 }
 
-export async function writeReportSnapshot(index: IndexState): Promise<void> {
-  const file = reportCachePath(index.sourceDir);
+export async function writeReportSnapshot(index: IndexState, options: { file?: string } = {}): Promise<void> {
+  const file = options.file ?? reportCachePath(index.sourceDir);
   const temporary = `${file}.${process.pid}.${randomUUID()}.tmp`;
   // Only report state is serialized. No environment, AI configuration or user settings.
   const payload = JSON.stringify({

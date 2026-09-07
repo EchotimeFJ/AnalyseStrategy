@@ -55,7 +55,7 @@ function sendEvent(res: Response, event: string, value: unknown) {
 }
 
 function adminToken(req: Request) {
-  return String(req.header('X-AI-Admin-Token') ?? '');
+  return String(req.header('X-Admin-Token') || req.header('X-AI-Admin-Token') || '');
 }
 
 function asyncRoute(handler: (req: Request, res: Response) => Promise<void>): RequestHandler {
@@ -70,8 +70,8 @@ function asyncRoute(handler: (req: Request, res: Response) => Promise<void>): Re
 function aiError(error: unknown) {
   const raw = error instanceof Error ? error.message : String(error);
   const [code, ...parts] = raw.split(':');
-  const known = code.startsWith('AI_') || code.startsWith('QUESTION_');
-  const message = known ? parts.join(':') : raw;
+  const known = ['AI_NOT_CONFIGURED', 'AI_RATE_LIMIT', 'AI_BUSY', 'AI_DAILY_BUDGET', 'AI_NO_EVIDENCE', 'QUESTION_REQUIRED', 'QUESTION_TOO_LONG', 'QUESTION_INVALID'].includes(code);
+  const message = known ? parts.join(':') : '研究助手暂时不可用，请稍后重试';
   const status = code === 'AI_NOT_CONFIGURED' ? 503 : code === 'AI_RATE_LIMIT' ? 429 : code === 'AI_BUSY' ? 429 : code === 'AI_DAILY_BUDGET' ? 429 : 400;
   return { code: known ? code : 'AI_REQUEST_FAILED', message: message || '研究助手请求失败', status };
 }

@@ -24,6 +24,8 @@ import { classifySearchIntent, groupSearchHits } from './searchService.js';
 import { readUserConfig, type WatchItem } from './localConfig.js';
 import { getReportDir } from '../runtimeConfig.js';
 import { readSourceManifest, readReportSnapshot, writeReportSnapshot, type SourceManifest } from './reportCache.js';
+import { publicData } from '../security.js';
+import { restorePublishedIndex } from './publicationStore.js';
 
 export type IndexState = {
   sourceDir: string;
@@ -111,11 +113,37 @@ let initializing: Promise<IndexState> | undefined;
 let checkingSource: Promise<IndexState> | undefined;
 let buildingIndex: Promise<IndexState> | undefined;
 let nextSourceCheck = 0;
+let updatingSource = false;
+let publishedState = false;
+let sourceUpdate: Promise<unknown> | undefined;
+
+// Serialize all management updates and pause on-access checks while git changes
+// the working tree. Readers continue using the previous complete index.
+export function withIndexSourceUpdate<T>(work: () => Promise<T>): Promise<T> {
+  const previous = sourceUpdate;
+  const job = (async () => {
+    await previous?.catch(() => undefined);
+    updatingSource = true;
+    await Promise.allSettled([initializing, checkingSource, buildingIndex].filter(Boolean));
+    const baseline = state;
+    try {
+      return await work();
+    } catch (error) {
+      state = baseline;
+      throw error;
+    } finally {
+      updatingSource = false;
+    }
+  })();
+  sourceUpdate = job;
+  void job.finally(() => { if (sourceUpdate === job) sourceUpdate = undefined; }).catch(() => undefined);
+  return job;
+}
 
 export async function ensureIndex(options: { checkSource?: boolean } = {}): Promise<IndexState> {
   if (state.indexedAt) {
     // Readers keep using the last complete generation while a rebuild is running.
-    if (options.checkSource === false || buildingIndex || checkingSource || Date.now() < nextSourceCheck) return state;
+    if (options.checkSource === false || updatingSource || publishedState || process.env.NODE_ENV === 'production' || buildingIndex || checkingSource || Date.now() < nextSourceCheck) return state;
     checkingSource = (async () => {
       try {
         const manifest = await readSourceManifest(getReportDir());
@@ -135,6 +163,12 @@ export async function ensureIndex(options: { checkSource?: boolean } = {}): Prom
   }
   if (initializing) return initializing;
   initializing = (async () => {
+    const published = await restorePublishedIndex(getReportDir());
+    if (published) {
+      state = published;
+      publishedState = true;
+      return state;
+    }
     const manifest = await readSourceManifest(getReportDir());
     const restored = await readReportSnapshot(manifest);
     if (restored && (await readSourceManifest(manifest.sourceDir)).fingerprint === manifest.fingerprint) {
@@ -177,6 +211,29 @@ function scheduleSourceCheck() {
 }
 
 async function buildAndSaveIndex(manifest: SourceManifest): Promise<IndexState> {
+  const next = await buildIndexCandidate(manifest);
+  try {
+    await writeReportSnapshot(next);
+    next.cache = { origin: 'rebuilt', persisted: true, savedAt: next.indexedAt };
+  } catch {
+    next.cache!.warning = '索引已更新，但服务器缓存写入失败；重启后需要重新构建。';
+  }
+  state = next;
+  return state;
+}
+
+export async function prepareIndexForPublication(): Promise<IndexState> {
+  return buildIndexCandidate(await readSourceManifest(getReportDir()));
+}
+
+export function activatePublishedIndex(index: IndexState) {
+  index.cache = { origin: 'rebuilt', persisted: true, savedAt: index.indexedAt };
+  state = index;
+  publishedState = true;
+  scheduleSourceCheck();
+}
+
+async function buildIndexCandidate(manifest: SourceManifest): Promise<IndexState> {
   const { sourceDir, files } = manifest;
   const reports: ReportDocument[] = [];
   const errors: IndexState['errors'] = [];
@@ -245,14 +302,7 @@ async function buildAndSaveIndex(manifest: SourceManifest): Promise<IndexState> 
     cache: { origin: 'rebuilt', persisted: false },
   };
   next.views = buildIndexViews(next);
-  try {
-    await writeReportSnapshot(next);
-    next.cache = { origin: 'rebuilt', persisted: true, savedAt: indexedAt };
-  } catch {
-    next.cache!.warning = '索引已更新，但服务器缓存写入失败；重启后需要重新构建。';
-  }
-  state = next;
-  return state;
+  return next;
 }
 
 function buildQualityIssues(reports: ReportDocument[], opinions: OpinionRecord[]): DataQualityIssue[] {
@@ -613,14 +663,14 @@ export async function getWatchlistView(watchlist: WatchItem[]) {
 export async function exportData(type: string, query?: string) {
   if (type === 'target' && query) {
     const profile = await getTargetProfile(query);
-    return toCsv(profile.mentions);
+    return toCsv(publicData(profile.mentions));
   }
   if (type === 'search' && query) {
     const hits = await searchReports({ q: query, raw: true });
-    return toCsv(Array.isArray(hits) ? hits : []);
+    return toCsv(publicData(Array.isArray(hits) ? hits : []));
   }
   const summary = await getSummary();
-  return JSON.stringify(summary, null, 2);
+  return JSON.stringify(publicData(summary), null, 2);
 }
 
 function buildReportOverview(report: ReportDocument, opinions: OpinionRecord[]): ReportOverview {

@@ -1,240 +1,34 @@
-import { useState } from 'react';
-import { Link } from 'react-router-dom';
-import { apiGet, apiPost } from '@/lib/api';
+import { apiGet } from '@/lib/api';
 import { useAsyncData } from '@/hooks/useAsyncData';
-import type { AppVersion, IndexStatus, ReportChange, ReportChangeSet, ReportChangeType, StrategyUpdateResult } from '@/types';
+import type { AppVersion, TodayOverview } from '@/types';
 import { Layout, PageHeader } from '@/components/Layout';
-import { Badge, ErrorBlock, LoadingBlock, Panel, StatCard } from '@/components/ui';
+import { ErrorBlock, LoadingBlock, Panel, StatCard } from '@/components/ui';
+import { PublicationStatus } from '@/components/PublicationStatus';
 import { formatDateTime } from '@/lib/format';
-import { ReportCacheStatus } from '@/components/ReportCacheStatus';
 
 export default function IndexPage() {
-  const { data, loading, error, setData } = useAsyncData(() => apiGet<IndexStatus>('/api/index'), []);
+  const overview = useAsyncData(() => apiGet<TodayOverview>('/api/overview'), []);
   const version = useAsyncData(() => apiGet<AppVersion>('/api/version'), []);
-  const [refreshing, setRefreshing] = useState(false);
-  const [updating, setUpdating] = useState(false);
-  const [refreshError, setRefreshError] = useState('');
-  const [lastPull, setLastPull] = useState<StrategyUpdateResult['pull'] | null>(null);
-
-  async function refresh() {
-    setRefreshing(true);
-    setRefreshError('');
-    try {
-      setData(await apiPost<IndexStatus>('/api/reindex'));
-    } catch (reason) {
-      setRefreshError(reason instanceof Error ? reason.message : String(reason));
-    } finally {
-      setRefreshing(false);
-    }
-  }
-
-  async function updateFromGit() {
-    setUpdating(true);
-    setRefreshError('');
-    setLastPull(null);
-    try {
-      const result = await apiPost<StrategyUpdateResult>('/api/update-strategy');
-      setData(result.index);
-      setLastPull(result.pull);
-    } catch (reason) {
-      setRefreshError(reason instanceof Error ? reason.message : String(reason));
-    } finally {
-      setUpdating(false);
-    }
-  }
-
   return (
     <Layout>
-      <PageHeader
-        eyebrow="Data & Release"
-        title="数据更新"
-        description="更新 Strategy 报告、重建索引，并检查版本、解析问题和待识别实体。Git 更新始终使用 fast-forward only。"
-      />
-      {loading ? <LoadingBlock label="正在读取索引状态..." /> : null}
-      {error ? <ErrorBlock message={error} /> : null}
-      {refreshError ? <ErrorBlock message={refreshError} /> : null}
-      {data ? (
-        <div className="space-y-6">
-          <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-            <StatCard label="报告数量" value={data.reportCount} />
-            <StatCard label="标的提及" value={data.mentionCount} />
-            <StatCard label="解析问题" value={data.errors.length} />
-            <StatCard label="待识别项" value={data.qualityIssues?.length ?? 0} />
+      <PageHeader eyebrow="Data & Release" title="数据与版本" description="报告每小时自动检查更新，这里显示最近成功发布的时间。" />
+      {overview.loading ? <LoadingBlock label="正在读取数据状态…" /> : null}
+      {overview.error ? <ErrorBlock message={overview.error} /> : null}
+      <div className="space-y-6">
+        {overview.data ? <div className="grid gap-4 sm:grid-cols-2">
+          <StatCard label="报告数量" value={overview.data.reportCount} />
+          <StatCard label="最新报告" value={overview.data.latestDate ?? '暂无'} />
+        </div> : null}
+        <Panel title="报告数据" eyebrow="Reports">
+          <div className="text-sm leading-7 text-slate-600"><PublicationStatus /></div>
+        </Panel>
+        <Panel title="网站版本" eyebrow="Release">
+          <div className="text-sm leading-7 text-slate-600">
+            <p>当前版本 v{version.data?.version ?? __APP_VERSION__}</p>
+            <p>网站发布于 {formatDateTime(version.data?.buildTime ?? __BUILD_TIME__)}</p>
           </div>
-          <Panel
-            title="源目录"
-            eyebrow="Source"
-            action={
-              <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row">
-                <button
-                  onClick={refresh}
-                  disabled={refreshing || updating}
-                  className="rounded-2xl border border-slate-200 bg-white px-5 py-2 text-sm font-semibold text-slate-900 transition hover:border-amber-300 disabled:opacity-50"
-                >
-                  {refreshing ? '刷新中...' : '仅刷新索引'}
-                </button>
-                <button
-                  onClick={updateFromGit}
-                  disabled={refreshing || updating}
-                  className="rounded-2xl bg-slate-950 px-5 py-2 text-sm font-semibold text-white transition hover:bg-slate-800 disabled:opacity-50"
-                >
-                  {updating ? '更新中...' : 'Git 更新并重建'}
-                </button>
-              </div>
-            }
-          >
-            <div className="break-all rounded-2xl bg-slate-50 p-4 font-mono text-sm text-slate-700">{data.sourceDir}</div>
-            <div className="mt-4 flex flex-wrap gap-2">
-              <Badge tone={data.errors.length ? 'red' : 'green'}>{data.errors.length ? '存在解析问题' : '索引正常'}</Badge>
-              <Badge tone="blue">访问时定期检查报告变化</Badge>
-              <Badge tone="amber">Git pull 使用 --ff-only</Badge>
-            </div>
-            <ReportCacheStatus cache={data.cache} />
-            {lastPull ? (
-              <div className="mt-4 rounded-2xl border border-emerald-200 bg-emerald-50 p-4 text-sm text-emerald-800">
-                <div className="font-semibold">Git 更新完成</div>
-                <div className="mt-2 break-all font-mono text-xs">{lastPull.strategyDir}</div>
-                <pre className="mt-3 max-h-36 overflow-auto whitespace-pre-wrap rounded-xl bg-white/70 p-3 text-xs">
-                  {lastPull.stdout || lastPull.stderr || '无输出'}
-                </pre>
-              </div>
-            ) : null}
-          </Panel>
-
-          <Panel title="应用版本" eyebrow="Release">
-            <div className="grid gap-3 md:grid-cols-3">
-              <div className="rounded-2xl bg-slate-50 p-4"><div className="text-xs text-slate-500">语义版本</div><div className="mt-2 font-mono text-sm font-semibold">v{version.data?.version ?? __APP_VERSION__}</div></div>
-              <div className="rounded-2xl bg-slate-50 p-4"><div className="text-xs text-slate-500">Git 提交</div><div className="mt-2 font-mono text-sm font-semibold">{version.data?.commit ?? __GIT_COMMIT__}</div></div>
-              <div className="rounded-2xl bg-slate-50 p-4"><div className="text-xs text-slate-500">构建时间</div><div className="mt-2 text-sm font-semibold">{formatDateTime(version.data?.buildTime ?? __BUILD_TIME__)}</div></div>
-            </div>
-          </Panel>
-
-          {data.reportChanges ? <ReportChangesPanel changes={data.reportChanges} /> : null}
-
-          <Panel title="数据质量" eyebrow="Quality">
-            {data.errors.length || data.qualityIssues?.length ? (
-              <div className="space-y-3">
-                {data.errors.map((item) => (
-                  <div key={item.filePath} className="rounded-2xl border border-rose-200 bg-rose-50 p-4">
-                    <div className="break-all text-sm font-semibold text-rose-800">{item.filePath}</div>
-                    <div className="mt-2 text-sm text-rose-700">{item.message}</div>
-                  </div>
-                ))}
-                {(data.qualityIssues ?? []).slice(0, 80).map((item, index) => (
-                  <div key={`${item.type}-${item.reportId}-${item.lineNumber}-${index}`} className="rounded-2xl border border-amber-200 bg-amber-50 p-4">
-                    <div className="text-sm font-semibold text-amber-900">{item.message}</div>
-                    <div className="mt-2 text-xs text-amber-700">{item.reportId ?? '未知报告'}{item.lineNumber ? ` · 第 ${item.lineNumber} 行` : ''}</div>
-                  </div>
-                ))}
-              </div>
-            ) : (
-              <div className="rounded-2xl bg-emerald-50 p-5 text-sm text-emerald-700">当前没有读取失败的 Markdown 文件。</div>
-            )}
-          </Panel>
-        </div>
-      ) : null}
+        </Panel>
+      </div>
     </Layout>
   );
-}
-
-function ReportChangesPanel({ changes }: { changes: ReportChangeSet }) {
-  const total = changes.added.length + changes.modified.length + changes.removed.length;
-
-  return (
-    <Panel title="本次报告变更" eyebrow="Diff">
-      <div className="mb-4 flex flex-wrap gap-2">
-        <Badge tone={changes.added.length ? 'green' : 'slate'}>新增 {changes.added.length}</Badge>
-        <Badge tone={changes.modified.length ? 'amber' : 'slate'}>修改 {changes.modified.length}</Badge>
-        <Badge tone={changes.removed.length ? 'red' : 'slate'}>删除 {changes.removed.length}</Badge>
-        <Badge tone="blue">生成于 {formatDateTime(changes.generatedAt)}</Badge>
-      </div>
-
-      {total ? (
-        <div className="grid gap-4 xl:grid-cols-3">
-          <ReportChangeGroup title="新增报告" type="added" items={changes.added} />
-          <ReportChangeGroup title="修改报告" type="modified" items={changes.modified} />
-          <ReportChangeGroup title="删除报告" type="removed" items={changes.removed} />
-        </div>
-      ) : (
-        <div className="rounded-2xl bg-slate-50 p-5 text-sm leading-7 text-slate-600">
-          本次更新没有发现新增、修改或删除的日报。
-        </div>
-      )}
-    </Panel>
-  );
-}
-
-function ReportChangeGroup({
-  title,
-  type,
-  items,
-}: {
-  title: string;
-  type: ReportChangeType;
-  items: ReportChange[];
-}) {
-  const emptyText: Record<ReportChangeType, string> = {
-    added: '没有新增日报',
-    modified: '没有修改日报',
-    removed: '没有删除日报',
-  };
-
-  return (
-    <div className="rounded-2xl border border-slate-200 bg-white/70 p-4">
-      <div className="mb-3 flex items-center justify-between gap-3">
-        <div className="font-semibold text-slate-950">{title}</div>
-        <Badge tone={items.length ? reportChangeTone(type) : 'slate'}>{items.length}</Badge>
-      </div>
-      {items.length ? (
-        <div className="space-y-2">
-          {items.map((item) => (
-            <ReportChangeItem key={`${type}-${item.id}`} item={item} type={type} />
-          ))}
-        </div>
-      ) : (
-        <div className="rounded-xl bg-slate-50 px-3 py-2 text-sm text-slate-500">{emptyText[type]}</div>
-      )}
-    </div>
-  );
-}
-
-function ReportChangeItem({ item, type }: { item: ReportChange; type: ReportChangeType }) {
-  const content = (
-    <>
-      <div className="flex flex-wrap items-center gap-2">
-        <Badge tone={reportChangeTone(type)}>{item.date}</Badge>
-        <span className="text-xs text-slate-500">{item.lineCount} 行</span>
-        <span className="text-xs text-slate-500">{item.targetCount} 个提及</span>
-      </div>
-      <div className="mt-2 line-clamp-2 text-sm font-medium text-slate-800">{item.title}</div>
-      {type === 'modified' ? (
-        <div className="mt-2 text-xs text-slate-500">
-          {formatDateTime(item.previousUpdatedAt)} → {formatDateTime(item.nextUpdatedAt)}
-        </div>
-      ) : null}
-    </>
-  );
-
-  if (type === 'removed') {
-    return <div className="rounded-xl bg-slate-50 p-3">{content}</div>;
-  }
-
-  return (
-    <Link
-      to={`/reports?id=${encodeURIComponent(item.id)}`}
-      className="block rounded-xl bg-slate-50 p-3 transition hover:bg-amber-50 hover:shadow-sm"
-    >
-      {content}
-    </Link>
-  );
-}
-
-function reportChangeTone(type: ReportChangeType) {
-  if (type === 'added') {
-    return 'green';
-  }
-  if (type === 'modified') {
-    return 'amber';
-  }
-  return 'red';
 }

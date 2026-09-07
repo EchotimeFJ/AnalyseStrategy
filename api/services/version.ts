@@ -2,7 +2,6 @@ import { createRequire } from 'node:module';
 
 const require = createRequire(import.meta.url);
 const packageJson = require('../../package.json') as { version?: string };
-const startedAt = new Date().toISOString();
 
 export function getAppVersion(options: {
   packageVersion?: string;
@@ -12,6 +11,6 @@ export function getAppVersion(options: {
   return {
     version: options.packageVersion ?? packageJson.version ?? '0.0.0',
     commit: env.APP_GIT_COMMIT || 'development',
-    buildTime: env.APP_BUILD_TIME || startedAt,
+    buildTime: env.APP_BUILD_TIME || '',
   };
 }
