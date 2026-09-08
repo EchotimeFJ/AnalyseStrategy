@@ -4,7 +4,7 @@ module.exports = {
     cwd: '/opt/AnalyseStrategy',
     script: 'api/server.ts',
     interpreter: '/opt/AnalyseStrategy-runtime/node-v24.20.0-linux-x64/bin/node',
-    node_args: ['--import', 'tsx'],
+    node_args: ['--max-old-space-size=512', '--import', 'tsx'],
     exec_mode: 'fork',
     instances: 1,
     autorestart: true,

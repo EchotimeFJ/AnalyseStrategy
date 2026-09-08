@@ -1,17 +1,22 @@
 import fs from 'node:fs/promises';
+import { createReadStream, createWriteStream } from 'node:fs';
 import path from 'node:path';
 import { createHash, randomUUID } from 'node:crypto';
-import { gzip, gunzip } from 'node:zlib';
+import { createGzip, createGunzip, gunzip } from 'node:zlib';
+import { createInterface } from 'node:readline';
+import { Readable } from 'node:stream';
+import { pipeline } from 'node:stream/promises';
 import { promisify } from 'node:util';
 import type { IndexState } from './reportIndex.js';
 import type { InstitutionBlock, ReportDocument } from './reportParser.js';
 import type { SecurityEntity } from '../domain/research.js';
 import { getAppVersion } from './version.js';
+import { packSnapshotStrings, unpackSnapshotStrings } from './snapshotStrings.js';
 
-const compress = promisify(gzip);
 const decompress = promisify(gunzip);
-const SCHEMA_VERSION = 2;
+const SCHEMA_VERSION = 3;
 const MAX_SNAPSHOT_BYTES = 256 * 1024 * 1024;
+const LINE_FORMAT = 'report-snapshot-lines-v1';
 
 export type SourceManifest = { sourceDir: string; files: string[]; fingerprint: string };
 type DiskReport = Omit<ReportDocument, 'lines' | 'institutions'> & { institutions: Omit<InstitutionBlock, 'content'>[] };
@@ -53,13 +58,11 @@ export async function readReportSnapshot(manifest: SourceManifest, options: { fi
   try {
     const file = options.file ?? reportCachePath(manifest.sourceDir);
     if ((await fs.stat(file)).size > MAX_SNAPSHOT_BYTES) return null;
-    const content = await decompress(await fs.readFile(file), { maxOutputLength: MAX_SNAPSHOT_BYTES });
-    const envelope = JSON.parse(content.toString('utf8'));
-    const compatible = options.published ? String(envelope.revision).startsWith(`${SCHEMA_VERSION}:`) : envelope.revision === revision();
+    const envelope = await readEnvelope(file);
+    const compatible = options.published ? /^[23]:/.test(String(envelope.revision)) : envelope.revision === revision();
     if (!compatible || envelope.sourceDir !== manifest.sourceDir ||
-      !options.published && envelope.fingerprint !== manifest.fingerprint || typeof envelope.payload !== 'string' ||
-      envelope.digest !== digest(envelope.payload)) return null;
-    const data = JSON.parse(envelope.payload);
+      !options.published && envelope.fingerprint !== manifest.fingerprint) return null;
+    const data = envelope.data;
     if (!validSnapshot(data) || data.sourceDir !== manifest.sourceDir || !options.published && data.sourceFingerprint !== manifest.fingerprint) return null;
     return {
       ...data,
@@ -82,7 +85,7 @@ export async function writeReportSnapshot(index: IndexState, options: { file?: s
   const file = options.file ?? reportCachePath(index.sourceDir);
   const temporary = `${file}.${process.pid}.${randomUUID()}.tmp`;
   // Only report state is serialized. No environment, AI configuration or user settings.
-  const payload = JSON.stringify({
+  const packed = packSnapshotStrings({
     sourceDir: index.sourceDir, sourceFingerprint: index.sourceFingerprint,
     version: index.version, indexedAt: index.indexedAt,
     reports: index.reports.map((report): DiskReport => ({
@@ -97,15 +100,31 @@ export async function writeReportSnapshot(index: IndexState, options: { file?: s
     entities: [...index.entities], qualityIssues: index.qualityIssues,
     errors: index.errors, views: index.views,
   });
-  const content = JSON.stringify({
-    revision: revision(), sourceDir: index.sourceDir,
-    fingerprint: index.sourceFingerprint, digest: digest(payload), payload,
+  // Each source string is a separate JSON line so both write and restore avoid
+  // materializing an escaped copy of the entire corpus at once.
+  function* payloadParts() {
+    for (const value of packed.strings) yield `${JSON.stringify({ text: value })}\n`;
+    yield `${JSON.stringify({ root: packed.root })}\n`;
+  }
+  const header = JSON.stringify({
+    format: LINE_FORMAT, revision: revision(), sourceDir: index.sourceDir,
+    fingerprint: index.sourceFingerprint,
   });
-  if (Buffer.byteLength(content) > MAX_SNAPSHOT_BYTES) throw new Error('Report snapshot exceeds size limit');
+  function* envelopeParts() {
+    let size = 0;
+    const checked = (part: string) => {
+      size += Buffer.byteLength(part);
+      if (size > MAX_SNAPSHOT_BYTES) throw new Error('Report snapshot exceeds size limit');
+      return part;
+    };
+    const hash = createHash('sha256');
+    yield checked(`${header}\n`);
+    for (const part of payloadParts()) { hash.update(part); yield checked(part); }
+    yield checked(`${JSON.stringify({ digest: hash.digest('hex') })}\n`);
+  }
   await fs.mkdir(path.dirname(file), { recursive: true, mode: 0o700 });
   try {
-    const bytes = await compress(content, { level: 1 });
-    await fs.writeFile(temporary, bytes, { mode: 0o600, flag: 'wx' });
+    await pipeline(Readable.from(envelopeParts()), createGzip({ level: 1 }), createWriteStream(temporary, { mode: 0o600, flags: 'wx' }));
     await fs.rename(temporary, file);
   } finally {
     await fs.unlink(temporary).catch(() => undefined);
@@ -125,6 +144,49 @@ function validSnapshot(value: unknown): value is DiskIndex {
   const views = data.views as IndexState['views'];
   return Boolean(views && Array.isArray(views.summaries) && Array.isArray(views.reportOverviews) &&
     views.overview?.indexVersion === data.version && views.overview.reportCount === data.reports.length);
+}
+
+async function readEnvelope(file: string) {
+  const probeInput = createReadStream(file);
+  const probe = probeInput.pipe(createGunzip());
+  probeInput.on('error', (error) => probe.destroy(error));
+  let isLines = false;
+  try {
+    for await (const chunk of probe) { isLines = chunk.toString('utf8').startsWith(`{"format":"${LINE_FORMAT}"`); break; }
+  } finally { probe.destroy(); probeInput.destroy(); }
+  if (!isLines) {
+    // Published schema-2 snapshots remain valid until a new publication commits.
+    const content = await decompress(await fs.readFile(file), { maxOutputLength: MAX_SNAPSHOT_BYTES });
+    const envelope = JSON.parse(content.toString('utf8'));
+    if (typeof envelope.payload !== 'string' || envelope.digest !== digest(envelope.payload)) throw new Error('Invalid snapshot digest');
+    const parsed = JSON.parse(envelope.payload);
+    return { ...envelope, data: envelope.encoding === 'strings-v1' ? unpackSnapshotStrings(parsed) : parsed };
+  }
+  const input = createReadStream(file);
+  const unzip = input.pipe(createGunzip());
+  input.on('error', (error) => unzip.destroy(error));
+  const lines = createInterface({ input: unzip, crlfDelay: Infinity });
+  const strings: string[] = [];
+  const hash = createHash('sha256');
+  let header: { revision: string; sourceDir: string; fingerprint: string } | undefined;
+  let root: unknown;
+  let expected: string | undefined;
+  let bytes = 0;
+  try {
+    for await (const line of lines) {
+      bytes += Buffer.byteLength(line) + 1;
+      if (bytes > MAX_SNAPSHOT_BYTES || expected) throw new Error('Invalid snapshot length');
+      const entry = JSON.parse(line);
+      if (!header) { header = entry; continue; }
+      if (typeof entry.digest === 'string') { expected = entry.digest; continue; }
+      hash.update(`${line}\n`);
+      if (typeof entry.text === 'string' && root === undefined) strings.push(entry.text);
+      else if ('root' in entry && root === undefined) root = entry.root;
+      else throw new Error('Invalid snapshot record');
+    }
+    if (!header || !root || !expected || hash.digest('hex') !== expected) throw new Error('Invalid snapshot digest');
+    return { ...header, data: unpackSnapshotStrings({ strings, root }) };
+  } finally { lines.close(); unzip.destroy(); input.destroy(); }
 }
 
 function digest(value: string) {

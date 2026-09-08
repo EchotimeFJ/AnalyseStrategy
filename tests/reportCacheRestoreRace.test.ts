@@ -17,18 +17,21 @@ process.env.REPORT_INDEX_CACHE_DIR = cache;
 try {
   execFileSync(process.execPath, ['--import', 'tsx', fileURLToPath(new URL('./helpers/reportCacheProbe.ts', import.meta.url))], { env: process.env });
   const snapshotPath = path.join(cache, (await fs.readdir(cache))[0]);
-  const originalRead = fs.readFile.bind(fs);
+  const originalStat = fs.stat.bind(fs);
   let changed = false;
-  mock.method(fs, 'readFile', async (...args: Parameters<typeof fs.readFile>) => {
-    const bytes = await originalRead(...args);
+  // The streaming reader stats the snapshot after collecting the source
+  // manifest. Change the source at that same restore boundary.
+  mock.method(fs, 'stat', async (...args: Parameters<typeof fs.stat>) => {
+    const result = await originalStat(...args);
     if (args[0] === snapshotPath && !changed) {
       changed = true;
       await fs.writeFile(file, '# 高盛\n恢复期间已更新的内容');
     }
-    return bytes;
+    return result;
   });
   const { ensureIndex } = await import('../api/services/reportIndex');
   const restored = await ensureIndex();
+  assert.equal(changed, true, 'the source changed during snapshot restoration');
   assert.match(restored.reports[0].markdown, /恢复期间已更新的内容/);
   assert.equal(restored.cache?.origin, 'rebuilt');
 } finally {
