@@ -16,7 +16,13 @@ const aliasReport = buildReportFromMarkdown({
 const aliasOpinions = extractOpinions(aliasReport);
 const sameSecurity = aliasOpinions.filter((item) => item.security.code === '1768.HK');
 
-assert.equal(sameSecurity.length, 3);
+assert.equal(sameSecurity.length, 1);
+assert.ok(sameSecurity[0].security.aliases.includes('明明很忙'));
+assert.ok(sameSecurity[0].security.aliases.includes('鸣鸣很忙'));
+assert.ok(sameSecurity[0].security.aliases.includes('忙碌明'));
+assert.ok(sameSecurity[0].evidence.some((item) => item.lineNumber === 4));
+assert.ok(sameSecurity[0].evidence.some((item) => item.lineNumber === 7));
+assert.ok(sameSecurity[0].evidence.some((item) => item.lineNumber === 10));
 assert.equal(new Set(sameSecurity.map((item) => item.security.key)).size, 1);
 assert.equal(aliasOpinions.some((item) => item.institution === 'AI' && item.institutionVerified), false);
 assert.equal(aliasOpinions.some((item) => item.security.aliases.includes('AH')), false);

@@ -1,9 +1,11 @@
 {
   "name": "analyse-strategy",
   "private": true,
-  "version": "0.3.0",
+  "version": "0.4.0",
   "type": "module",
-  "engines": { "node": ">=24.0.0" },
+  "engines": {
+    "node": ">=24.0.0"
+  },
   "scripts": {
     "client:dev": "vite",
     "build": "tsc -b && vite build",

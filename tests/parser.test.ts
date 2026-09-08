@@ -53,8 +53,8 @@ const spacex = mentions.find((item) => item.aliases.includes('SpaceX'));
 assert.ok(spacex);
 assert.equal(spacex?.institution, '瑞银');
 assert.equal(spacex?.rating, '买入');
-assert.equal(spacex?.targetPrice, '210.00美元');
-assert.equal(spacex?.currentPrice, '160.91美元');
+assert.equal(spacex?.targetPrice, '210 美元');
+assert.equal(spacex?.currentPrice, '160.91 美元');
 
 const innoscience = mentions.find((item) => item.code === '2577.HK');
 assert.ok(innoscience);
@@ -106,12 +106,13 @@ assert.equal(shipMentions.some((item) => item.targetName === '中国船舶工业
 const yangzijiang = shipMentions.find((item) => item.code === 'YAZG.SI');
 assert.ok(yangzijiang);
 assert.equal(yangzijiang?.rating, '买入');
-assert.equal(yangzijiang?.targetPrice, '4.00新元');
+assert.equal(yangzijiang?.targetPrice, '4 新元');
 
 const coscoShipping = shipMentions.find((item) => item.code === '601919.SS');
 assert.ok(coscoShipping);
 assert.equal(coscoShipping?.rating, '买入');
-assert.equal(coscoShipping?.targetPrice, '11.5港元');
+assert.equal(coscoShipping?.targetPrice, '14.7 元');
+assert.equal(shipMentions.find((item) => item.code === '1919.HK')?.targetPrice, '11.5 港元');
 assert.equal(coscoShipping?.action, '维持');
 
 console.log('parser tests passed');

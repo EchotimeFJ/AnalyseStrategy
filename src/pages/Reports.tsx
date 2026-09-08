@@ -6,7 +6,7 @@ import type { ReportDetail, ReportOverview, ReportSummary } from '@/types';
 import { Layout, PageHeader } from '@/components/Layout';
 import { Badge, EmptyState, ErrorBlock, LoadingBlock, Panel } from '@/components/ui';
 import { MarkdownViewer } from '@/components/MarkdownViewer';
-import { getCenteredScrollTop, getSourceLineScrollTop } from '@/lib/reportScroll';
+import { findSourceLineElement, getCenteredScrollTop, getSourceLineScrollTop } from '@/lib/reportScroll';
 import { ReportOpinionTable } from '@/components/ReportOpinionTable';
 
 export default function Reports() {
@@ -29,6 +29,8 @@ export default function Reports() {
     () => (activeId ? apiGet<ReportOverview>(`/api/reports/${encodeURIComponent(activeId)}/overview`) : Promise.resolve(null)),
     [activeId],
   );
+  const activeDetail = detail.data?.id === activeId ? detail.data : null;
+  const activeOverview = overview.data?.reportId === activeId ? overview.data : null;
 
   useEffect(() => {
     if (!selectedId && firstId) {
@@ -37,12 +39,13 @@ export default function Reports() {
   }, [firstId, selectedId, setParams]);
 
   useEffect(() => {
-    if (!detail.data || !focusedLine) {
+    if (!detail.data || detail.data.id !== activeId || detail.loading || overview.loading || !focusedLine) {
       return;
     }
 
+    let focusedElement: HTMLElement | null = null;
     const frame = window.requestAnimationFrame(() => {
-      const element = findSourceLineElement(focusedLine);
+      const element = findSourceLineElement(document, focusedLine);
       if (!element) {
         return;
       }
@@ -51,6 +54,7 @@ export default function Reports() {
         node.classList.remove('report-line-focus');
       });
       element.classList.add('report-line-focus');
+      focusedElement = element;
       const rect = element.getBoundingClientRect();
       const top = getSourceLineScrollTop({
         windowScrollY: window.scrollY,
@@ -64,8 +68,11 @@ export default function Reports() {
       window.scrollTo({ top, behavior: 'auto' });
     });
 
-    return () => window.cancelAnimationFrame(frame);
-  }, [detail.data, focusedLine]);
+    return () => {
+      window.cancelAnimationFrame(frame);
+      focusedElement?.classList.remove('report-line-focus');
+    };
+  }, [activeId, detail.data, detail.loading, overview.data, overview.loading, focusedLine, highlightTerms]);
 
   useEffect(() => {
     if (!activeId || !reports.data?.length) {
@@ -107,7 +114,7 @@ export default function Reports() {
               ))}
             </select>
           }
-          className="xl:sticky xl:top-8 xl:max-h-[calc(100vh-4rem)] xl:overflow-auto"
+          className="max-h-72 overflow-auto xl:sticky xl:top-8 xl:max-h-[calc(100vh-4rem)]"
         >
           {reports.loading ? <LoadingBlock label="正在加载报告列表..." /> : null}
           {reports.error ? <ErrorBlock message={reports.error} /> : null}
@@ -144,22 +151,22 @@ export default function Reports() {
           {detail.loading || overview.loading ? <LoadingBlock label="正在加载报告与速览..." /> : null}
           {detail.error ? <ErrorBlock message={detail.error} /> : null}
           {overview.error ? <ErrorBlock message={overview.error} /> : null}
-          {detail.data ? (
+          {activeDetail ? (
             <>
-              <Panel title={detail.data.date} eyebrow="Report meta">
+              <Panel title={activeDetail.date} eyebrow="Report meta">
                 <div className="grid gap-3 md:grid-cols-3">
-                  <Meta label="机构" value={`${detail.data.institutions.length} 家`} />
-                  <Meta label="标的提及" value={`${detail.data.mentions.length} 条`} />
-                  <Meta label="报告编号" value={detail.data.id} />
+                  <Meta label="机构" value={`${activeDetail.institutions.length} 家`} />
+                  <Meta label="标的提及" value={`${activeDetail.mentions.length} 条`} />
+                  <Meta label="报告编号" value={activeDetail.id} />
                 </div>
               </Panel>
-              {overview.data ? (
+              {activeOverview ? (
                 <Panel title="报告观点速览" eyebrow="Quick view">
-                  <ReportOpinionTable overview={overview.data} />
+                  <ReportOpinionTable key={activeOverview.reportId} overview={activeOverview} />
                 </Panel>
               ) : null}
               <Panel title="Markdown 原文" eyebrow="Original" className="overflow-hidden">
-                <MarkdownViewer markdown={detail.data.markdown} highlightTerms={highlightTerms} />
+                <MarkdownViewer markdown={activeDetail.markdown} highlightTerms={highlightTerms} />
               </Panel>
             </>
           ) : (
@@ -178,21 +185,6 @@ function parseLineNumber(value: string | null) {
 
   const line = Number.parseInt(value, 10);
   return Number.isFinite(line) && line > 0 ? line : undefined;
-}
-
-function findSourceLineElement(line: number) {
-  const nodes = Array.from(document.querySelectorAll<HTMLElement>('[data-line-start]'));
-  return (
-    nodes.find((node) => {
-      const start = Number(node.dataset.lineStart);
-      const end = Number(node.dataset.lineEnd || node.dataset.lineStart);
-      return start <= line && line <= end;
-    }) ??
-    nodes
-      .filter((node) => Number(node.dataset.lineStart) <= line)
-      .sort((left, right) => Number(right.dataset.lineStart) - Number(left.dataset.lineStart))[0] ??
-    null
-  );
 }
 
 function scrollReportListToActiveItem(container: HTMLElement | null, activeId: string) {

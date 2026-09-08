@@ -4,6 +4,9 @@ export interface SourceEvidence {
   reportId: string;
   filePath: string;
   lineNumber: number;
+  endLineNumber?: number;
+  startColumn?: number;
+  endColumn?: number;
   excerpt: string;
   method: string;
   confidence: ConfidenceLevel;
@@ -31,6 +34,7 @@ export interface OpinionRecord {
   institution: string;
   institutionVerified: boolean;
   security: SecurityEntity;
+  sourceName?: string;
   rating: string | null;
   rawRating: string | null;
   action: string | null;
@@ -38,6 +42,9 @@ export interface OpinionRecord {
   currentPrice: string | null;
   types: OpinionType[];
   evidence: SourceEvidence[];
+  ratingAlternatives?: string[];
+  previousRating?: string;
+  buyRecommendation?: boolean;
 }
 
 export interface DataQualityIssue {
@@ -60,6 +67,21 @@ export interface ReportOverview {
   targetPriceChangeCount: number;
   riskCount: number;
   catalystCount: number;
+  buyCoverage?: BuyCoverage;
+}
+
+export interface BuyReference {
+  lineNumber: number;
+  startColumn: number;
+  excerpt: string;
+  reason: string;
+}
+export interface BuyCoverage {
+  references: number;
+  covered: number;
+  companyCount: number;
+  review: BuyReference[];
+  other: BuyReference[];
 }
 
 export interface CompanyProfile {

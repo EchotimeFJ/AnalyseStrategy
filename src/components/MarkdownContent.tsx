@@ -3,6 +3,7 @@ import remarkGfm from 'remark-gfm';
 import { Link } from 'react-router-dom';
 import type { ReactNode } from 'react';
 import type { Components, Options } from 'react-markdown';
+import { remarkSourceLines } from '@/lib/markdownSourceLines';
 import { remarkMarkdownTags } from '@/lib/markdownTags';
 
 export type MarkdownVariant = 'report' | 'assistant';
@@ -38,7 +39,7 @@ export function MarkdownContent({
 
   return (
     <article className={classes}>
-      <ReactMarkdown components={mergedComponents} remarkPlugins={[remarkGfm, remarkMarkdownTags, ...remarkPlugins]}>{markdown}</ReactMarkdown>
+      <ReactMarkdown components={mergedComponents} remarkPlugins={[[remarkGfm, { singleTilde: false }], ...(sourceLines ? [remarkSourceLines] : []), remarkMarkdownTags, ...remarkPlugins]}>{markdown}</ReactMarkdown>
       {trailing}
     </article>
   );

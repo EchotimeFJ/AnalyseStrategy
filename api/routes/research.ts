@@ -94,6 +94,9 @@ router.get('/search', asyncRoute(async (req: Request, res: Response): Promise<vo
       institution: asString(req.query.institution),
       mode: asString(req.query.mode),
       raw: asBoolean(req.query.raw),
+      paginated: asBoolean(req.query.paginated),
+      offset: Number(asString(req.query.offset) ?? 0),
+      limit: Number(asString(req.query.limit) ?? 500),
     }),
   });
 }));

@@ -1,0 +1,132 @@
+{
+  "sourceRevision": "bfeb8c8ddf3af8cd7add795ae74059d8f1b5da74",
+  "description": "Unmodified full Markdown reports from the published report snapshot. No generated cases.",
+  "reports": [
+    {
+      "date": "2025-11-25",
+      "id": "2025__2025-11-25",
+      "file": "2025-11-25.md.gz",
+      "sha256": "5da7bfd6dafecf606a087f5352cdf4a19b5eaf7fca4552e50a0dfa603ffa5003",
+      "source": "https://fustar.top/analyse-strategy/reports?id=2025__2025-11-25"
+    },
+    {
+      "date": "2026-01-14",
+      "id": "2026__2026-01-14",
+      "file": "2026-01-14.md.gz",
+      "sha256": "1aabfa376344e260c1e67f2a40a8cda093015419a4f56f966ca7e1677bc2e2a8",
+      "source": "https://fustar.top/analyse-strategy/reports?id=2026__2026-01-14"
+    },
+    {
+      "date": "2026-02-05",
+      "id": "2026__2026-02-05",
+      "file": "2026-02-05.md.gz",
+      "sha256": "8432fa9d88024569df7eec40d138c2578c14e80e6fa844ef0de0ee3fe43a2642",
+      "source": "https://fustar.top/analyse-strategy/reports?id=2026__2026-02-05"
+    },
+    {
+      "date": "2026-02-10",
+      "id": "2026__2026-02-10",
+      "file": "2026-02-10.md.gz",
+      "sha256": "ad0d2e148d204dd259eba266816af6f2098432e4e611fb3d3cb17dff4ef84480",
+      "source": "https://fustar.top/analyse-strategy/reports?id=2026__2026-02-10"
+    },
+    {
+      "date": "2026-07-26",
+      "id": "2026__2026-07-26",
+      "file": "2026-07-26.md.gz",
+      "sha256": "0b44883d145e55adffae2646129f9a26cae45abeeab37df7df80aa1ec2148339",
+      "source": "https://fustar.top/analyse-strategy/reports?id=2026__2026-07-26"
+    },
+    {
+      "date": "2026-08-06",
+      "id": "2026__2026-08-06",
+      "file": "2026-08-06.md.gz",
+      "sha256": "2c7bbaa1c8356f2fc9105905e6b5775d9230ac800356e4635e0582c957ef149b",
+      "source": "https://fustar.top/analyse-strategy/reports?id=2026__2026-08-06"
+    },
+    {
+      "date": "2026-08-26",
+      "id": "2026__2026-08-26",
+      "file": "2026-08-26.md.gz",
+      "sha256": "58014962546048576728936815c18b0addf6a1c7de50bdefca4fb5cc086ad7cc",
+      "source": "https://fustar.top/analyse-strategy/reports?id=2026__2026-08-26"
+    },
+    {
+      "date": "2026-08-27",
+      "id": "2026__2026-08-27",
+      "file": "2026-08-27.md.gz",
+      "sha256": "c1d3f6de49e0519e6a514bc462522d9634b22dddf4fa5dfbaaef24a23cf567c2",
+      "source": "https://fustar.top/analyse-strategy/reports?id=2026__2026-08-27"
+    },
+    {
+      "date": "2026-09-02",
+      "id": "2026__2026-09-02",
+      "file": "2026-09-02.md.gz",
+      "sha256": "e84e665237ab0c873e25332c905d4ea92464103c147ac4040d8c4a55a608700b",
+      "source": "https://fustar.top/analyse-strategy/reports?id=2026__2026-09-02"
+    },
+    {
+      "date": "2026-09-03",
+      "id": "2026__2026-09-03",
+      "file": "2026-09-03.md.gz",
+      "sha256": "008db62a4f5fb453c4b8fd4f695989797db21b9514f8543282f9e3102f6ba83e",
+      "source": "https://fustar.top/analyse-strategy/reports?id=2026__2026-09-03"
+    },
+    {
+      "date": "2026-09-04",
+      "id": "2026__2026-09-04",
+      "file": "2026-09-04.md.gz",
+      "sha256": "c98a2de68f5d903f5fd64301472d3c00351607ea50e02cf437a36723eca109a0",
+      "source": "https://fustar.top/analyse-strategy/reports?id=2026__2026-09-04"
+    },
+    {
+      "date": "2026-09-07",
+      "id": "2026__2026-09-07",
+      "file": "2026-09-07.md.gz",
+      "sha256": "e929b422019b6498f5eca2e6a180dfcafe9afbbd1540c1b9dd54a88de9cb1e29",
+      "source": "https://fustar.top/analyse-strategy/reports?id=2026__2026-09-07"
+    },
+    {
+      "date": "2026-08-24",
+      "id": "2026__2026-08-24",
+      "file": "2026-08-24.md.gz",
+      "sha256": "ea145d481b2c836cc68283dd9ab27f1ea30568dc9bd820c3dc4363a5ace259c3",
+      "source": "https://fustar.top/analyse-strategy/reports?id=2026__2026-08-24"
+    },
+    {
+      "date": "2026-08-25",
+      "id": "2026__2026-08-25",
+      "file": "2026-08-25.md.gz",
+      "sha256": "ca59914e2d41dc5254c759699fb8b8ea3f8d55174cd70c93b0c47a0d2b3457eb",
+      "source": "https://fustar.top/analyse-strategy/reports?id=2026__2026-08-25"
+    },
+    {
+      "date": "2026-09-01",
+      "id": "2026__2026-09-01",
+      "file": "2026-09-01.md.gz",
+      "sha256": "422929e7967daf9e550d1b4720c8d3d842af7847a38337feb2be52572127dd0d",
+      "source": "https://fustar.top/analyse-strategy/reports?id=2026__2026-09-01"
+    },
+    {
+      "date": "2026-09-06",
+      "id": "2026__2026-09-06",
+      "file": "2026-09-06.md.gz",
+      "sha256": "c81aaa57d06a7b3e9f7ed7f4c5140fdb060d4c92dfe011760a995eedb9aab10d",
+      "source": "https://fustar.top/analyse-strategy/reports?id=2026__2026-09-06"
+    },
+    {
+      "date": "2025-09-17",
+      "id": "2025__2025-9-17",
+      "file": "2025-09-17.md.gz",
+      "sha256": "d95964b8de1c4148d2bd5e074639ff4507bba674c46a0fe038e47bbf94daf44e",
+      "source": "https://fustar.top/analyse-strategy/reports?id=2025__2025-9-17"
+    },
+    {
+      "date": "2026-07-01",
+      "id": "2026__2026-07-01",
+      "file": "2026-07-01.md.gz",
+      "sha256": "6ec721b5417d741a67d78f3272e2f1c645a10ffb9042a49557c14bdf416ec72c",
+      "source": "https://fustar.top/analyse-strategy/reports?id=2026__2026-07-01"
+    }
+  ]
+}

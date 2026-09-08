@@ -100,7 +100,20 @@ export type SearchResultGroup = {
   }>;
 };
 
-export type GroupedSearchResponse = {
+export type SearchPagination = {
+  totalHits: number;
+  offset: number;
+  limit: number;
+  returnedHits: number;
+  hasMore: boolean;
+};
+
+export type RawSearchResponse = SearchPagination & {
+  query: string;
+  hits: SearchHit[];
+};
+
+export type GroupedSearchResponse = SearchPagination & {
   query: string;
   intent: SearchIntent;
   totalHits: number;
@@ -238,6 +251,9 @@ export type SourceEvidence = {
   reportId: string;
   filePath: string;
   lineNumber: number;
+  endLineNumber?: number;
+  startColumn?: number;
+  endColumn?: number;
   excerpt: string;
   method: string;
   confidence: ConfidenceLevel;
@@ -258,6 +274,7 @@ export type OpinionRecord = {
   institution: string;
   institutionVerified: boolean;
   security: SecurityEntity;
+  sourceName?: string;
   rating: string | null;
   rawRating: string | null;
   action: string | null;
@@ -265,6 +282,9 @@ export type OpinionRecord = {
   currentPrice: string | null;
   types: OpinionType[];
   evidence: SourceEvidence[];
+  ratingAlternatives?: string[];
+  previousRating?: string;
+  buyRecommendation?: boolean;
 };
 
 export type ReportOverview = {
@@ -279,7 +299,16 @@ export type ReportOverview = {
   targetPriceChangeCount: number;
   riskCount: number;
   catalystCount: number;
+  buyCoverage?: {
+    references: number;
+    covered: number;
+    companyCount: number;
+    review: BuyReference[];
+    other: BuyReference[];
+  };
 };
+
+export type BuyReference = { lineNumber: number; startColumn: number; excerpt: string; reason: string };
 
 export type TodayOverview = {
   sourceDir: string;

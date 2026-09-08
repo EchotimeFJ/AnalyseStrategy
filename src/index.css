@@ -754,3 +754,17 @@ a:focus-visible {
   0%, 48% { opacity: 1; }
   49%, 100% { opacity: 0; }
 }
+/* The report panel can be narrow even on a desktop with a sidebar and list. */
+.report-opinion-table { container-type: inline-size; }
+.report-opinion-header { display: none; }
+.report-opinion-row { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
+.report-opinion-company { grid-column: 1 / -1; }
+.report-opinion-source { justify-self: end; }
+@container (min-width: 640px) {
+  .report-opinion-header, .report-opinion-row {
+    display: grid;
+    grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr) minmax(0, 1fr) minmax(0, 1fr) 74px;
+    align-items: center;
+  }
+  .report-opinion-company { grid-column: auto; }
+}

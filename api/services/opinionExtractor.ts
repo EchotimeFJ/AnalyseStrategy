@@ -12,23 +12,25 @@ const POSITIVE_RATINGS = ['买入', '增持', '跑赢', '优于大市', 'overwei
 
 export function isPositiveRating(value: string | null | undefined): boolean {
   const normalized = value?.normalize('NFKC').trim().toLowerCase() ?? '';
-  return POSITIVE_RATINGS.some((rating) => normalized === rating.toLowerCase());
+  return POSITIVE_RATINGS.some((rating) => normalized === rating.toLowerCase()) || /^跑赢(?:大盘|大市|行业)$/.test(normalized);
 }
 
 export function classifyOpinionTypes(input: {
   rating: string | null;
   action: string | null;
   text: string;
+  ratingChanged?: boolean;
+  targetPriceChanged?: boolean;
 }): OpinionType[] {
   const types = new Set<OpinionType>();
   const normalized = input.text.normalize('NFKC').toLowerCase();
-  if (isPositiveRating(input.rating) || /首选股|top pick|重点推荐/.test(normalized)) {
+  if (isPositiveRating(input.rating) || !input.rating && /首选股|top pick|重点推荐/.test(normalized)) {
     types.add('positive');
   }
-  if (input.action && /上调|下调|首次覆盖|恢复覆盖|首予|重申/.test(input.action)) {
+  if (input.ratingChanged ?? Boolean(input.rating && input.action && /上调|下调|首次覆盖|恢复覆盖|首予/.test(input.action) && /评级/.test(normalized))) {
     types.add('rating-change');
   }
-  if (/目标价[^。\n]{0,28}(?:上调|下调|升至|降至|提高|降低)|(?:上调|下调|升至|降至)[^。\n]{0,28}目标价/.test(normalized)) {
+  if (input.targetPriceChanged ?? /目标价[^。\n]{0,28}(?:上调|下调|升至|降至|提高|降低)|(?:上调|下调|升至|降至)[^。\n]{0,28}目标价/.test(normalized)) {
     types.add('target-price-change');
   }
   if (/催化剂|catalyst/.test(normalized)) types.add('catalyst');
@@ -55,10 +57,16 @@ function toOpinion(report: ReportDocument, mention: TargetMention, index: number
     confidence: code ? 'high' : 'medium',
   };
   const evidence: SourceEvidence[] = [
+    ...(mention.fieldEvidence ?? []).map((field) => ({
+      reportId: report.id, filePath: report.filePath, lineNumber: field.lineNumber,
+      endLineNumber: field.lineNumber, excerpt: field.excerpt, method: `${field.field}-statement`,
+      startColumn: field.startColumn, endColumn: field.endColumn,
+      confidence: code ? 'high' as const : 'medium' as const,
+    })),
     {
       reportId: report.id,
       filePath: report.filePath,
-      lineNumber: mention.lineNumber,
+      lineNumber: mention.headingLineNumber ?? mention.lineNumber,
       excerpt: mention.excerpt,
       method: code ? 'security-code-segment' : 'security-heading-segment',
       confidence: code ? 'high' : 'medium',
@@ -82,13 +90,18 @@ function toOpinion(report: ReportDocument, mention: TargetMention, index: number
     institution: institution.verified ? institution.canonicalName : `待识别机构（${institution.rawName || '未知'}）`,
     institutionVerified: institution.verified,
     security,
+    sourceName: mention.targetName,
     rating,
-    rawRating: rating,
+    rawRating: mention.rawRating ?? rating,
     action,
     targetPrice: mention.targetPrice ?? null,
     currentPrice: mention.currentPrice ?? null,
-    types: classifyOpinionTypes({ rating, action, text: mention.excerpt }),
-    evidence,
+    types: [...new Set([...classifyOpinionTypes({ rating, action, text: mention.excerpt, ratingChanged: mention.ratingChanged, targetPriceChanged: mention.targetPriceChanged }),
+      ...mention.signals.filter((signal) => signal.type === 'risk' || signal.type === 'catalyst').map((signal) => signal.type as OpinionType)])].filter((type) => !mention.ratingAlternatives?.length || type !== 'positive'),
+    ratingAlternatives: mention.ratingAlternatives,
+    previousRating: mention.previousRating,
+    buyRecommendation: mention.buyRecommendation,
+    evidence: [...new Map(evidence.map((source) => [`${source.method}:${source.lineNumber}:${source.startColumn ?? ''}:${source.excerpt}`, source])).values()],
   };
 }
 

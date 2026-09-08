@@ -26,6 +26,8 @@ import { getReportDir } from '../runtimeConfig.js';
 import { readSourceManifest, readReportSnapshot, writeReportSnapshot, type SourceManifest } from './reportCache.js';
 import { publicData } from '../security.js';
 import { restorePublishedIndex } from './publicationStore.js';
+import { getBuyCoverage } from './buyCoverage.js';
+import { resolveOpinions as dedupeOpinions } from './opinionResolution.js';
 
 export type IndexState = {
   sourceDir: string;
@@ -511,6 +513,9 @@ export async function searchReports(input: {
   institution?: string;
   mode?: string;
   raw?: boolean;
+  paginated?: boolean;
+  offset?: number;
+  limit?: number;
 }) {
   const index = await ensureIndex();
   const filteredReports = index.reports.filter((report) => {
@@ -520,27 +525,34 @@ export async function searchReports(input: {
     if (input.to && report.date > input.to) {
       return false;
     }
-    if (input.institution && !report.institutions.some((item) => item.institution === input.institution)) {
-      return false;
-    }
     return true;
   });
 
   const ratingQuery = parseRatingQuery(input.q, input.mode);
   let hits: SearchHit[];
   if (input.mode === 'tag') {
-    hits = createTagSearch(sortReportsDesc(filteredReports))(input.q ?? '').slice(0, 500);
-  } else if (ratingQuery) {
+    hits = createTagSearch(sortReportsDesc(filteredReports))(input.q ?? '');
+  } else if (!input.raw && ratingQuery) {
     const reportIds = new Set(filteredReports.map((report) => report.id));
-    hits = searchRatingMentions(index.mentions, reportIds, ratingQuery).slice(0, 500);
+    hits = searchRatingMentions(index.mentions, reportIds, ratingQuery);
   } else {
     hits = filterSearchMode(
       createExactSearch(sortReportsDesc(filteredReports))(input.q ?? ''),
-      input.mode,
-    ).slice(0, 500);
+      input.raw ? undefined : input.mode,
+    );
   }
 
-  if (input.raw) return hits;
+  if (input.institution) {
+    const institution = normalizeText(resolveInstitution(input.institution).canonicalName);
+    hits = hits.filter((hit) => normalizeText(resolveInstitution(hit.institution).canonicalName) === institution);
+  }
+  const totalHits = hits.length;
+  const offset = Number.isFinite(input.offset) ? Math.max(0, Math.floor(input.offset!)) : 0;
+  const limit = Number.isFinite(input.limit) ? Math.min(500, Math.max(1, Math.floor(input.limit!))) : 500;
+  hits = hits.slice(offset, offset + limit);
+  const pagination = { totalHits, offset, limit, returnedHits: hits.length, hasMore: offset + hits.length < totalHits };
+  // Existing raw clients keep the array contract; interactive clients opt into totals and paging.
+  if (input.raw) return input.paginated ? { query: input.q ?? '', hits, ...pagination } : hits;
 
   const intent = classifySearchIntent(input.q ?? '', {
     securities: [...index.entities.values()],
@@ -552,7 +564,7 @@ export async function searchReports(input: {
   return {
     query: input.q ?? '',
     intent,
-    totalHits: hits.length,
+    ...pagination,
     groups: groupSearchHits(hits),
     company,
   };
@@ -688,34 +700,8 @@ function buildReportOverview(report: ReportDocument, opinions: OpinionRecord[]):
     targetPriceChangeCount: reportOpinions.filter((opinion) => opinion.types.includes('target-price-change')).length,
     riskCount: reportOpinions.filter((opinion) => opinion.types.includes('risk')).length,
     catalystCount: reportOpinions.filter((opinion) => opinion.types.includes('catalyst')).length,
+    buyCoverage: getBuyCoverage(report, reportOpinions),
   };
-}
-
-function dedupeOpinions(opinions: OpinionRecord[]): OpinionRecord[] {
-  const grouped = new Map<string, OpinionRecord>();
-  for (const opinion of opinions) {
-    const key = `${opinion.reportId}|${opinion.institution}|${opinion.security.key}`;
-    const current = grouped.get(key);
-    if (!current) {
-      grouped.set(key, opinion);
-      continue;
-    }
-    grouped.set(key, {
-      ...current,
-      rating: current.rating ?? opinion.rating,
-      rawRating: current.rawRating ?? opinion.rawRating,
-      action: current.action ?? opinion.action,
-      targetPrice: current.targetPrice ?? opinion.targetPrice,
-      currentPrice: current.currentPrice ?? opinion.currentPrice,
-      types: [...new Set([...current.types, ...opinion.types])],
-      evidence: [...current.evidence, ...opinion.evidence],
-      security: {
-        ...current.security,
-        aliases: [...new Set([...current.security.aliases, ...opinion.security.aliases])],
-      },
-    });
-  }
-  return [...grouped.values()];
 }
 
 function compareOpinionsDesc(left: OpinionRecord, right: OpinionRecord): number {
@@ -780,13 +766,13 @@ function filterSearchMode(hits: SearchHit[], mode?: string): SearchHit[] {
 }
 
 function parseRatingQuery(query?: string, mode?: string): string | undefined {
-  const normalizedQuery = normalizeText(query ?? '').replace(/评级|投资评级|rating/g, '');
+  const normalizedQuery = normalizeText(query ?? '').replace(/^(?:投资评级|评级|rating)[:：]?|(?:投资评级|评级|rating)$/g, '');
   if (!normalizedQuery && mode === 'rating') {
     return '*';
   }
 
   for (const [rating, aliases] of Object.entries(RATING_SEARCH_ALIASES)) {
-    if (aliases.some((alias) => normalizedQuery.includes(normalizeText(alias)))) {
+    if (aliases.some((alias) => normalizedQuery === normalizeText(alias))) {
       return rating;
     }
   }

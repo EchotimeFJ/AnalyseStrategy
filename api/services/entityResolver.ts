@@ -16,6 +16,15 @@ const INSTITUTION_ALIASES: Record<string, string> = {
   瑞信: '瑞信',
   申万宏源: '申万宏源',
   花旗: '花旗',
+  Citi: '花旗',
+  德银: '德意志银行',
+  德意志银行: '德意志银行',
+  美银: '美银',
+  美国银行: '美银',
+  杰富瑞: '杰富瑞',
+  汇丰: '汇丰',
+  汇丰银行: '汇丰',
+  中信建投: '中信建投',
   高盛: '高盛',
   麦格理: '麦格理',
 };
@@ -38,15 +47,18 @@ const INVALID_EXACT = new Set([
   '主题',
 ]);
 
-const CODE_PATTERN = /^([A-Z]{1,6}|\d{4,6})[.\s-]?(HK|SS|SH|SZ|US|TW|KS|KQ|JP|L|O|N|SI)$/i;
+const CODE_PATTERN = /^([A-Z]{1,8}|\d{1,6})([.\s-]?)(HK|SS|SH|SZ|US|TW|KS|KQ|JP|L|O|N|SI|CH|C1|C2)$/i;
 
 export function normalizeSecurityCode(input: string | null | undefined): string | null {
   if (!input) return null;
-  const normalized = input.normalize('NFKC').trim().replace(/\s+/g, '');
+  const normalized = input.normalize('NFKC').trim().replace(/\s+/g, ' ');
   const match = normalized.match(CODE_PATTERN);
   if (!match) return null;
-  const market = match[2].toUpperCase() === 'SH' ? 'SS' : match[2].toUpperCase();
-  return `${match[1].toUpperCase()}.${market}`;
+  if (/^[A-Z]/i.test(match[1]) && !match[2]) return null;
+  const suffix = match[3].toUpperCase();
+  const market = suffix === 'SH' || suffix === 'C1' ? 'SS' : suffix === 'C2' ? 'SZ' : suffix === 'CH' ? (match[1].startsWith('6') ? 'SS' : 'SZ') : suffix;
+  const symbol = market === 'HK' && /^\d+$/.test(match[1]) ? String(Number(match[1])).padStart(4, '0') : match[1].toUpperCase();
+  return `${symbol}.${market}`;
 }
 
 export function normalizeEntityName(input: string): string {
@@ -77,7 +89,7 @@ export function resolveInstitution(input: string): {
   verified: boolean;
 } {
   const rawName = input.trim();
-  const normalized = normalizeEntityName(rawName);
+  const normalized = normalizeEntityName(rawName).replace(/[（(]\s*精选\s*\d*\s*[）)]/g, '').trim();
   const canonicalName = INSTITUTION_ALIASES[normalized] ?? normalized;
   return {
     rawName,

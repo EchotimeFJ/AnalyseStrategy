@@ -46,17 +46,20 @@ const { rebuildIndex, searchReports } = await import('../api/services/reportInde
 
 await rebuildIndex();
 
-const buyHits = await searchReports({ q: '买入评级', raw: true });
-assert.equal(buyHits.length, 2);
-assert.equal(buyHits[0].date, '2026-07-08');
-assert.equal(buyHits[0].institution, '花旗');
-assert.match(buyHits[0].snippet, /新标的/);
-assert.equal(buyHits[1].date, '2026-01-01');
+// Rating expansion belongs to structured search; raw mode searches the original wording.
+const buyResult = await searchReports({ q: '买入评级', mode: 'rating' });
+assert.ok(!Array.isArray(buyResult) && 'groups' in buyResult);
+assert.equal(buyResult.totalHits, 2);
+assert.equal(buyResult.groups[0].date, '2026-07-08');
+assert.deepEqual(buyResult.groups[0].institutions, ['花旗']);
+assert.match(buyResult.groups[0].snippets[0].text, /新标的/);
+assert.equal(buyResult.groups[1].date, '2026-01-01');
 
-const sellHits = await searchReports({ q: '卖出评级', raw: true });
-assert.equal(sellHits.length, 1);
-assert.equal(sellHits[0].date, '2026-07-09');
-assert.match(sellHits[0].snippet, /谨慎标的/);
+const sellResult = await searchReports({ q: '卖出评级', mode: 'rating' });
+assert.ok(!Array.isArray(sellResult) && 'groups' in sellResult);
+assert.equal(sellResult.totalHits, 1);
+assert.equal(sellResult.groups[0].date, '2026-07-09');
+assert.match(sellResult.groups[0].snippets[0].text, /谨慎标的/);
 
 await fs.rm(tmpRoot, { recursive: true, force: true });
 

@@ -2,7 +2,7 @@ import { FormEvent, useEffect, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { Search as SearchIcon } from 'lucide-react';
 import { apiGet, queryString } from '@/lib/api';
-import type { GroupedSearchResponse, SearchHit } from '@/types';
+import type { GroupedSearchResponse, RawSearchResponse, SearchHit } from '@/types';
 import { Layout, PageHeader } from '@/components/Layout';
 import { Badge, EmptyState, ErrorBlock, LoadingBlock, Panel } from '@/components/ui';
 import { buildReportLink, searchHitHighlightTerms } from '@/lib/reportLinks';
@@ -17,17 +17,18 @@ export default function SearchPage() {
   const [from, setFrom] = useState(params.get('from') ?? '');
   const [to, setTo] = useState(params.get('to') ?? '');
   const [strict, setStrict] = useState(params.get('raw') === 'true');
-  const [result, setResult] = useState<GroupedSearchResponse | SearchHit[] | null>(null);
+  const [result, setResult] = useState<GroupedSearchResponse | RawSearchResponse | null>(null);
+  const [lastSearch, setLastSearch] = useState<Record<string, string | undefined> | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
   useEffect(() => {
-    if (params.get('q')) void runSearch(params.get('q') ?? '', params.get('mode') ?? 'all', params.get('raw') === 'true');
+    if (params.get('q')) void runSearch(params.get('q') ?? '', params.get('mode') ?? 'all', params.get('raw') === 'true', Number(params.get('offset') ?? 0));
     // URL 参数是页面初次加载和首页跳转的恢复源。
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  async function runSearch(nextQuery = query, nextMode = mode, nextStrict = strict) {
+  async function runSearch(nextQuery = query, nextMode = mode, nextStrict = strict, offset = 0, paging = false) {
     const value = nextQuery.trim();
     if (!value) {
       setResult(null);
@@ -36,11 +37,11 @@ export default function SearchPage() {
     }
     setLoading(true);
     setError('');
+    setResult(null);
     try {
-      const searchParams = { q: value, mode: nextMode, from, to, raw: nextStrict ? 'true' : undefined };
-      const data = nextStrict
-        ? await apiGet<SearchHit[]>(`/api/search${queryString(searchParams)}`)
-        : await apiGet<GroupedSearchResponse>(`/api/search${queryString(searchParams)}`);
+      const searchParams = { ...(paging && lastSearch ? lastSearch : { q: value, mode: nextMode, from, to, institution: params.get('institution') ?? undefined, raw: nextStrict ? 'true' : undefined }), paginated: 'true', limit: '100', offset: String(offset) };
+      const data = await apiGet<GroupedSearchResponse | RawSearchResponse>(`/api/search${queryString(searchParams)}`);
+      setLastSearch(searchParams);
       setResult(data);
       setParams(compactSearchParams(searchParams));
     } catch (reason) {
@@ -84,7 +85,16 @@ export default function SearchPage() {
       <div className="mt-6">
         {loading ? <LoadingBlock label="正在检索报告…" /> : null}
         {error ? <ErrorBlock message={error} /> : null}
-        {!loading && !error && result ? Array.isArray(result) ? <RawResults hits={result} query={query} /> : <GroupedResults result={result} query={query} mode={mode} /> : null}
+        {!loading && !error && result ? <>
+          <div className="mb-4 flex flex-wrap items-center justify-between gap-3 text-sm text-slate-600">
+            <span>共 {result.totalHits} 处命中 · 当前显示 {result.returnedHits ? result.offset + 1 : 0}–{result.offset + result.returnedHits} 处</span>
+            <div className="flex gap-2">
+              <button type="button" disabled={result.offset === 0} onClick={() => void runSearch(result.query, mode, strict, Math.max(0, result.offset - result.limit), true)} className="rounded-xl border px-4 py-2 disabled:opacity-40">上一页</button>
+              <button type="button" disabled={!result.hasMore} onClick={() => void runSearch(result.query, mode, strict, result.offset + result.limit, true)} className="rounded-xl border px-4 py-2 disabled:opacity-40">下一页</button>
+            </div>
+          </div>
+          {'hits' in result ? <RawResults hits={result.hits} query={result.query} /> : <GroupedResults result={result} query={result.query} mode={lastSearch?.mode ?? mode} />}
+        </> : null}
         {!loading && !error && !result ? <EmptyState title="输入内容开始检索" description="搜索结果会按报告合并；需要逐行核对时再打开严格原文模式。" /> : null}
       </div>
     </Layout>
@@ -102,11 +112,11 @@ function GroupedResults({ result, query, mode }: { result: GroupedSearchResponse
           <div className="mt-2 text-sm text-slate-600">最新评级 {result.company.latestRating ?? '—'} · 目标价 {result.company.latestTargetPrice ?? '—'} · {result.company.institutions.length} 家机构</div>
         </Link>
       ) : null}
-      <Panel title={`${result.groups.length} 份报告 · ${result.totalHits} 处命中`} eyebrow={mode === 'tag' ? '标签匹配' : `识别为${intentLabels[result.intent.type]}`}>
+      <Panel title={`本页 ${result.groups.length} 份报告 · ${result.returnedHits} 处命中`} eyebrow={mode === 'tag' ? '标签匹配' : `识别为${intentLabels[result.intent.type]}`}>
         {result.groups.length ? <div className="space-y-4">{result.groups.map((group) => (
           <article key={group.reportId} className="rounded-2xl border border-slate-200 bg-white p-4">
             <div className="flex flex-wrap items-center gap-2"><Badge tone="amber">{group.date}</Badge>{group.institutions.map((institution) => <Badge key={institution} tone="blue">{institution}</Badge>)}<span className="text-xs text-slate-400">{group.matchCount} 处命中</span></div>
-            <div className="mt-3 space-y-2">{group.snippets.slice(0, 4).map((snippet) => (
+            <div className="mt-3 space-y-2">{group.snippets.map((snippet) => (
               <Link key={snippet.startLine} to={buildReportLink({ reportId: group.reportId, lineNumber: snippet.startLine, highlightTerms: [query] })} className="block rounded-xl bg-slate-50 p-3 text-sm leading-7 text-slate-700 transition hover:bg-blue-50">{cleanSnippet(snippet.text)}<span className="ml-2 whitespace-nowrap text-xs font-semibold text-blue-700">第 {snippet.startLine} 行</span></Link>
             ))}</div>
           </article>
@@ -118,7 +128,7 @@ function GroupedResults({ result, query, mode }: { result: GroupedSearchResponse
 
 function RawResults({ hits, query }: { hits: SearchHit[]; query: string }) {
   return (
-    <Panel title={`严格原文结果 ${hits.length} 条`} eyebrow="Raw source">
+    <Panel title={`本页严格原文结果 ${hits.length} 条`} eyebrow="Raw source">
       {hits.length ? <div className="space-y-3">{hits.map((hit, index) => (
         <Link key={`${hit.reportId}-${hit.lineNumber}-${index}`} to={buildReportLink({ reportId: hit.reportId, lineNumber: hit.lineNumber, highlightTerms: searchHitHighlightTerms({ matchedText: hit.matchedText, query }) })} className="block rounded-2xl border border-slate-200 p-4 transition hover:border-blue-300">
           <div className="flex flex-wrap gap-2"><Badge tone="amber">{hit.date}</Badge><Badge tone="blue">{hit.institution}</Badge><Badge tone="slate">第 {hit.lineNumber} 行</Badge></div>
