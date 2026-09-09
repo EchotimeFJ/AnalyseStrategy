@@ -1,4 +1,5 @@
 import { normalizeEntityName, normalizeSecurityCode, resolveInstitution } from './entityResolver.js';
+import { dictionaryName, lookupBareCode } from './securityDictionary.js';
 import type { CatalystRiskItem, InstitutionBlock, ReportDocument, TargetMention } from './reportParser.js';
 
 type Market = 'A' | 'H' | 'US' | 'SG' | 'TW' | 'JP' | 'KR';
@@ -13,7 +14,7 @@ type Row = { candidate: Candidate; references: Candidate[]; ratings: Value[]; re
 type Signals = (report: ReportDocument, block: InstitutionBlock, targetName?: string, range?: { startLine: number; endLine: number }) => CatalystRiskItem[];
 
 const RATING = '(?:买入(?:[/／]高风险)?|增持|超配|中性|持有|减持|卖出|跑赢(?:大市|大盘|行业)?|跑输(?:大市|大盘|行业)?|优于大市|弱于大市|低于行业表现|Overweight|Underweight|Neutral|Buy|Hold|Sell|OW|UW)';
-const CODE = /\b(\d{1,6}|[A-Z]{1,8})[.\s]+(HK|SS|SH|SZ|US|TW|KS|KQ|JP|L|O|N|SI|CH|C1|C2)\b/gi;
+const CODE = /\b(\d{1,6}|[A-Z]{1,8})[.\s]+(HK|SS|SH|SZ|BJ|US|TW|KS|KQ|JP|L|O|N|SI|CH|C1|C2)\b/gi;
 const PAREN = /([\p{L}][\p{L}\p{N}·・&.'’\-\s]{1,70})\(([^()]*)\)/gu;
 const PRICE_LABEL = /(?:目标价(?:格)?|target price|\bTP\b|\bPT\b)/gi;
 const GENERIC = /^(?:评级|投资评级|Rating|买入|增持|超配|中性|卖出|持有|公司|目标价|当前价|发布日期|估值|财务|风险|催化剂|行业|市场|主题|观点|核心|展望|摘要|结论|我们|由于|因为|因此|当|从|基于|考虑|对所有|盈利|利润|收入|营收|基本面|投资策略|投资要点|业务概览|中国互联网行业|中国房地产|视点|附录|核心要点)(?:$|[:：\s]|[^A-Za-z])/i;
@@ -38,7 +39,7 @@ function market(code?: string): Market | undefined {
   if (!code) return;
   const suffix = code.split('.').at(-1);
   if (suffix === 'HK') return 'H';
-  if (suffix === 'SS' || suffix === 'SZ') return 'A';
+  if (suffix === 'SS' || suffix === 'SZ' || suffix === 'BJ') return 'A';
   if (['US', 'N', 'O'].includes(suffix ?? '')) return 'US';
   if (suffix === 'SI') return 'SG';
   if (suffix === 'TW') return 'TW';
@@ -48,11 +49,27 @@ function market(code?: string): Market | undefined {
 function currency(value?: Market) {
   return value ? ({ A: '元', H: '港元', US: '美元', SG: '新元', TW: '新台币', JP: '日元', KR: '韩元' })[value] : undefined;
 }
-function codes(text: string) {
-  return [...text.matchAll(CODE)].flatMap((match) => {
+function codes(text: string, name?: string, confirmedPairs = new Set<string>()) {
+  const explicit = [...text.matchAll(CODE)].flatMap((match) => {
     const code = normalizeSecurityCode(match[0]);
     return code ? [{ code, start: match.index!, end: match.index! + match[0].length }] : [];
   });
+  if (name === undefined) return explicit;
+  const knownName = dictionaryName(name);
+  // Bare symbols belong to the leading code field. Later comma-separated
+  // fields may be ratings (EW) or values, even when they are valid US tickers.
+  const codeField = text.split(/[,，;；]/, 1)[0];
+  const bare = [...codeField.matchAll(/(?:^|\/\s*)(\d{4,6}|[A-Z][A-Z0-9.-]{0,9})(?=\s*(?:$|\/))/g)].flatMap((match) => {
+    const value = match[1];
+    const code = lookupBareCode(value);
+    if (!code) return [];
+    const agrees = knownName?.codes.includes(code);
+    if ((value.length === 1 || ACRONYMS.has(value) || /^(?:19|20)\d{2}$/.test(value)) && !agrees) return [];
+    if (knownName && !agrees && !confirmedPairs.has(code)) return [];
+    const start = match.index! + match[0].lastIndexOf(value);
+    return [{ code, start, end: start + value.length }];
+  });
+  return [...explicit, ...bare].sort((a, b) => a.start - b.start);
 }
 function normalizedRating(value: string) {
   const lower = value.toLowerCase();
@@ -69,14 +86,25 @@ function normalizedRating(value: string) {
 
 function candidatesFor(lines: Line[]) {
   const found: Candidate[] = [];
+  // A report can explicitly link a Chinese alias to both listings, e.g.
+  // BOSS直聘 (BZ/2076.HK), even if the US directory lacks the Chinese alias.
+  const pairedCodes = new Map<string, Set<string>>();
+  for (const line of lines) for (const match of line.text.matchAll(PAREN)) {
+    const known = dictionaryName(nameOf(match[1]));
+    if (!known || !codes(match[2]).some(item => known.codes.includes(item.code))) continue;
+    const values = match[2].split(/[,，;；]/, 1)[0].split('/').map(token => lookupBareCode(token.trim())).filter((code): code is string => Boolean(code));
+    pairedCodes.set(known.name.toLowerCase(), new Set([...(pairedCodes.get(known.name.toLowerCase()) ?? []), ...values]));
+  }
   const firstContentLine = lines.find((line) => line.text.trim() && !/^#/.test(line.text.trim()))?.number;
   for (const line of lines) {
     for (const match of line.text.matchAll(PAREN)) {
       let name = nameOf(match[1]);
+      const knownName = dictionaryName(name);
+      if (knownName) name = knownName.name;
       if (/[)）]\s*$/.test(line.text.slice(0, match.index!))) name = name.replace(/^(?:和|与|及)\s*/, '');
       if (!validName(name)) continue;
       const inside = match[2];
-      const listed = codes(inside);
+      const listed = codes(inside, name, pairedCodes.get(name.toLowerCase()));
       const bare = /^[A-Z][A-Z0-9.-]{0,6}$/.test(inside.trim()) && !ACRONYMS.has(inside.trim());
       const explicitName = /^\s*(?:[#>*•-]+\s*)?覆盖(?:个股|公司)\s*[:：]/.test(line.text);
       const hasField = new RegExp(`(?:^|[^A-Za-z])${RATING}(?:$|[^A-Za-z])`, 'i').test(inside) || /目标价|target price/i.test(inside);
@@ -88,7 +116,7 @@ function candidatesFor(lines: Line[]) {
       const namedRecommendation = /首推|首选|看好|推荐|买入|增持|持有|卖出|评级/.test(recommendationPrefix);
       // A parenthesized industry abbreviation is not a ticker just because it
       // is uppercase. Bare symbols need title or recommendation structure.
-      if (bare && !listed.length && !hasField && !explicitName && !companyProfile && line.number !== firstContentLine && !namedRecommendation) continue;
+      if (bare && !codes(inside).length && !knownName && !hasField && !explicitName && !companyProfile && line.number !== firstContentLine && !namedRecommendation) continue;
       const innerStart = start + match[0].indexOf('(') + 1;
       const prefix = line.text.slice(0, start).trim();
       const prefixedRating = new RegExp(`^[【\\[]${RATING}[】\\]]$`, 'i').test(prefix);
@@ -99,7 +127,9 @@ function candidatesFor(lines: Line[]) {
         part.length >= 2 && !new RegExp(`(?:^|[^A-Za-z])${RATING}(?:$|[^A-Za-z])`, 'i').test(part) && !/目标价|\$|\d.*(?:元|币)/.test(part) && !codes(part).length && !ACRONYMS.has(part.toUpperCase()));
       const separateFields = listed.slice(0, -1).some((code, index) =>
         new RegExp(`${RATING}|目标价`, 'i').test(inside.slice(code.end, listed[index + 1].start)));
-      for (const item of listed.length ? listed : [{ code: undefined, start: 0, end: 0 }]) {
+      const unresolvedBare = !listed.length && inside.split(/[,，;；]/, 1)[0].split('/').some(token => lookupBareCode(token.trim()));
+      const inferred = !listed.length && !unresolvedBare ? (knownName?.codes.length === 1 ? knownName.codes[0] : !ACRONYMS.has(name) ? lookupBareCode(name) ?? undefined : undefined) : undefined;
+      for (const item of listed.length ? listed : [{ code: inferred, start: 0, end: 0 }]) {
         found.push({ name, aliases, code: item.code, market: market(item.code), line: line.number,
           start, end: start + match[0].length, innerStart, innerEnd: innerStart + inside.length,
           codeStart: item.code ? innerStart + item.start : undefined, separateFields, heading, explicitName });
@@ -123,7 +153,7 @@ function candidatesFor(lines: Line[]) {
     const name = nameOf(text);
     const named = found.filter((candidate) => candidate.code && (name.includes(candidate.name) || candidate.name.includes(name)));
     const nearby = lines.slice(index + 1, index + 4).flatMap((item) => codes(item.text));
-    const code = named.length === 1 ? named[0].code : nearby.length === 1 ? nearby[0].code : undefined;
+    const code = named.length === 1 ? named[0].code : nearby.length === 1 ? nearby[0].code : !ACRONYMS.has(name) ? lookupBareCode(name) ?? undefined : undefined;
     found.push({ name: named.length === 1 ? named[0].name : name, aliases: named.length === 1 ? [name] : [], code,
       market: market(code), line: line.number, start: line.text.indexOf(text), end: line.text.length,
       innerStart: -1, innerEnd: -1, separateFields: false, heading: true, explicitName: true });
@@ -171,7 +201,8 @@ function owners(line: Line, position: number, candidates: Candidate[], headings:
   // Explicitly named companies in the current clause take precedence over the
   // article heading, including peer companies mentioned in parentheses.
   const named = candidates.flatMap((candidate) => {
-    const terms = [candidate.name, ...candidate.aliases, candidate.code ?? ''].filter((term) => term.length >= 2);
+    const groupedCodes = !candidate.separateFields ? sameLine.filter((other) => other.start === candidate.start && other.line === candidate.line).map((other) => other.code ?? '') : [];
+    const terms = [candidate.name, ...candidate.aliases, candidate.code ?? '', ...groupedCodes].filter((term) => term.length >= 2);
     const at = Math.max(...terms.map((term) => before.toLowerCase().lastIndexOf(term.toLowerCase())));
     return at >= 0 ? [{ candidate, at }] : [];
   });

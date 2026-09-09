@@ -1,4 +1,5 @@
 import type { SecurityEntity } from '../domain/research.js';
+import { lookupBareCode } from './securityDictionary.js';
 
 const INSTITUTION_ALIASES: Record<string, string> = {
   UBS: '瑞银',
@@ -47,14 +48,14 @@ const INVALID_EXACT = new Set([
   '主题',
 ]);
 
-const CODE_PATTERN = /^([A-Z]{1,8}|\d{1,6})([.\s-]?)(HK|SS|SH|SZ|US|TW|KS|KQ|JP|L|O|N|SI|CH|C1|C2)$/i;
+const CODE_PATTERN = /^([A-Z]{1,8}|\d{1,6})([.\s-]?)(HK|SS|SH|SZ|BJ|US|TW|KS|KQ|JP|L|O|N|SI|CH|C1|C2)$/i;
 
 export function normalizeSecurityCode(input: string | null | undefined): string | null {
   if (!input) return null;
   const normalized = input.normalize('NFKC').trim().replace(/\s+/g, ' ');
   const match = normalized.match(CODE_PATTERN);
-  if (!match) return null;
-  if (/^[A-Z]/i.test(match[1]) && !match[2]) return null;
+  if (!match) return lookupBareCode(normalized);
+  if (/^[A-Z]/i.test(match[1]) && !match[2]) return lookupBareCode(normalized);
   const suffix = match[3].toUpperCase();
   const market = suffix === 'SH' || suffix === 'C1' ? 'SS' : suffix === 'C2' ? 'SZ' : suffix === 'CH' ? (match[1].startsWith('6') ? 'SS' : 'SZ') : suffix;
   const symbol = market === 'HK' && /^\d+$/.test(match[1]) ? String(Number(match[1])).padStart(4, '0') : match[1].toUpperCase();

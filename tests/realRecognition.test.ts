@@ -21,7 +21,11 @@ for (const h of security('2026-02-10', '2648.HK')) assert.equal(h.rating, '买�
 assert.equal(amount(security('2026-02-10', '603345.SS')[0].targetPrice), 98);
 assert.equal(amount(security('2026-02-10', '2648.HK')[0].targetPrice), 91);
 
-for (const item of security('2026-01-14', '9633.HK')) {
+// Dictionary linking also finds other institutions' name-only mentions. The
+// 58.5 target belongs specifically to this Citi article, not every mention.
+const nongfuCiti = security('2026-01-14', '9633.HK').filter(item => item.institution === '花旗' && item.evidence.some(e => e.lineNumber >= 178 && e.lineNumber <= 199));
+assert.ok(nongfuCiti.length);
+for (const item of nongfuCiti) {
   assert.equal(item.rating, '买入', 'Nongfu line182 must not inherit Master Kong sell rating from line184');
   assert.equal(amount(item.targetPrice), 58.5);
 }
