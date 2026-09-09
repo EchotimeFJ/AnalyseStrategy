@@ -14,9 +14,9 @@ import { getAppVersion } from './version.js';
 import { packSnapshotStrings, unpackSnapshotStrings } from './snapshotStrings.js';
 
 const decompress = promisify(gunzip);
-const SCHEMA_VERSION = 3;
+const SCHEMA_VERSION = 4;
 const MAX_SNAPSHOT_BYTES = 256 * 1024 * 1024;
-const LINE_FORMAT = 'report-snapshot-lines-v1';
+const LINE_FORMAT = 'report-snapshot-lines-v2';
 
 export type SourceManifest = { sourceDir: string; files: string[]; fingerprint: string };
 type DiskReport = Omit<ReportDocument, 'lines' | 'institutions'> & { institutions: Omit<InstitutionBlock, 'content'>[] };
@@ -59,7 +59,7 @@ export async function readReportSnapshot(manifest: SourceManifest, options: { fi
     const file = options.file ?? reportCachePath(manifest.sourceDir);
     if ((await fs.stat(file)).size > MAX_SNAPSHOT_BYTES) return null;
     const envelope = await readEnvelope(file);
-    const compatible = options.published ? /^[23]:/.test(String(envelope.revision)) : envelope.revision === revision();
+    const compatible = options.published ? /^[234]:/.test(String(envelope.revision)) : envelope.revision === revision();
     if (!compatible || envelope.sourceDir !== manifest.sourceDir ||
       !options.published && envelope.fingerprint !== manifest.fingerprint) return null;
     const data = envelope.data;
@@ -104,7 +104,21 @@ export async function writeReportSnapshot(index: IndexState, options: { file?: s
   // materializing an escaped copy of the entire corpus at once.
   function* payloadParts() {
     for (const value of packed.strings) yield `${JSON.stringify({ text: value })}\n`;
-    yield `${JSON.stringify({ root: packed.root })}\n`;
+    // The reference tree can itself be large. Hash/write individual collection
+    // entries rather than flattening one giant root string alongside both indexes.
+    function* fields(object: Record<string, unknown>, parent: string[] = []): Generator<string> {
+      for (const [key, value] of Object.entries(object)) {
+        const fieldPath = [...parent, key];
+        if (Array.isArray(value)) {
+          yield `${JSON.stringify({ fieldPath, value: [] })}\n`;
+          for (const item of value) yield `${JSON.stringify({ fieldPath, item })}\n`;
+        } else if (key === 'views' && value && typeof value === 'object') {
+          yield `${JSON.stringify({ fieldPath, value: {} })}\n`;
+          yield* fields(value as Record<string, unknown>, fieldPath);
+        } else yield `${JSON.stringify({ fieldPath, value })}\n`;
+      }
+    }
+    yield* fields(packed.root as Record<string, unknown>);
   }
   const header = JSON.stringify({
     format: LINE_FORMAT, revision: revision(), sourceDir: index.sourceDir,
@@ -152,7 +166,7 @@ async function readEnvelope(file: string) {
   probeInput.on('error', (error) => probe.destroy(error));
   let isLines = false;
   try {
-    for await (const chunk of probe) { isLines = chunk.toString('utf8').startsWith(`{"format":"${LINE_FORMAT}"`); break; }
+    for await (const chunk of probe) { isLines = /^\{"format":"report-snapshot-lines-v[12]"/.test(chunk.toString('utf8')); break; }
   } finally { probe.destroy(); probeInput.destroy(); }
   if (!isLines) {
     // Published schema-2 snapshots remain valid until a new publication commits.
@@ -182,6 +196,21 @@ async function readEnvelope(file: string) {
       hash.update(`${line}\n`);
       if (typeof entry.text === 'string' && root === undefined) strings.push(entry.text);
       else if ('root' in entry && root === undefined) root = entry.root;
+      else if (Array.isArray(entry.fieldPath) && entry.fieldPath.length > 0 && entry.fieldPath.length <= 2 &&
+        entry.fieldPath.every((key: unknown) => typeof key === 'string' && !['__proto__', 'prototype', 'constructor'].includes(key))) {
+        root ??= {};
+        let target = root as Record<string, unknown>;
+        for (const key of entry.fieldPath.slice(0, -1)) {
+          if (!target[key] || typeof target[key] !== 'object' || Array.isArray(target[key])) throw new Error('Invalid snapshot field path');
+          target = target[key] as Record<string, unknown>;
+        }
+        const key = entry.fieldPath.at(-1);
+        if ('item' in entry) {
+          if (!Array.isArray(target[key])) throw new Error('Invalid snapshot collection');
+          (target[key] as unknown[]).push(entry.item);
+        } else if ('value' in entry && !(key in target)) target[key] = entry.value;
+        else throw new Error('Invalid snapshot field');
+      }
       else throw new Error('Invalid snapshot record');
     }
     if (!header || !root || !expected || hash.digest('hex') !== expected) throw new Error('Invalid snapshot digest');
