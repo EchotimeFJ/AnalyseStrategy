@@ -33,11 +33,12 @@ export async function apiDelete<T>(path: string): Promise<T> {
   return request<T>(path, { method: 'DELETE' });
 }
 
-export async function apiPut<T>(path: string, body?: unknown, headers?: Record<string, string>): Promise<T> {
+export async function apiPut<T>(path: string, body?: unknown, headers?: Record<string, string>, signal?: AbortSignal): Promise<T> {
   return request<T>(path, {
     method: 'PUT',
     headers: { 'Content-Type': 'application/json', ...headers },
     body: JSON.stringify(body ?? {}),
+    signal,
   });
 }
 

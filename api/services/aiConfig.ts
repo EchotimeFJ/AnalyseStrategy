@@ -1,6 +1,8 @@
 import fs from 'node:fs/promises';
 import path from 'node:path';
-import { timingSafeEqual } from 'node:crypto';
+import { createHash, timingSafeEqual } from 'node:crypto';
+import { constants } from 'node:fs';
+import { writeAtomicJson } from './atomicJson.js';
 import { decryptSecret, encryptSecret, maskApiKey, type EncryptedValue } from './secretStore.js';
 import {
   AI_PROVIDER_PRESETS,
@@ -27,6 +29,10 @@ type StoredAiConfig = Omit<ResolvedAiConfig, 'apiKey'> & {
   apiKeyTail: string;
   updatedAt: string;
 };
+type ConfigFile = { version: 2; activeProfileId: string; profiles: StoredAiConfig[] };
+function profileId(config: Pick<ResolvedAiConfig, 'providerId' | 'baseUrl' | 'model'>) {
+  return createHash('sha256').update(JSON.stringify([config.providerId, normalizeBaseUrl(config.baseUrl), config.model.trim()])).digest('hex');
+}
 
 type AiConfigStoreOptions = {
   filePath?: string;
@@ -43,13 +49,21 @@ export function createAiConfigStore(options: AiConfigStoreOptions = {}) {
   const secret = options.secret ?? env.AI_CONFIG_SECRET ?? '';
   const adminToken = options.adminToken ?? (env.ADMIN_TOKEN || env.AI_CONFIG_ADMIN_TOKEN || '');
 
-  async function readStored(): Promise<StoredAiConfig | null> {
+  async function readFile(): Promise<ConfigFile | null> {
     try {
-      return JSON.parse(await fs.readFile(filePath, 'utf-8')) as StoredAiConfig;
+      const value = JSON.parse(await fs.readFile(filePath, 'utf-8'));
+      if (value.version === 2 && Array.isArray(value.profiles)) return value;
+      if (!value.apiKeyEncrypted || !value.baseUrl || !value.model) throw new Error('AI_CONFIG_INVALID');
+      value.providerId = normalizeProviderId(value.providerId || inferAiProviderId(value.baseUrl, value.providerName));
+      return { version: 2, activeProfileId: profileId(value), profiles: [value] };
     } catch (error) {
       if (error && typeof error === 'object' && 'code' in error && error.code === 'ENOENT') return null;
       throw error;
     }
+  }
+  async function readStored() {
+    const file = await readFile();
+    return file?.profiles.find(profile => profileId(profile) === file.activeProfileId) ?? null;
   }
 
   async function resolve(): Promise<ResolvedAiConfig | null> {
@@ -75,6 +89,7 @@ export function createAiConfigStore(options: AiConfigStoreOptions = {}) {
 
   async function getPublic() {
     const config = await resolve();
+    const file = await readFile();
     const defaultPreset = getAiProviderPreset('openai');
     return {
       configured: Boolean(config),
@@ -90,10 +105,18 @@ export function createAiConfigStore(options: AiConfigStoreOptions = {}) {
       adminProtected: Boolean(adminToken),
       providerPresets: AI_PROVIDER_PRESETS,
       overriddenFields: ['AI_PROVIDER_ID', 'AI_PROVIDER_NAME', 'AI_BASE_URL', 'AI_MODEL', 'AI_API_KEY'].filter(key => Boolean(env[key])),
+      profiles: (file?.profiles ?? []).map(profile => ({ id: profileId(profile), providerId: profile.providerId, providerName: profile.providerName, baseUrl: profile.baseUrl, model: profile.model, apiKeyMask: `••••${profile.apiKeyTail}` })),
+      activeProfileId: file?.activeProfileId ?? null,
     };
   }
 
-  async function save(input: AiConfigInput, token: string): Promise<void> {
+  let saving: Promise<void> = Promise.resolve();
+  function save(input: AiConfigInput, token: string): Promise<void> {
+    const job = saving.then(() => saveProfile(input, token));
+    saving = job.catch(() => undefined);
+    return job;
+  }
+  async function saveProfile(input: AiConfigInput, token: string): Promise<void> {
     const candidate = await preview(input, token);
     if (!secret) throw new Error('AI_CONFIG_SECRET 未配置，不能持久化 API Key');
     const stored: StoredAiConfig = {
@@ -108,8 +131,16 @@ export function createAiConfigStore(options: AiConfigStoreOptions = {}) {
       maxConcurrency: candidate.maxConcurrency,
       updatedAt: new Date().toISOString(),
     };
-    await fs.mkdir(path.dirname(filePath), { recursive: true });
-    await fs.writeFile(filePath, `${JSON.stringify(stored, null, 2)}\n`, { encoding: 'utf-8', mode: 0o600 });
+    const previous = await readFile();
+    // Retain the original encrypted single-profile file for migration recovery.
+    try {
+      const raw = JSON.parse(await fs.readFile(filePath, 'utf8'));
+      if (!raw.version) await fs.copyFile(filePath, `${filePath}.v1.bak`, constants.COPYFILE_EXCL);
+    } catch (error) {
+      if (!['ENOENT', 'EEXIST'].includes((error as NodeJS.ErrnoException).code ?? '')) throw error;
+    }
+    const id = profileId(stored);
+    await writeAtomicJson(filePath, { version: 2, activeProfileId: id, profiles: [...(previous?.profiles ?? []).filter(profile => profileId(profile) !== id), stored] } satisfies ConfigFile);
   }
 
   async function preview(input: AiConfigInput, token: string): Promise<ResolvedAiConfig> {
@@ -117,14 +148,15 @@ export function createAiConfigStore(options: AiConfigStoreOptions = {}) {
     const existing = await resolve();
     const providerId = normalizeProviderId(input.providerId || inferAiProviderId(input.baseUrl, input.providerName));
     const preset = getAiProviderPreset(providerId);
-    const providerChanged = Boolean(existing && existing.providerId !== providerId);
     const baseUrl = input.baseUrl.trim() || preset.baseUrl;
     if (!baseUrl) throw new Error('请填写 API 基础地址');
-    const addressChanged = Boolean(existing && normalizeBaseUrl(baseUrl) !== normalizeBaseUrl(existing.baseUrl));
-    const apiKey = input.apiKey?.trim() || (!providerChanged && !addressChanged ? existing?.apiKey : '') || '';
-    if (!apiKey) throw new Error('请填写 API Key');
     const model = input.model.trim() || preset.defaultModel;
     if (!model) throw new Error('请填写模型名称');
+    const id = profileId({ providerId, baseUrl, model });
+    const saved = (await readFile())?.profiles.find(profile => profileId(profile) === id);
+    const matching = saved && secret ? decryptSecret(saved.apiKeyEncrypted, secret) : existing && profileId(existing) === id ? existing.apiKey : '';
+    const apiKey = input.apiKey?.trim() || matching || '';
+    if (!apiKey) throw new Error('请填写 API Key');
     return {
       providerId,
       providerName: providerId === 'custom' ? input.providerName.trim() || preset.name : preset.name,

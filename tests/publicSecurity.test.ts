@@ -26,6 +26,8 @@ try {
   const publicData = (await (await fetch(base + '/ai/status')).json()).data;
   assert.ok(!('baseUrl' in publicData));
   assert.ok(!('providerPresets' in publicData));
+  assert.ok(!('profiles' in publicData));
+  assert.ok(!('activeProfileId' in publicData));
   // Removing server authorization must never let an anonymous request mutate shared state.
   for (const [method, route] of [['POST', '/reindex'], ['POST', '/update-strategy'], ['POST', '/watchlist'], ['DELETE', '/watchlist/x'], ['POST', '/aliases'], ['PUT', '/ai/config'], ['POST', '/ai/config/test']]) {
     const response = await fetch(base + route, { method, headers: { 'Content-Type': 'application/json' }, body: '{}' });

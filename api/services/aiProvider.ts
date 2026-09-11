@@ -120,7 +120,9 @@ export function createOpenAiCompatibleProvider(fetchImpl: typeof fetch = fetch):
       const timeout = setTimeout(() => controller.abort(), Math.min(config.timeoutMs, 15_000));
       const combined = signal ? AbortSignal.any([signal, controller.signal]) : controller.signal;
       try {
-        await request({ messages: [{ role: 'user', content: '只回复 OK' }], maxTokens: 8 }, config, combined, false);
+        const response = await request({ messages: [{ role: 'user', content: '只回复 OK' }], maxTokens: 8 }, config, combined, false);
+        const payload = await response.json().catch((error: unknown) => { if (error instanceof SyntaxError) throw new Error('AI_PROTOCOL_ERROR'); throw error; });
+        if (!Array.isArray(payload?.choices) || !payload.choices[0]?.message) throw new Error('AI_PROTOCOL_ERROR');
       } finally {
         clearTimeout(timeout);
       }

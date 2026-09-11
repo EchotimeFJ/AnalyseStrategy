@@ -337,6 +337,8 @@ export type CompanyProfile = {
 };
 
 export type AiStatus = {
+  profiles?: AiSavedProfile[];
+  activeProfileId?: string | null;
   configured: boolean;
   providerId: 'openai' | 'deepseek' | 'mimo' | 'openrouter' | 'custom';
   providerName: string;
@@ -351,6 +353,15 @@ export type AiStatus = {
   providerPresets: AiProviderPreset[];
   overriddenFields?: string[];
   usage: { estimatedTokens: number; active: number };
+};
+
+export type AiSavedProfile = {
+  id: string;
+  providerId: AiStatus['providerId'];
+  providerName: string;
+  baseUrl: string;
+  model: string;
+  apiKeyMask: string;
 };
 
 export type AiProviderPreset = {
