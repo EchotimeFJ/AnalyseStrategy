@@ -349,6 +349,7 @@ export type AiStatus = {
   canPersist: boolean;
   adminProtected: boolean;
   providerPresets: AiProviderPreset[];
+  overriddenFields?: string[];
   usage: { estimatedTokens: number; active: number };
 };
 

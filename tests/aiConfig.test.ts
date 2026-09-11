@@ -43,6 +43,13 @@ assert.equal(publicConfig.configured, true);
 assert.equal(publicConfig.apiKeyMask, '••••1234');
 assert.equal(JSON.stringify(publicConfig).includes('sk-test-1234'), false);
 assert.equal((await store.resolve()).apiKey, 'sk-test-1234');
+await store.save({ providerName: 'Provider', baseUrl: 'https://example.com/v1', model: 'replacement-model', apiKey: '' }, 'admin');
+const updated = await store.resolve();
+assert.equal(updated.model, 'replacement-model');
+assert.equal(updated.apiKey, 'sk-test-1234');
+assert.equal(updated.timeoutMs, 15_000);
+assert.equal(updated.dailyTokenBudget, 100_000);
+await assert.rejects(store.preview({ providerName: 'Provider', baseUrl: 'https://different.example/v1', model: 'model', apiKey: '' }, 'admin'), /API Key/);
 
 await fs.rm(tmpRoot, { recursive: true, force: true });
 

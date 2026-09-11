@@ -89,6 +89,7 @@ export function createAiConfigStore(options: AiConfigStoreOptions = {}) {
       canPersist: Boolean(secret),
       adminProtected: Boolean(adminToken),
       providerPresets: AI_PROVIDER_PRESETS,
+      overriddenFields: ['AI_PROVIDER_ID', 'AI_PROVIDER_NAME', 'AI_BASE_URL', 'AI_MODEL', 'AI_API_KEY'].filter(key => Boolean(env[key])),
     };
   }
 
@@ -117,21 +118,22 @@ export function createAiConfigStore(options: AiConfigStoreOptions = {}) {
     const providerId = normalizeProviderId(input.providerId || inferAiProviderId(input.baseUrl, input.providerName));
     const preset = getAiProviderPreset(providerId);
     const providerChanged = Boolean(existing && existing.providerId !== providerId);
-    const apiKey = input.apiKey?.trim() || (!providerChanged ? existing?.apiKey : '') || '';
+    const baseUrl = input.baseUrl.trim() || preset.baseUrl;
+    if (!baseUrl) throw new Error('请填写 API 基础地址');
+    const addressChanged = Boolean(existing && normalizeBaseUrl(baseUrl) !== normalizeBaseUrl(existing.baseUrl));
+    const apiKey = input.apiKey?.trim() || (!providerChanged && !addressChanged ? existing?.apiKey : '') || '';
     if (!apiKey) throw new Error('请填写 API Key');
     const model = input.model.trim() || preset.defaultModel;
     if (!model) throw new Error('请填写模型名称');
-    const baseUrl = input.baseUrl.trim() || preset.baseUrl;
-    if (!baseUrl) throw new Error('请填写 API 基础地址');
     return {
       providerId,
       providerName: providerId === 'custom' ? input.providerName.trim() || preset.name : preset.name,
       baseUrl: normalizeBaseUrl(baseUrl),
       model,
       apiKey,
-      timeoutMs: numberValue(input.timeoutMs, undefined, 45_000, 3_000, 180_000),
-      dailyTokenBudget: numberValue(input.dailyTokenBudget, undefined, 500_000, 1_000, 50_000_000),
-      maxConcurrency: numberValue(input.maxConcurrency, undefined, 2, 1, 20),
+      timeoutMs: numberValue(input.timeoutMs, existing?.timeoutMs, 45_000, 3_000, 180_000),
+      dailyTokenBudget: numberValue(input.dailyTokenBudget, existing?.dailyTokenBudget, 500_000, 1_000, 50_000_000),
+      maxConcurrency: numberValue(input.maxConcurrency, existing?.maxConcurrency, 2, 1, 20),
     };
   }
 

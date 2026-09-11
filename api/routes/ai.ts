@@ -1,8 +1,16 @@
 import { Router, type Request, type RequestHandler, type Response } from 'express';
 import { aiConfigStore, type AiConfigInput } from '../services/aiConfig.js';
 import { aiService } from '../services/aiService.js';
+import { requireAdmin } from '../security.js';
 
 const router = Router();
+
+router.get('/config', requireAdmin, asyncRoute(async (_req, res) => {
+  res.setHeader('Cache-Control', 'no-store');
+  // Only authenticated administrators receive editable settings. This DTO
+  // contains a masked key, never the resolved credential or encrypted payload.
+  res.type('json').send(JSON.stringify({ success: true, data: await aiConfigStore.getPublic() }));
+}));
 
 router.get('/status', asyncRoute(async (_req, res) => {
   res.json({ success: true, data: await aiService.status() });

@@ -18,6 +18,7 @@ import { Layout } from '@/components/Layout';
 import { ErrorBlock, LoadingBlock } from '@/components/ui';
 import { AssistantMessage } from '@/components/assistant/AssistantMessage';
 import { ChatComposer } from '@/components/assistant/ChatComposer';
+import { AiConfigDialog } from '@/components/AiConfigDialog';
 
 const prompts = [
   { title: '最新报告速览', prompt: '今天是多少号？请分析最新报告里最值得关注的内容，并说明报告库更新到哪一天。' },
@@ -37,6 +38,7 @@ export default function ResearchAssistant() {
   const [institution, setInstitution] = useState('');
   const [historyOpen, setHistoryOpen] = useState(false);
   const [filtersOpen, setFiltersOpen] = useState(false);
+  const [configOpen, setConfigOpen] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
   const shouldFollowRef = useRef(true);
   const activeSession = chat.sessions.find((session) => session.id === chat.activeSessionId) ?? chat.sessions[0];
@@ -71,6 +73,7 @@ export default function ResearchAssistant() {
 
   return (
     <Layout>
+      {configOpen ? <AiConfigDialog open status={status.data} onClose={() => setConfigOpen(false)} onSaved={status.setData} /> : null}
       <div className="mx-auto flex h-[calc(100dvh-7.5rem)] min-h-[640px] max-w-[1360px] gap-4 lg:h-[calc(100dvh-4rem)]">
         <div className="hidden w-[258px] shrink-0 lg:block">
           <ConversationRail
@@ -119,6 +122,7 @@ export default function ResearchAssistant() {
                 </div>
               </div>
               <div className="flex shrink-0 items-center gap-1.5">
+                <button type="button" onClick={() => setConfigOpen(true)} className="flex h-10 items-center rounded-xl bg-slate-100 px-3 text-xs font-semibold text-slate-600" aria-haspopup="dialog">AI 配置</button>
                 <button type="button" onClick={() => setFiltersOpen((value) => !value)} className={`relative flex h-10 items-center gap-2 rounded-xl px-3 text-xs font-semibold transition ${filtersOpen || activeFilterCount ? 'bg-blue-50 text-blue-700' : 'bg-slate-100 text-slate-600'}`} aria-expanded={filtersOpen} aria-label="检索范围">
                   <SlidersHorizontal className="h-4 w-4" /><span className="hidden sm:inline">检索范围</span>
                   {activeFilterCount ? <span className="flex h-5 min-w-5 items-center justify-center rounded-full bg-blue-600 px-1 text-[10px] text-white">{activeFilterCount}</span> : null}

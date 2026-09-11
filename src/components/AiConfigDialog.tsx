@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { KeyRound, X } from 'lucide-react';
-import { apiPost, apiPut } from '@/lib/api';
+import { apiGet, apiPost, apiPut } from '@/lib/api';
 import { buildAiConfigInput } from '@/lib/aiConfigForm';
 import type { AiProviderPreset, AiStatus } from '@/types';
 
@@ -11,13 +12,49 @@ const providerNotes: Partial<Record<AiStatus['providerId'], string>> = {
   custom: '适用于其他兼容 OpenAI Chat Completions 的服务。',
 };
 
-export function AiConfigDialog({ open, status, onClose, onSaved }: { open: boolean; status: AiStatus | null; onClose: () => void; onSaved: (status: AiStatus) => void }) {
+type Props = { open: boolean; status: AiStatus | null; onClose: () => void; onSaved: (status: AiStatus) => void };
+
+export function AiConfigDialog(props: Props) {
+  const [password, setPassword] = useState('');
+  const [settings, setSettings] = useState<AiStatus | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState('');
+  const close = props.onClose;
+  useEffect(() => {
+    const previous = document.activeElement as HTMLElement | null;
+    const overflow = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    const escape = (event: KeyboardEvent) => { if (event.key === 'Escape') close(); };
+    document.addEventListener('keydown', escape);
+    return () => { document.body.style.overflow = overflow; document.removeEventListener('keydown', escape); previous?.focus(); };
+  }, [close]);
+  if (!props.open) return null;
+  async function unlock() {
+    setBusy(true); setError('');
+    try { setSettings(await apiGet<AiStatus>('/api/ai/config', undefined, { 'X-AI-Admin-Token': password })); }
+    catch (reason) { setError(reason instanceof Error ? reason.message : String(reason)); }
+    finally { setBusy(false); }
+  }
+  return createPortal(settings ? <ConfigEditor {...props} status={settings} initialAdminToken={password} /> : (
+    <div className="fixed inset-0 z-[120] flex items-center justify-center bg-slate-950/45 p-4 backdrop-blur-sm" role="dialog" aria-modal="true" aria-label="AI 配置管理员验证">
+      <form onSubmit={event => { event.preventDefault(); void unlock(); }} className="w-full max-w-md rounded-3xl bg-white p-6 shadow-2xl">
+        <h2 className="text-xl font-semibold text-slate-950">AI 配置</h2>
+        <p className="mt-2 text-sm text-slate-500">输入管理员密码后，可修改全站研究助手的模型和接口。</p>
+        <div className="mt-5"><Field label="管理员密码"><input autoFocus type="password" value={password} onChange={e => setPassword(e.target.value)} autoComplete="current-password" /></Field></div>
+        {error ? <p role="alert" className="mt-3 text-sm text-rose-600">{error}</p> : null}
+        <div className="mt-5 flex justify-end gap-2"><button type="button" onClick={props.onClose} className="min-h-11 rounded-xl border px-4">取消</button><button disabled={busy || !password} className="min-h-11 rounded-xl bg-blue-600 px-4 font-semibold text-white disabled:opacity-50">{busy ? '验证中…' : '进入配置'}</button></div>
+      </form>
+    </div>
+  ), document.body);
+}
+
+function ConfigEditor({ open, status, onClose, onSaved, initialAdminToken }: Props & { initialAdminToken: string }) {
   const [providerId, setProviderId] = useState<AiStatus['providerId']>('custom');
   const [providerName, setProviderName] = useState('OpenAI compatible');
   const [baseUrl, setBaseUrl] = useState('https://api.openai.com/v1');
   const [model, setModel] = useState('');
   const [apiKey, setApiKey] = useState('');
-  const [adminToken, setAdminToken] = useState('');
+  const [adminToken, setAdminToken] = useState(initialAdminToken);
   const [busy, setBusy] = useState<'test' | 'save' | ''>('');
   const [message, setMessage] = useState('');
 
@@ -64,7 +101,7 @@ export function AiConfigDialog({ open, status, onClose, onSaved }: { open: boole
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-end justify-center bg-slate-950/45 p-0 backdrop-blur-sm sm:items-center sm:p-5" role="dialog" aria-modal="true" aria-label="研究助手全局配置">
+    <div className="fixed inset-0 z-[120] flex items-end justify-center bg-slate-950/45 p-0 backdrop-blur-sm sm:items-center sm:p-5" role="dialog" aria-modal="true" aria-label="研究助手全局配置">
       <div className="max-h-[92vh] w-full overflow-auto rounded-t-3xl bg-white p-5 shadow-2xl sm:max-w-2xl sm:rounded-3xl sm:p-6">
         <div className="flex items-start justify-between gap-4"><div><div className="flex items-center gap-2 text-sm font-semibold text-blue-700"><KeyRound className="h-4 w-4" />服务器级全局配置</div><h2 className="mt-2 text-2xl font-semibold text-slate-950">配置研究助手</h2><p className="mt-2 text-sm leading-6 text-slate-500">保存后所有访问者共享 AI 能力；聊天历史仍只保存在各自浏览器。</p></div><button onClick={onClose} className="min-h-11 min-w-11 rounded-full bg-slate-100 p-3" aria-label="关闭"><X className="h-5 w-5" /></button></div>
         <div className="mt-6">
@@ -93,8 +130,9 @@ export function AiConfigDialog({ open, status, onClose, onSaved }: { open: boole
           <p className="-mt-2 text-xs leading-5 text-slate-500 sm:col-span-2">仅在测试、保存或修改全站 AI 配置时需要；普通访客使用研究助手无需填写。</p>
         </div>
         {!status?.canPersist ? <p className="mt-4 rounded-xl bg-amber-50 p-3 text-sm text-amber-800">服务器尚未设置 AI_CONFIG_SECRET，不能在网页保存密钥；可以先使用服务器环境变量配置。</p> : null}
+        {status?.overriddenFields?.length ? <p className="mt-4 rounded-xl bg-amber-50 p-3 text-sm text-amber-800">以下项目由服务器环境变量固定：{status.overriddenFields.join('、')}。请先在服务器移除对应覆盖设置，再使用网页保存配置。</p> : null}
         {message ? <p className={`mt-4 rounded-xl p-3 text-sm ${message.includes('成功') ? 'bg-emerald-50 text-emerald-700' : 'bg-rose-50 text-rose-700'}`}>{message}</p> : null}
-        <div className="mt-6 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end"><button onClick={onClose} className="min-h-11 rounded-xl border border-slate-200 px-5 text-sm font-semibold">取消</button><button disabled={Boolean(busy)} onClick={() => void test()} className="min-h-11 rounded-xl border border-blue-200 px-5 text-sm font-semibold text-blue-700 disabled:opacity-50">{busy === 'test' ? '测试中…' : '测试连接'}</button><button disabled={Boolean(busy) || !status?.canPersist} onClick={() => void save()} className="min-h-11 rounded-xl bg-blue-600 px-5 text-sm font-semibold text-white disabled:opacity-50">{busy === 'save' ? '保存中…' : '保存全局配置'}</button></div>
+        <div className="mt-6 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end"><button onClick={onClose} className="min-h-11 rounded-xl border border-slate-200 px-5 text-sm font-semibold">取消</button><button disabled={Boolean(busy)} onClick={() => void test()} className="min-h-11 rounded-xl border border-blue-200 px-5 text-sm font-semibold text-blue-700 disabled:opacity-50">{busy === 'test' ? '测试中…' : '测试连接'}</button><button disabled={Boolean(busy) || !status?.canPersist || Boolean(status?.overriddenFields?.length)} onClick={() => void save()} className="min-h-11 rounded-xl bg-blue-600 px-5 text-sm font-semibold text-white disabled:opacity-50">{busy === 'save' ? '保存中…' : '保存全局配置'}</button></div>
       </div>
     </div>
   );

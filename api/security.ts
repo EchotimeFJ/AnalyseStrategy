@@ -38,7 +38,7 @@ export const validateQuery: RequestHandler = (req, res, next) => {
 
 // Apply to all public JSON, including pre-compressed cached responses. Paths are
 // operational metadata, never report content. Keep the internal index intact.
-const privateFields = new Set(['sourceDir', 'filePath', 'strategyDir', 'stdout', 'stderr', 'apiKeyMask', 'baseUrl', 'timeoutMs', 'dailyTokenBudget', 'maxConcurrency', 'canPersist', 'adminProtected', 'providerPresets', 'usage']);
+const privateFields = new Set(['sourceDir', 'filePath', 'strategyDir', 'stdout', 'stderr', 'apiKeyMask', 'baseUrl', 'timeoutMs', 'dailyTokenBudget', 'maxConcurrency', 'canPersist', 'adminProtected', 'providerPresets', 'overriddenFields', 'usage']);
 export function publicJsonReplacer(key: string, value: unknown): unknown {
   return privateFields.has(key) ? undefined : value;
 }

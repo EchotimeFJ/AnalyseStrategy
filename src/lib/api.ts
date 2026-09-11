@@ -16,8 +16,8 @@ export function resolveApiPath(path: string, basePath = getDefaultBasePath()): s
   return `${normalizedBasePath}${normalizedPath}`;
 }
 
-export async function apiGet<T>(path: string, signal?: AbortSignal): Promise<T> {
-  return request<T>(path, { signal });
+export async function apiGet<T>(path: string, signal?: AbortSignal, headers?: Record<string, string>): Promise<T> {
+  return request<T>(path, { signal, headers });
 }
 
 export async function apiPost<T>(path: string, body?: unknown, signal?: AbortSignal, headers?: Record<string, string>): Promise<T> {
