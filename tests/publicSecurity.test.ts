@@ -29,7 +29,7 @@ try {
   assert.ok(!('profiles' in publicData));
   assert.ok(!('activeProfileId' in publicData));
   // Removing server authorization must never let an anonymous request mutate shared state.
-  for (const [method, route] of [['POST', '/reindex'], ['POST', '/update-strategy'], ['POST', '/watchlist'], ['DELETE', '/watchlist/x'], ['POST', '/aliases'], ['PUT', '/ai/config'], ['POST', '/ai/config/test']]) {
+  for (const [method, route] of [['POST', '/reindex'], ['POST', '/update-strategy'], ['POST', '/watchlist'], ['DELETE', '/watchlist/x'], ['POST', '/aliases'], ['PUT', '/ai/config'], ['POST', '/ai/config/test'], ['POST', '/ai/active-profile']]) {
     const response = await fetch(base + route, { method, headers: { 'Content-Type': 'application/json' }, body: '{}' });
     assert.equal(response.status, 403, `${method} ${route} must require an administrator`);
   }

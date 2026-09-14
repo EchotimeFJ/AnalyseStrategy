@@ -111,12 +111,12 @@ export function createAiConfigStore(options: AiConfigStoreOptions = {}) {
   }
 
   let saving: Promise<void> = Promise.resolve();
-  function save(input: AiConfigInput, token: string): Promise<void> {
-    const job = saving.then(() => saveProfile(input, token));
+  function save(input: AiConfigInput, token: string, activate = true): Promise<void> {
+    const job = saving.then(() => saveProfile(input, token, activate));
     saving = job.catch(() => undefined);
     return job;
   }
-  async function saveProfile(input: AiConfigInput, token: string): Promise<void> {
+  async function saveProfile(input: AiConfigInput, token: string, activate: boolean): Promise<void> {
     const candidate = await preview(input, token);
     if (!secret) throw new Error('AI_CONFIG_SECRET 未配置，不能持久化 API Key');
     const stored: StoredAiConfig = {
@@ -132,6 +132,10 @@ export function createAiConfigStore(options: AiConfigStoreOptions = {}) {
       updatedAt: new Date().toISOString(),
     };
     const previous = await readFile();
+    const id = profileId(stored);
+    await persist({ version: 2, activeProfileId: activate ? id : previous?.activeProfileId ?? '', profiles: [...(previous?.profiles ?? []).filter(profile => profileId(profile) !== id), stored] });
+  }
+  async function persist(file: ConfigFile) {
     // Retain the original encrypted single-profile file for migration recovery.
     try {
       const raw = JSON.parse(await fs.readFile(filePath, 'utf8'));
@@ -139,8 +143,25 @@ export function createAiConfigStore(options: AiConfigStoreOptions = {}) {
     } catch (error) {
       if (!['ENOENT', 'EEXIST'].includes((error as NodeJS.ErrnoException).code ?? '')) throw error;
     }
-    const id = profileId(stored);
-    await writeAtomicJson(filePath, { version: 2, activeProfileId: id, profiles: [...(previous?.profiles ?? []).filter(profile => profileId(profile) !== id), stored] } satisfies ConfigFile);
+    await writeAtomicJson(filePath, file);
+  }
+  function activate(id: string, token: string): Promise<void> {
+    const job = saving.then(async () => {
+      assertAdminToken(token, adminToken);
+      if (['AI_PROVIDER_ID', 'AI_PROVIDER_NAME', 'AI_BASE_URL', 'AI_MODEL', 'AI_API_KEY'].some(key => env[key])) throw new Error('AI_CONFIG_ENV_LOCKED');
+      const file = await readFile();
+      const target = file?.profiles.find(profile => profileId(profile) === id);
+      if (!file || !target) throw new Error('AI_PROFILE_NOT_FOUND');
+      if (!secret) throw new Error('AI_CONFIG_SECRET 未配置');
+      decryptSecret(target.apiKeyEncrypted, secret);
+      const current = await resolve();
+      // Switching only selects saved credentials; shared resource limits stay
+      // at their currently effective values across model changes.
+      const selected = current ? { ...target, timeoutMs: current.timeoutMs, dailyTokenBudget: current.dailyTokenBudget, maxConcurrency: current.maxConcurrency } : target;
+      await persist({ ...file, activeProfileId: id, profiles: file.profiles.map(profile => profile === target ? selected : profile) });
+    });
+    saving = job.catch(() => undefined);
+    return job;
   }
 
   async function preview(input: AiConfigInput, token: string): Promise<ResolvedAiConfig> {
@@ -169,7 +190,7 @@ export function createAiConfigStore(options: AiConfigStoreOptions = {}) {
     };
   }
 
-  return { getPublic, resolve, preview, save };
+  return { getPublic, resolve, preview, save, activate };
 }
 
 function normalizeProviderId(value: string): AiProviderId {

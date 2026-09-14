@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   Bot,
   CheckCircle2,
@@ -10,7 +10,8 @@ import {
   Trash2,
   X,
 } from 'lucide-react';
-import { apiGet } from '@/lib/api';
+import { apiGet, apiPost } from '@/lib/api';
+import { aiConfigRequest } from '@/lib/aiConfigRequest';
 import { useAsyncData } from '@/hooks/useAsyncData';
 import { useAiChat, type ChatSession } from '@/hooks/useAiChat';
 import type { AiStatus, TodayOverview } from '@/types';
@@ -18,7 +19,7 @@ import { Layout } from '@/components/Layout';
 import { ErrorBlock, LoadingBlock } from '@/components/ui';
 import { AssistantMessage } from '@/components/assistant/AssistantMessage';
 import { ChatComposer } from '@/components/assistant/ChatComposer';
-import { AiConfigDialog } from '@/components/AiConfigDialog';
+import { AiConfigDialog, type AiConfigAccess } from '@/components/AiConfigDialog';
 
 const prompts = [
   { title: '最新报告速览', prompt: '今天是多少号？请分析最新报告里最值得关注的内容，并说明报告库更新到哪一天。' },
@@ -39,6 +40,22 @@ export default function ResearchAssistant() {
   const [historyOpen, setHistoryOpen] = useState(false);
   const [filtersOpen, setFiltersOpen] = useState(false);
   const [configOpen, setConfigOpen] = useState(false);
+  const [configAccess, setConfigAccess] = useState<AiConfigAccess | null>(null);
+  const [switching, setSwitching] = useState(false);
+  const [switchError, setSwitchError] = useState('');
+  const closeConfig = useCallback(() => setConfigOpen(false), []);
+  function authorized(settings: AiStatus, token: string) {
+    setConfigAccess({ settings, token }); status.setData(settings);
+  }
+  async function switchProfile(profileId: string) {
+    if (!configAccess || switching || chat.streaming || !profileId) return;
+    setSwitching(true); setSwitchError('');
+    try {
+      const next = await aiConfigRequest(signal => apiPost<AiStatus>('/api/ai/active-profile', { profileId }, signal, { 'X-AI-Admin-Token': configAccess.token }), 'save');
+      authorized(next, configAccess.token);
+    } catch (reason) { setSwitchError(reason instanceof Error ? reason.message : String(reason)); }
+    finally { setSwitching(false); }
+  }
   const scrollRef = useRef<HTMLDivElement>(null);
   const shouldFollowRef = useRef(true);
   const activeSession = chat.sessions.find((session) => session.id === chat.activeSessionId) ?? chat.sessions[0];
@@ -62,7 +79,7 @@ export default function ResearchAssistant() {
   }, [chat.messages, chat.phase]);
 
   function ask(value = question) {
-    if (!status.data?.configured || !value.trim() || chat.streaming) return;
+    if (!status.data?.configured || !value.trim() || chat.streaming || switching) return;
     shouldFollowRef.current = true;
     setQuestion('');
     void chat.send(value, scope);
@@ -73,7 +90,7 @@ export default function ResearchAssistant() {
 
   return (
     <Layout>
-      {configOpen ? <AiConfigDialog open status={status.data} onClose={() => setConfigOpen(false)} onSaved={status.setData} /> : null}
+      {configOpen ? <AiConfigDialog open status={status.data} access={configAccess} onAuthorized={authorized} onClose={closeConfig} onSaved={status.setData} /> : null}
       <div className="mx-auto flex h-[calc(100dvh-7.5rem)] min-h-[640px] max-w-[1360px] gap-4 lg:h-[calc(100dvh-4rem)]">
         <div className="hidden w-[258px] shrink-0 lg:block">
           <ConversationRail
@@ -122,13 +139,18 @@ export default function ResearchAssistant() {
                 </div>
               </div>
               <div className="flex shrink-0 items-center gap-1.5">
-                <button type="button" onClick={() => setConfigOpen(true)} className="flex h-10 items-center rounded-xl bg-slate-100 px-3 text-xs font-semibold text-slate-600" aria-haspopup="dialog">AI 配置</button>
+                <button type="button" disabled={switching} onClick={() => setConfigOpen(true)} className="flex h-10 items-center rounded-xl bg-slate-100 px-3 text-xs font-semibold text-slate-600" aria-haspopup="dialog">AI 配置</button>
                 <button type="button" onClick={() => setFiltersOpen((value) => !value)} className={`relative flex h-10 items-center gap-2 rounded-xl px-3 text-xs font-semibold transition ${filtersOpen || activeFilterCount ? 'bg-blue-50 text-blue-700' : 'bg-slate-100 text-slate-600'}`} aria-expanded={filtersOpen} aria-label="检索范围">
                   <SlidersHorizontal className="h-4 w-4" /><span className="hidden sm:inline">检索范围</span>
                   {activeFilterCount ? <span className="flex h-5 min-w-5 items-center justify-center rounded-full bg-blue-600 px-1 text-[10px] text-white">{activeFilterCount}</span> : null}
                 </button>
               </div>
             </div>
+            <div className="mt-3 flex min-w-0 items-center gap-2 text-xs text-slate-600">
+              {configAccess ? <><label className="flex min-w-0 flex-1 items-center gap-2"><span className="shrink-0">全站模型</span><select aria-label="切换已配置模型" disabled={switching || chat.streaming || Boolean(configAccess.settings.overriddenFields?.length)} value={configAccess.settings.activeProfileId ?? ''} onChange={event => void switchProfile(event.target.value)} className="min-h-10 min-w-0 flex-1 rounded-xl border border-slate-200 bg-white px-3"><option value="" disabled>选择已保存模型</option>{configAccess.settings.profiles?.map(profile => <option key={profile.id} value={profile.id}>{profile.providerName} · {profile.model} · {new URL(profile.baseUrl).host}</option>)}</select></label><button type="button" className="shrink-0 px-2 py-2 text-slate-500" disabled={switching} onClick={() => setConfigAccess(null)}>锁定</button></> : <button type="button" onClick={() => setConfigOpen(true)} className="min-h-10 rounded-xl border border-slate-200 px-3">切换已配置模型</button>}
+              {switching ? <span className="shrink-0">切换中…</span> : null}
+            </div>
+            {switchError ? <p role="alert" className="mt-2 text-xs text-rose-600">{switchError}</p> : null}
             <div className={`assistant-filter-grid ${filtersOpen ? 'assistant-filter-grid-open' : ''}`} aria-hidden={!filtersOpen}>
               <div className="pt-3">
                 <div className="grid gap-2 rounded-2xl border border-slate-200 bg-slate-50 p-3 sm:grid-cols-2 xl:grid-cols-4">
@@ -168,7 +190,7 @@ export default function ResearchAssistant() {
                       key={message.id}
                       message={message}
                       phase={message.pending ? chat.phase : 'idle'}
-                      onRetry={() => void chat.retry(message.id, scope)}
+                      onRetry={() => { if (!switching) void chat.retry(message.id, scope); }}
                       onStop={chat.stop}
                     />
                   ))}

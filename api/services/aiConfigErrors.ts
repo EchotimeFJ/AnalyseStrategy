@@ -1,6 +1,8 @@
 export function configError(error: unknown) {
   const raw = error instanceof Error ? error.message : '';
   const result = (code: string, message: string, status = 502) => ({ code, message, status });
+  if (raw === 'AI_PROFILE_NOT_FOUND') return result(raw, '该模型配置不存在，请重新打开配置列表。', 404);
+  if (raw === 'AI_CONFIG_ENV_LOCKED') return result(raw, '模型由服务器环境变量固定，需先移除对应覆盖设置才能切换。', 409);
   const codes: string[] = [];
   let current: unknown = error;
   for (let i = 0; current && typeof current === 'object' && i < 6; i++) {

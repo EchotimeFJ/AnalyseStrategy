@@ -69,6 +69,19 @@ assert.equal((await migrated.getPublic()).profiles.length, 2);
 assert.deepEqual(JSON.parse(await fs.readFile(legacyPath + '.v1.bak', 'utf8')), legacy);
 assert.equal((await migrated.preview({ providerName: 'Provider', baseUrl: 'https://example.com/v1', model: 'model', apiKey: '' }, 'admin')).apiKey, 'sk-test-1234');
 
+const beforeSaveOnly = await store.resolve();
+await store.save({ providerId: 'mimo', providerName: 'MiMo', baseUrl: 'https://api.xiaomimimo.com/v1', model: 'mimo-v2.5-pro', apiKey: 'mimo-key' }, 'admin', false);
+assert.equal((await store.resolve()).model, beforeSaveOnly.model, 'saving a profile does not have to activate it');
+const profilesBeforeSwitch = JSON.parse(await fs.readFile(filePath, 'utf8')).profiles;
+const mimo = (await store.getPublic()).profiles.find(p => p.providerId === 'mimo')!;
+await store.activate(mimo.id, 'admin');
+assert.equal((await store.resolve()).apiKey, 'mimo-key');
+await store.activate((await store.getPublic()).profiles.find(p => p.model === 'model')!.id, 'admin');
+assert.equal((await store.resolve()).apiKey, 'sk-test-1234');
+assert.deepEqual(JSON.parse(await fs.readFile(filePath, 'utf8')).profiles.map((p: { apiKeyEncrypted: unknown }) => p.apiKeyEncrypted), profilesBeforeSwitch.map((p: { apiKeyEncrypted: unknown }) => p.apiKeyEncrypted), 'switching preserves every encrypted key');
+await assert.rejects(store.activate(mimo.id, 'wrong'), /管理员密码/);
+await assert.rejects(store.activate('missing', 'admin'), /AI_PROFILE_NOT_FOUND/);
+
 await fs.rm(tmpRoot, { recursive: true, force: true });
 
 console.log('ai config tests passed');

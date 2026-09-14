@@ -18,8 +18,16 @@ router.get('/status', asyncRoute(async (_req, res) => {
 }));
 
 router.put('/config', requireAdmin, asyncRoute(async (req, res) => {
-  await aiConfigStore.save(req.body as AiConfigInput, adminToken(req));
-  res.json({ success: true, data: await aiService.status() });
+  await aiConfigStore.save(req.body as AiConfigInput, adminToken(req), req.body.activate !== false);
+  res.setHeader('Cache-Control', 'no-store');
+  res.type('json').send(JSON.stringify({ success: true, data: await aiConfigStore.getPublic() }));
+}, true));
+
+router.post('/active-profile', requireAdmin, asyncRoute(async (req, res) => {
+  if (typeof req.body.profileId !== 'string') throw new Error('AI_PROFILE_NOT_FOUND');
+  await aiConfigStore.activate(req.body.profileId, adminToken(req));
+  res.setHeader('Cache-Control', 'no-store');
+  res.type('json').send(JSON.stringify({ success: true, data: await aiConfigStore.getPublic() }));
 }, true));
 
 router.post('/config/test', requireAdmin, asyncRoute(async (req, res) => {

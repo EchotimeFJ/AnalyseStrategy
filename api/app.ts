@@ -29,6 +29,9 @@ app.use('/api/search', requestLimit(20))
 app.use('/api/export', requestLimit(4))
 app.use('/api/ai/chat', requestLimit(6))
 app.use('/api/ai/config', requestLimit(5))
+// Model selection does not consume provider tokens. Preserve the failed-admin
+// attempt limit while allowing successful selections under the global API cap.
+app.use('/api/ai/active-profile', requestLimit(5, true))
 // Deny writes before parsing bodies or doing any expensive work. An absent
 // administrator secret disables management rather than opening it to visitors.
 app.use('/api', (req, res, next) => {

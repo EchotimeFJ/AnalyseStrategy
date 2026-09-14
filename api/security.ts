@@ -15,9 +15,10 @@ export const requireAdmin: RequestHandler = (req, res, next) => {
   next();
 };
 
-export function requestLimit(limit: number) {
+export function requestLimit(limit: number, skipSuccessfulRequests = false) {
   return rateLimit({
     windowMs: 60_000, limit, standardHeaders: 'draft-8', legacyHeaders: false,
+    skipSuccessfulRequests,
     // By default forwarding headers are intentionally ignored. A trusted local
     // reverse proxy may be enabled explicitly, and must overwrite these headers.
     validate: { xForwardedForHeader: false },
