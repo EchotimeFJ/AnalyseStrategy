@@ -13,17 +13,48 @@ import type { ReviewedReport, MentionRecord } from '../domain/review.js';
 // Automated publication is intentionally pinned to DeepSeek. The active
 // website profile remains available for chat and manual connection tests.
 export const AUTOMATED_REVIEW_PROVIDER = 'deepseek' as const;
+const REVIEW_PUBLICATION_DEBOUNCE_MS = 15_000;
 
 export async function startReviewScheduler(publish: () => Promise<void>) {
   if (!reviewEnabled()) return { wake: () => {}, stop: async () => {} };
   const store = reviewStore();
+  let publicationPending = false;
+  let publicationTimer: NodeJS.Timeout | undefined;
+  let publicationRunning: Promise<void> | undefined;
+  const flushPublication = async () => {
+    if (publicationRunning || !publicationPending) return;
+    publicationPending = false;
+    publicationRunning = publish().catch(error => {
+      console.error('[research-review] publication refresh failed; retaining the last published facts', error);
+    });
+    await publicationRunning;
+    publicationRunning = undefined;
+    if (publicationPending) schedulePublication();
+  };
+  const schedulePublication = () => {
+    if (publicationTimer || publicationRunning) return;
+    publicationTimer = setTimeout(() => {
+      publicationTimer = undefined;
+      void flushPublication();
+    }, REVIEW_PUBLICATION_DEBOUNCE_MS);
+    publicationTimer.unref();
+  };
+  // A review result changes one report, but rebuilding the complete index for
+  // every chunk blocks the API while large reports are being processed. Queue
+  // one publication refresh and coalesce the results produced in this window.
+  const requestPublication = () => {
+    publicationPending = true;
+    schedulePublication();
+    return Promise.resolve();
+  };
   const worker = createReviewWorker<ReviewedReport>({
     store,
     resolve: () => aiConfigStore.resolveProvider(AUTOMATED_REVIEW_PROVIDER),
     resolveProfile: aiConfigStore.resolveProfile,
     missingConfigCode: 'AI_DEEPSEEK_NOT_CONFIGURED',
+    publish: requestPublication,
+    publishOnError: false,
     ignorePinnedConfig: true,
-    publish,
     process: async (report, config, context) => {
       const candidate = buildReviewCandidate(report, extractOpinions(report));
       const namespace = contentHash(JSON.stringify([REVIEW_PIPELINE_VERSION, REVIEW_PROMPT_VERSION, profileId(config), config.reviewThinking, config.reviewMaxTokens]));
@@ -67,5 +98,5 @@ export async function startReviewScheduler(publish: () => Promise<void>) {
   // Hourly source discovery is separate from short retry/queue ticks. No source
   // download or whole-corpus model rerun is scheduled by this timer.
   const timer=setInterval(wake,30_000);timer.unref();wake();
-  return { wake, stop: async()=>{setReviewWorkerRunning(false);clearInterval(timer);await worker.stop();} };
+  return { wake, stop: async()=>{setReviewWorkerRunning(false);clearInterval(timer);await worker.stop();if(publicationTimer)clearTimeout(publicationTimer);publicationTimer=undefined;await flushPublication();} };
 }

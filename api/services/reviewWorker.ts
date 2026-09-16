@@ -16,6 +16,9 @@ export function createReviewWorker<T>(options: {
   resolveProfile: (id: string) => Promise<ResolvedAiConfig | null>;
   process: (report: ReportDocument, config: ResolvedAiConfig, context: ReviewProcessContext) => Promise<{ result: T; partial: boolean; errorCode?: string }>;
   publish: () => Promise<void>;
+  /** Error/status transitions are exposed by the status endpoint directly. A
+   * scheduler may defer full-index publication for these transitions. */
+  publishOnError?: boolean;
   missingConfigCode?: string;
   /** Ignore legacy pins when a scheduler has a provider policy (for example,
    * automated review must always use DeepSeek). A new pin is written when the
@@ -47,7 +50,7 @@ export function createReviewWorker<T>(options: {
         job.status = 'retry_wait'; job.nextAttemptAt = now().toISOString(); job.errorCode = 'REVIEW_INTERRUPTED';
       }
       return changed;
-    }).then(async changed => { if(changed) await options.publish().catch(() => undefined); });
+    }).then(async changed => { if(changed && options.publishOnError !== false) await options.publish().catch(() => undefined); });
   }
   async function drain() {
     while (!stopped) {
@@ -62,12 +65,12 @@ export function createReviewWorker<T>(options: {
       catch { config = null; }
       if (!config) {
         await update(job, j => { j.status = 'config_paused'; j.errorCode = options.missingConfigCode ?? 'AI_NOT_CONFIGURED'; j.nextAttemptAt = new Date(now().getTime() + 60_000).toISOString(); });
-        await options.publish().catch(() => undefined);
+        if (options.publishOnError !== false) await options.publish().catch(() => undefined);
         return;
       }
       if (!options.ignorePinnedConfig && job.pin && profileId(config) !== job.pin.profileId) {
         await update(job, j => { j.status = 'config_paused'; j.errorCode = 'REVIEW_PROFILE_CHANGED'; j.nextAttemptAt = new Date(now().getTime() + 86_400_000).toISOString(); });
-        await options.publish().catch(() => undefined);
+        if (options.publishOnError !== false) await options.publish().catch(() => undefined);
         return;
       }
       if (job.pin && !options.ignorePinnedConfig) config = { ...config, ...job.pin.settings };
@@ -86,7 +89,7 @@ export function createReviewWorker<T>(options: {
           if (j.attempts >= 3) { j.status = 'failed'; j.errorCode = 'REVIEW_RETRY_EXHAUSTED'; return false; }
           j.attempts += 1; j.status = 'running'; j.pin = pin; delete j.errorCode; delete j.nextAttemptAt; return true;
         });
-        if (!claimed) { await options.publish().catch(() => undefined); continue; }
+        if (!claimed) { if (options.publishOnError !== false) await options.publish().catch(() => undefined); continue; }
         job.pin = pin;
         const report = await options.store.loadReport(job);
         const context: ReviewProcessContext = {
@@ -130,7 +133,7 @@ export function createReviewWorker<T>(options: {
             j.status = 'retry_wait'; j.nextAttemptAt = new Date(now().getTime() + 60_000 * Math.max(1, j.attempts)).toISOString();
           } else j.status = stopped ? 'retry_wait' : 'failed';
         });
-        await options.publish().catch(() => undefined);
+        if (options.publishOnError !== false) await options.publish().catch(() => undefined);
         if (code === 'AI_DAILY_BUDGET') return;
       } finally { release(); controller = undefined; }
     }
