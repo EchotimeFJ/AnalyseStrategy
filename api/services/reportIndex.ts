@@ -259,7 +259,9 @@ async function buildAndSaveIndex(manifest: SourceManifest): Promise<IndexState> 
 }
 
 export async function prepareIndexForPublication(): Promise<IndexState> {
-  return buildIndexCandidate(await readSourceManifest(getReportDir()));
+  const manifest = await readSourceManifest(getReportDir());
+  if (reviewEnabled() && state.indexedAt) return buildIncrementalReviewIndex(manifest);
+  return buildIndexCandidate(manifest);
 }
 
 export function activatePublishedIndex(index: IndexState) {
@@ -271,7 +273,7 @@ export function activatePublishedIndex(index: IndexState) {
 
 async function buildIndexCandidate(manifest: SourceManifest): Promise<IndexState> {
   const { sourceDir, files } = manifest;
-  let reports: ReportDocument[] = [];
+  const reports: ReportDocument[] = [];
   const errors: IndexState['errors'] = [];
 
   for (const filePath of files) {
@@ -297,37 +299,7 @@ async function buildIndexCandidate(manifest: SourceManifest): Promise<IndexState
   if (errors.length) throw new Error(`Report rebuild failed: ${errors.length} unreadable reports`);
   if (reviewEnabled()) {
     const synced = await reviewStore(sourceDir).sync(reports);
-    reports = synced.map(item => item.report);
-    // In review mode the structured projection is the source of truth.  Skip
-    // the legacy opinions/mentions graph here; building both graphs duplicates
-    // the corpus in memory before the reviewed facts are loaded.
-    const sourceReports = reports;
-    const indexedAt = new Date().toISOString();
-    if ((await readSourceManifest(sourceDir)).fingerprint !== manifest.fingerprint) throw new Error('Report files changed during rebuild; retry when the update has finished');
-    const next: IndexState = {
-      sourceDir,
-      sourceReports,
-      reports: reports.slice().sort((left, right) => left.date.localeCompare(right.date)),
-      mentions: [], opinions: [], entities: new Map(), qualityIssues: buildQualityIssues(reports, []),
-      version: `${indexedAt}-${randomUUID()}`,
-      indexedAt,
-      errors,
-      sourceFingerprint: manifest.fingerprint,
-      cache: { origin: 'rebuilt', persisted: false },
-    };
-    const reviewed = await loadReviewProjection(reports, sourceDir);
-    if (reviewed) {
-      next.reports = reviewed.reports;
-      next.opinions = reviewed.opinions; next.mentions = reviewed.mentions; next.entities = reviewed.entities;
-      next.reviewStates = reviewed.states; next.reviewFacts = reviewed.facts; next.reviewFactRefs = reviewed.factRefs;
-      next.reviewOverviewSignals = reviewed.overviewSignals; next.reviewSummaries = reviewed.overviewSummaries;
-      next.reviewSignals = reviewed.signals; next.reviewFingerprint = reviewed.fingerprint;
-      next.identityGraph = reviewed.identityGraph; next.identityMapping = reviewed.identityMapping;
-      next.qualityIssues = buildQualityIssues(next.reports, next.opinions);
-      for (const [reportId, review] of Object.entries(reviewed.states)) if (review.status !== 'succeeded') next.qualityIssues.push({ type: review.status === 'partial' ? 'review-partial' : review.status === 'failed' ? 'review-failed' : 'review-pending', reportId, message: review.status === 'partial' ? '报告有待核对字段' : review.status === 'failed' ? '报告复核失败' : '报告尚待复核' });
-    }
-    next.views = buildIndexViews(next);
-    return next;
+    return buildReviewedIndex(manifest, synced.map(item => item.report), errors);
   }
   const sourceReports = reports.map(report => ({ ...report, lines: [...report.lines], institutions: report.institutions.map(block => ({ ...block })) }));
   const rawOpinions = reports.flatMap((report) => extractOpinions(report));
@@ -387,6 +359,64 @@ async function buildIndexCandidate(manifest: SourceManifest): Promise<IndexState
     next.identityGraph = reviewed.identityGraph; next.identityMapping = reviewed.identityMapping;
     next.qualityIssues = buildQualityIssues(next.reports, next.opinions);
     for (const [reportId,review] of Object.entries(reviewed.states)) if(review.status!=='succeeded') next.qualityIssues.push({type:review.status==='partial'?'review-partial':review.status==='failed'?'review-failed':'review-pending',reportId,message:review.status==='partial'?'报告有待核对字段':review.status==='failed'?'报告复核失败':'报告尚待复核'});
+  }
+  next.views = buildIndexViews(next);
+  return next;
+}
+
+async function buildIncrementalReviewIndex(manifest: SourceManifest): Promise<IndexState> {
+  const previous = state.sourceReports ?? state.reports;
+  const byPath = new Map(previous.map(report => [report.filePath, report]));
+  const reports: ReportDocument[] = [];
+  const errors: IndexState['errors'] = [];
+  for (const filePath of manifest.files) {
+    try {
+      const stat = await fs.stat(filePath);
+      const reused = byPath.get(filePath);
+      if (reused && reused.updatedAt === stat.mtime.toISOString()) {
+        reports.push(reused);
+        continue;
+      }
+      reports.push(buildReportFromMarkdown({
+        id: makeReportId(manifest.sourceDir, filePath),
+        filePath,
+        markdown: await fs.readFile(filePath, 'utf-8'),
+        updatedAt: stat.mtime.toISOString(),
+      }));
+    } catch (error) {
+      errors.push({ filePath, message: error instanceof Error ? error.message : String(error) });
+    }
+  }
+  if (errors.length) throw new Error(`Report rebuild failed: ${errors.length} unreadable reports`);
+  const synced = await reviewStore(manifest.sourceDir).sync(reports);
+  return buildReviewedIndex(manifest, synced.map(item => item.report), errors);
+}
+
+async function buildReviewedIndex(manifest: SourceManifest, reports: ReportDocument[], errors: IndexState['errors']): Promise<IndexState> {
+  if ((await readSourceManifest(manifest.sourceDir)).fingerprint !== manifest.fingerprint) throw new Error('Report files changed during rebuild; retry when the update has finished');
+  const sourceReports = reports;
+  const indexedAt = new Date().toISOString();
+  const next: IndexState = {
+    sourceDir: manifest.sourceDir,
+    sourceReports,
+    reports: reports.slice().sort((left, right) => left.date.localeCompare(right.date)),
+    mentions: [], opinions: [], entities: new Map(), qualityIssues: buildQualityIssues(reports, []),
+    version: `${indexedAt}-${randomUUID()}`,
+    indexedAt,
+    errors,
+    sourceFingerprint: manifest.fingerprint,
+    cache: { origin: 'rebuilt', persisted: false },
+  };
+  const reviewed = await loadReviewProjection(reports, manifest.sourceDir);
+  if (reviewed) {
+    next.reports = reviewed.reports;
+    next.opinions = reviewed.opinions; next.mentions = reviewed.mentions; next.entities = reviewed.entities;
+    next.reviewStates = reviewed.states; next.reviewFacts = reviewed.facts; next.reviewFactRefs = reviewed.factRefs;
+    next.reviewOverviewSignals = reviewed.overviewSignals; next.reviewSummaries = reviewed.overviewSummaries;
+    next.reviewSignals = reviewed.signals; next.reviewFingerprint = reviewed.fingerprint;
+    next.identityGraph = reviewed.identityGraph; next.identityMapping = reviewed.identityMapping;
+    next.qualityIssues = buildQualityIssues(next.reports, next.opinions);
+    for (const [reportId, review] of Object.entries(reviewed.states)) if (review.status !== 'succeeded') next.qualityIssues.push({ type: review.status === 'partial' ? 'review-partial' : review.status === 'failed' ? 'review-failed' : 'review-pending', reportId, message: review.status === 'partial' ? '报告有待核对字段' : review.status === 'failed' ? '报告复核失败' : '报告尚待复核' });
   }
   next.views = buildIndexViews(next);
   return next;
