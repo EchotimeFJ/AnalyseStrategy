@@ -8,7 +8,6 @@ import { readSourceManifest } from './reportCache.js';
 import { pullStrategyRepository } from './gitUpdater.js';
 import { commitPublication, publicationFile, readPublication } from './publicationStore.js';
 import { getAppVersion } from './version.js';
-import { reviewEnabled } from './reviewRuntime.js';
 
 const exec = promisify(execFile);
 const HOUR = 60 * 60 * 1000;
@@ -58,13 +57,17 @@ export function createDataUpdater(options: { statusFile?: string; now?: () => Da
       const manifest = await readSourceManifest(getReportDir());
       const app = getAppVersion();
       const appRevision = `${app.version}:${app.commit}`;
-      let reuseSnapshot = Boolean(!reviewEnabled() && !force && baseline && previous && manifest.fingerprint === baseline.sourceFingerprint && previous.appRevision === appRevision);
+      // An hourly poll with an unchanged source must not rebuild the entire
+      // review graph.  Code-version changes are handled by an explicit forced
+      // reindex during deployment; the source/review fingerprint remains the
+      // freshness gate for routine polling.
+      let reuseSnapshot = Boolean(!force && baseline && previous && manifest.fingerprint === baseline.sourceFingerprint);
       let index = reuseSnapshot ? baseline! : await prepareIndexForPublication();
       const hash = createHash('sha256');
       for (const report of index.reports) hash.update(JSON.stringify([report.id, report.markdown]));
       if (index.reviewFingerprint) hash.update(index.reviewFingerprint);
       const fingerprint = hash.digest('hex');
-      if (baseline && previous?.fingerprint === fingerprint && previous.appRevision === appRevision && baseline.sourceFingerprint === manifest.fingerprint) {
+      if (baseline && previous?.fingerprint === fingerprint && baseline.sourceFingerprint === manifest.fingerprint) {
         index = baseline; reuseSnapshot = true;
       }
       const reportChanges = diffReportChanges(baseline ?? emptyIndex(getReportDir()), index);
