@@ -4,7 +4,7 @@ import { dictionaryCodeNames } from './securityDictionary.js';
 import { createIdentityStore } from './researchIdentity.js';
 import type { IdentityGraph, IdentityMapping } from '../domain/identity.js';
 import { RATING_DISPLAY_LABELS } from '../../src/shared/researchVocabulary.js';
-import type { OpinionRecord, SecurityEntity, SourceEvidence } from '../domain/research.js';
+import type { OpinionRecord, ReportOverview, SecurityEntity, SourceEvidence } from '../domain/research.js';
 import type { MentionRecord, ReviewedReport, SignalRecord, StatementRecord, ReviewClaim, ReviewPriceValue } from '../domain/review.js';
 import type { ReportDocument, TargetMention, CatalystRiskItem } from './reportParser.js';
 import { normalizeEntityName, normalizeSecurityCode, resolveInstitution, securityKey, isInvalidEntityName } from './entityResolver.js';
@@ -13,11 +13,19 @@ import { reviewEnabled, reviewStore } from './reviewRuntime.js';
 import { classifyOpinionTypes } from './opinionExtractor.js';
 
 export type ReportReviewState = { status: string; sourceHash: string; publishedSourceHash?: string; model?: string; issueCount: number };
+export type ReviewFactRef = { jobId: string; resultRef: string; sourceHash: string };
+type ReviewOverviewSignal = NonNullable<ReportOverview['signals']>[number];
+type ReviewOverviewSummary = NonNullable<ReportOverview['summaries']>[number];
 export type ReviewProjection = {
   reports: ReportDocument[]; opinions: OpinionRecord[]; mentions: TargetMention[];
   entities: Map<string, SecurityEntity>; signals: CatalystRiskItem[];
   identityGraph?: IdentityGraph; identityMapping?: Record<string, IdentityMapping>;
-  facts: ReviewedReport[]; states: Record<string, ReportReviewState>; fingerprint: string;
+  /** Full facts are kept only for small/test callers. Production uses refs and
+   * loads one report's detail on demand to avoid retaining the whole corpus. */
+  facts: ReviewedReport[]; factRefs: Record<string, ReviewFactRef>;
+  overviewSignals: Record<string, ReviewOverviewSignal[]>;
+  overviewSummaries: Record<string, ReviewOverviewSummary[]>;
+  states: Record<string, ReportReviewState>; fingerprint: string;
 };
 const stated = <T>(claim: ReviewClaim<T> | undefined): T | null => claim?.state === 'stated' ? claim.value : null;
 const labels = RATING_DISPLAY_LABELS;
@@ -95,7 +103,10 @@ export async function loadReviewProjection(reports: ReportDocument[], sourceDir:
   if (!storeOverride && !reviewEnabled()) return null;
   const store=storeOverride??reviewStore(sourceDir);
   const state=await store.read();
-  const output: ReviewProjection={reports:[],opinions:[],mentions:[],signals:[],facts:[],entities:new Map(),states:{},fingerprint:''};
+  const output: ReviewProjection={reports:[],opinions:[],mentions:[],signals:[],facts:[],factRefs:{},overviewSignals:{},overviewSummaries:{},entities:new Map(),states:{},fingerprint:''};
+  const keepFacts = Boolean(storeOverride) || process.env.REVIEW_KEEP_FACTS === 'true';
+  const identityInputs: Array<MentionRecord & { reportId: string; date?: string }> = [];
+  const statementMentions = new Map<string, string>();
   for (const report of reports) {
     const hash=contentHash(report.markdown);
     const source=Object.values(state.sources).find(s=>s.active&&(s.filePath===report.filePath||s.reportId===report.id));
@@ -116,15 +127,36 @@ export async function loadReviewProjection(reports: ReportDocument[], sourceDir:
     // Keep old source and old facts together while a changed report is pending.
     const published=selected.sourceHash===hash?{...report,id}:await store.loadReport(selected);
     const projection=projectReviewedReport(published,saved.result);
-    output.reports.push(published);output.opinions.push(...projection.opinions);output.mentions.push(...projection.mentions);output.signals.push(...projection.signals);output.facts.push(saved.result);
+    output.reports.push(published);output.opinions.push(...projection.opinions);output.mentions.push(...projection.mentions);output.signals.push(...projection.signals);
+    output.factRefs[id]={jobId:selected.id,resultRef:selected.resultRef!,sourceHash:selected.sourceHash};
+    if (keepFacts) output.facts.push(saved.result);
+    const activeRecords=saved.result.records.filter(r=>!r.status||r.status==='active');
+    const evidenceById=new Map(saved.result.evidence.map(e=>[e.evidenceId,e]));
+    const reportSignals: ReviewOverviewSignal[] = activeRecords.flatMap(record => {
+      if (record.kind !== 'signal' || record.payload.polarity !== 'affirmative' || record.payload.temporalContext === 'historical') return [];
+      if (saved.result.issues.some(issue => issue.severity === 'error' && issue.status === 'open' && (!issue.recordRef || [record.id,record.articleRef,record.payload.subject.mentionRef].includes(issue.recordRef)))) return [];
+      const evidence=evidenceById.get(record.payload.evidenceIDs[0]);
+      if (!evidence) return [];
+      const subject=activeRecords.find(item=>item.id===record.payload.subject.mentionRef);
+      return [{id:record.id,kind:record.payload.kind,subject:subject?.kind==='mention'?subject.payload.rawName:record.payload.subject.rawText??'未明确对象',subjectScope:record.payload.subject.scope,summary:record.payload.summary,lineNumber:evidence.startLine,sourceHash:saved.result.sourceHash}];
+    });
+    const reportSummaries: ReviewOverviewSummary[] = activeRecords.flatMap(record => {
+      if (record.kind !== 'article' || record.payload.summary.state !== 'stated' || !record.payload.summary.value) return [];
+      const evidence=evidenceById.get(record.payload.summary.evidenceIDs[0]);
+      return evidence ? [{id:record.id,title:record.payload.title,summary:record.payload.summary.value,lineNumber:evidence.startLine,sourceHash:saved.result.sourceHash}] : [];
+    });
+    output.overviewSignals[id]=reportSignals;
+    output.overviewSummaries[id]=reportSummaries;
+    for(const record of activeRecords){
+      if(record.kind==='mention') identityInputs.push({...record,reportId:id,date:published.date});
+      if(record.kind==='statement') statementMentions.set(record.id,record.payload.subject.mentionRef??'');
+    }
     info.publishedSourceHash=selected.sourceHash;info.issueCount=saved.result.issues.length;
     for(const opinion of projection.opinions)output.entities.set(opinion.security.key,opinion.security);
   }
-  const identityInputs = output.facts.flatMap(f => f.records.filter((r): r is MentionRecord => r.kind === 'mention' && (!r.status || r.status === 'active')).map(r => ({ ...r, reportId: f.reportId, date: output.reports.find(p => p.id === f.reportId)?.date })));
   if (identityInputs.length) {
     const resolved = await createIdentityStore(path.join(store.directory, 'identities')).resolveMentions(identityInputs);
     output.identityGraph = resolved.identityGraph; output.identityMapping = resolved.mapping;
-    const statementMentions = new Map(output.facts.flatMap(f => f.records.filter((r): r is StatementRecord => r.kind === 'statement').map(r => [r.id, r.payload.subject.mentionRef ?? ''] as const)));
     output.opinions = output.opinions.filter(opinion => {
       const identity = resolved.mapping[statementMentions.get(opinion.id) ?? ''];
       if (!identity) return false;
@@ -141,6 +173,6 @@ export async function loadReviewProjection(reports: ReportDocument[], sourceDir:
     output.mentions = output.mentions.filter(m => m.reviewStatementId && visible.has(m.reviewStatementId)).map(m => ({ ...m, targetName:visible.get(m.reviewStatementId!)!.security.displayName,aliases:visible.get(m.reviewStatementId!)!.security.aliases,code: visible.get(m.reviewStatementId!)!.security.code ?? undefined }));
     output.entities = new Map(output.opinions.map(o => [o.security.key,o.security]));
   }
-  output.fingerprint=contentHash(JSON.stringify([output.states,output.identityMapping,output.facts.map(f=>[f.sourceHash,f.candidateHash,f.operations,f.records])]));
+  output.fingerprint=contentHash(JSON.stringify([output.states,output.identityMapping,output.factRefs,output.overviewSignals,output.overviewSummaries]));
   return output;
 }

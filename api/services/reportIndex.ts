@@ -1,6 +1,6 @@
 import fs from 'node:fs/promises';
 import type { ReviewedReport } from '../domain/review.js';
-import { loadReviewProjection, type ReportReviewState } from './reviewProjection.js';
+import { isPublishableReview, loadReviewProjection, type ReportReviewState, type ReviewFactRef } from './reviewProjection.js';
 import { reviewEnabled, reviewStore } from './reviewRuntime.js';
 import path from 'node:path';
 import { randomUUID, createHash } from 'node:crypto';
@@ -46,6 +46,9 @@ export type IndexState = {
   qualityIssues: DataQualityIssue[];
   reviewStates?: Record<string, ReportReviewState>;
   reviewFacts?: ReviewedReport[];
+  reviewFactRefs?: Record<string, ReviewFactRef>;
+  reviewOverviewSignals?: Record<string, NonNullable<ReportOverview['signals']>>;
+  reviewSummaries?: Record<string, NonNullable<ReportOverview['summaries']>>;
   reviewSignals?: import('./reportParser.js').CatalystRiskItem[];
   reviewFingerprint?: string;
   identityGraph?: import('../domain/identity.js').IdentityGraph;
@@ -186,7 +189,7 @@ export async function ensureIndex(options: { checkSource?: boolean } = {}): Prom
         // Old snapshots are readable originals, not AI-validated facts. Never
         // promote a separately staged review result during pointer recovery.
         published.opinions = []; published.mentions = []; published.entities = new Map();
-        published.reviewFacts = []; published.reviewSignals = [];
+        published.reviewFacts = []; published.reviewFactRefs = {}; published.reviewOverviewSignals = {}; published.reviewSummaries = {}; published.reviewSignals = [];
         published.reviewStates = Object.fromEntries(published.reports.map(r => [r.id, { status: 'legacy_unreviewed', sourceHash: '' , issueCount: 0 }]));
         published.version = `${published.version}:review-migration`;
         published.views = buildIndexViews(published);
@@ -200,7 +203,7 @@ export async function ensureIndex(options: { checkSource?: boolean } = {}): Prom
     if (restored && (await readSourceManifest(manifest.sourceDir)).fingerprint === manifest.fingerprint) {
       if (reviewEnabled() && !restored.reviewFingerprint) {
         restored.opinions = []; restored.mentions = []; restored.entities = new Map();
-        restored.reviewFacts = []; restored.reviewSignals = [];
+        restored.reviewFacts = []; restored.reviewFactRefs = {}; restored.reviewOverviewSignals = {}; restored.reviewSummaries = {}; restored.reviewSignals = [];
         restored.reviewStates = Object.fromEntries(restored.reports.map(r => [r.id, { status: 'legacy_unreviewed', sourceHash: '', issueCount: 0 }]));
         restored.version = `${restored.version}:review-migration`;
         restored.views = buildIndexViews(restored);
@@ -348,7 +351,8 @@ async function buildIndexCandidate(manifest: SourceManifest): Promise<IndexState
   if (reviewed) {
     next.reports = reviewed.reports;
     next.opinions = reviewed.opinions; next.mentions = reviewed.mentions; next.entities = reviewed.entities;
-    next.reviewStates = reviewed.states; next.reviewFacts = reviewed.facts;
+    next.reviewStates = reviewed.states; next.reviewFacts = reviewed.facts; next.reviewFactRefs = reviewed.factRefs;
+    next.reviewOverviewSignals = reviewed.overviewSignals; next.reviewSummaries = reviewed.overviewSummaries;
     next.reviewSignals = reviewed.signals; next.reviewFingerprint = reviewed.fingerprint;
     next.identityGraph = reviewed.identityGraph; next.identityMapping = reviewed.identityMapping;
     next.qualityIssues = buildQualityIssues(next.reports, next.opinions);
@@ -462,19 +466,23 @@ function buildIndexViews(index: IndexState): IndexViews {
   const reportOverviews = reports.map(report => {
     const overview=buildReportOverview(report,opinionsByReport.get(report.id)??[]);
     const facts=index.reviewFacts?.find(f=>f.reportId===report.id);
-    const evidence=new Map(facts?.evidence.map(e=>[e.evidenceId,e])??[]);
-    const active=facts?.records.filter(r=>!r.status||r.status==='active')??[];
-    const signals:NonNullable<ReportOverview['signals']>=active.flatMap(r=>{
-      if(r.kind!=='signal'||r.payload.polarity!=='affirmative'||r.payload.temporalContext==='historical')return [];
-      if(facts?.issues.some(i=>i.severity==='error'&&(!i.recordRef||[r.id,r.articleRef,r.payload.subject.mentionRef].includes(i.recordRef))))return [];
-      const e=evidence.get(r.payload.evidenceIDs[0]);if(!e)return [];
-      const subject=active.find(m=>m.id===r.payload.subject.mentionRef);
-      return [{id:r.id,kind:r.payload.kind,subject:subject?.kind==='mention'?subject.payload.rawName:r.payload.subject.rawText??'未明确对象',subjectScope:r.payload.subject.scope,summary:r.payload.summary,lineNumber:e.startLine,sourceHash:facts!.sourceHash}];
-    });
-    const summaries:NonNullable<ReportOverview['summaries']>=active.flatMap(r=>{
-      if(r.kind!=='article'||r.payload.summary.state!=='stated'||!r.payload.summary.value)return [];
-      const e=evidence.get(r.payload.summary.evidenceIDs[0]);return e?[{id:r.id,title:r.payload.title,summary:r.payload.summary.value,lineNumber:e.startLine,sourceHash:facts!.sourceHash}]:[];
-    });
+    let signals:NonNullable<ReportOverview['signals']> = index.reviewOverviewSignals?.[report.id] ?? [];
+    let summaries:NonNullable<ReportOverview['summaries']> = index.reviewSummaries?.[report.id] ?? [];
+    if (facts) {
+      const evidence=new Map(facts.evidence.map(e=>[e.evidenceId,e]));
+      const active=facts.records.filter(r=>!r.status||r.status==='active');
+      signals=active.flatMap(r=>{
+        if(r.kind!=='signal'||r.payload.polarity!=='affirmative'||r.payload.temporalContext==='historical')return [];
+        if(facts.issues.some(i=>i.severity==='error'&&(!i.recordRef||[r.id,r.articleRef,r.payload.subject.mentionRef].includes(i.recordRef))))return [];
+        const e=evidence.get(r.payload.evidenceIDs[0]);if(!e)return [];
+        const subject=active.find(m=>m.id===r.payload.subject.mentionRef);
+        return [{id:r.id,kind:r.payload.kind,subject:subject?.kind==='mention'?subject.payload.rawName:r.payload.subject.rawText??'未明确对象',subjectScope:r.payload.subject.scope,summary:r.payload.summary,lineNumber:e.startLine,sourceHash:facts.sourceHash}];
+      });
+      summaries=active.flatMap(r=>{
+        if(r.kind!=='article'||r.payload.summary.state!=='stated'||!r.payload.summary.value)return [];
+        const e=evidence.get(r.payload.summary.evidenceIDs[0]);return e?[{id:r.id,title:r.payload.title,summary:r.payload.summary.value,lineNumber:e.startLine,sourceHash:facts.sourceHash}]:[];
+      });
+    }
     return {...overview,companyCount:index.identityGraph?new Set(overview.securities.map(s=>s.organizationId??s.key)).size:undefined,signals,summaries,review:index.reviewStates?.[report.id]??{status:'legacy_unreviewed'},publicationId:index.version};
   });
   const mentionCounts = new Map<string, number>();
@@ -511,6 +519,19 @@ export async function getReportDraft(reportId: string, snapshot?: IndexState): P
   const index=snapshot??await ensureIndex();const report=index.reports.find(r=>r.id===reportId);
   if(!report)return null;
   return {...buildReportOverview(report,extractOpinions(report)),review:{status:'legacy_unreviewed',sourceHash:createHash('sha256').update(report.markdown).digest('hex')},publicationId:index.version} as ReportOverview;
+}
+
+/** Load one published full review result without retaining every report's
+ * candidate records in the process heap. */
+export async function getReviewedReportFact(reportId: string, snapshot?: IndexState): Promise<ReviewedReport | null> {
+  const index = snapshot ?? await ensureIndex({ checkSource: false });
+  const inMemory = index.reviewFacts?.find(result => result.reportId === reportId);
+  if (inMemory) return inMemory;
+  const ref = index.reviewFactRefs?.[reportId];
+  if (!ref) return null;
+  const saved = await reviewStore().loadResult<ReviewedReport>(ref.resultRef);
+  if (saved.reportId !== reportId || saved.sourceHash !== ref.sourceHash || saved.result.reportId !== reportId || saved.result.sourceHash !== ref.sourceHash || !isPublishableReview(saved.result)) return null;
+  return saved.result;
 }
 
 export async function getReportOverview(reportId: string, snapshot?: IndexState): Promise<ReportOverview | null> {

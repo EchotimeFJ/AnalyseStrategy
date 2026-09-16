@@ -97,7 +97,16 @@ export async function writeReportSnapshot(index: IndexState, options: { file?: s
       })),
     })),
     mentions: index.mentions, opinions: index.opinions,
-    ...(index.reviewStates ? { reviewStates: index.reviewStates, reviewFacts: index.reviewFacts ?? [], reviewSignals: index.reviewSignals ?? [], reviewFingerprint: index.reviewFingerprint ?? '', identityGraph: index.identityGraph ?? null, identityMapping: index.identityMapping ?? {} } : {}),
+    ...(index.reviewStates ? {
+      reviewStates: index.reviewStates,
+      // Full ReviewedReport records stay in the review store and are loaded on
+      // demand.  Persist only the references and lightweight overview data so
+      // restoring a publication does not materialize the whole corpus.
+      reviewFactRefs: index.reviewFactRefs ?? {},
+      reviewOverviewSignals: index.reviewOverviewSignals ?? {},
+      reviewSummaries: index.reviewSummaries ?? {},
+      reviewSignals: index.reviewSignals ?? [], reviewFingerprint: index.reviewFingerprint ?? '', identityGraph: index.identityGraph ?? null, identityMapping: index.identityMapping ?? {},
+    } : {}),
     entities: [...index.entities], qualityIssues: index.qualityIssues,
     errors: index.errors, views: index.views,
   });

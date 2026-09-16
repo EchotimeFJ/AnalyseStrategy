@@ -2,7 +2,7 @@ import { Router } from 'express';
 import { reviewStatus, reviewStore, reviewEnabled } from '../services/reviewRuntime.js';
 import { requireAdmin } from '../security.js';
 import { sendCachedReport } from '../services/reportHttpCache.js';
-import { ensureIndex, getReportDraft } from '../services/reportIndex.js';
+import { ensureIndex, getReportDraft, getReviewedReportFact } from '../services/reportIndex.js';
 import { readPublication } from '../services/publicationStore.js';
 import { contentHash } from '../services/reviewStore.js';
 
@@ -27,7 +27,7 @@ router.get('/reports/:id/draft', async(req,res,next)=>{
 // remain in the private store, never in a public list/assistant payload.
 router.get('/reports/:id/structure', async(req,res,next)=>{
   try{
-    const index=await ensureIndex();const result=index.reviewFacts?.find(r=>r.reportId===req.params.id);
+    const index=await ensureIndex();const result=await getReviewedReportFact(req.params.id,index);
     if(!result){res.status(404).json({success:false,error:{code:'REVIEW_PENDING',message:'该报告尚无已发布的结构化结果'}});return;}
     res.json({success:true,data:{publicationId:index.version,reportId:result.reportId,sourceHash:result.sourceHash,records:result.records.filter(r=>!r.status||r.status==='active'),evidence:result.evidence,identityGraph:index.identityGraph??null,identityMapping:Object.fromEntries(result.records.filter(r=>r.kind==='mention').flatMap(r=>index.identityMapping?.[r.id]?[[r.id,index.identityMapping[r.id]]]:[])),readiness:result.readiness}});
   }catch(error){next(error);}
