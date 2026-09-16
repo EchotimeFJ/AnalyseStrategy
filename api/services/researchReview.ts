@@ -1236,10 +1236,11 @@ function isSha256(value: unknown): value is string {
 }
 
 /** Check the cross-record edges that a JSON/schema validator cannot prove. */
-function validateRecordRelationships(records: ReviewRecord[], evidenceById: Map<string, ReviewEvidence>, issues: ReviewIssue[], requireGrounding = true) {
+function validateRecordRelationships(records: ReviewRecord[], evidenceById: Map<string, ReviewEvidence>, issues: ReviewIssue[], requireGrounding = true, groundingRecordIDs?: Set<string>) {
   // Rule candidates are tentative. Enforce semantic grounding only after review;
   // immutable source evidence and structural references are checked at both stages.
-  if (requireGrounding && !issues.some(i => i.severity === 'error' && i.status === 'open')) for (const problem of groundingErrors(records, [...evidenceById.values()])) issues.push(makeIssue(problem.field === 'rating' ? 'rating_conflict' : 'price_conflict', 'error', problem.code, problem.recordId, `payload.${problem.field}`, []));
+  const groundedRecords = groundingRecordIDs ? records.filter(record => groundingRecordIDs.has(record.id)) : records;
+  if (requireGrounding && !issues.some(i => i.severity === 'error' && i.status === 'open')) for (const problem of groundingErrors(groundedRecords, [...evidenceById.values()])) issues.push(makeIssue(problem.field === 'rating' ? 'rating_conflict' : 'price_conflict', 'error', problem.code, problem.recordId, `payload.${problem.field}`, []));
   const byId = new Map(records.map((record) => [record.id, record]));
   const active = (id: string | null | undefined, kind?: ReviewRecordKind) => {
     if (!id) return undefined;
@@ -1269,7 +1270,7 @@ function validateRecordRelationships(records: ReviewRecord[], evidenceById: Map<
       case 'mention': {
         if (record.payload.articleRef !== record.articleRef) issues.push(makeIssue('subject_role', 'error', 'mention 的 articleRef 与记录不一致', record.id, 'payload.articleRef', []));
         articleFor(record.articleRef, record.id, 'articleRef');
-        if (requireGrounding) {
+        if (requireGrounding && (!groundingRecordIDs || groundingRecordIDs.has(record.id))) {
         const nameText=record.payload.nameEvidenceIDs.map(id=>evidenceById.get(id)?.quote??'').join('\n').normalize('NFKC');
         if(!nameText.includes(record.payload.rawName.normalize('NFKC')))issues.push(makeIssue('identity_conflict','error','候选名称不在指定原文中',record.id,'payload.rawName',record.payload.nameEvidenceIDs));
         for(const identifier of record.payload.rawIdentifiers)if(!identifier.evidenceIDs.some(id=>evidenceById.get(id)?.quote.normalize('NFKC').includes(identifier.text.normalize('NFKC'))))issues.push(makeIssue('identity_conflict','error','候选代码不在指定原文中',record.id,'payload.rawIdentifiers',identifier.evidenceIDs));
@@ -1445,7 +1446,8 @@ export function validateReviewPatch(
   // Validate the graph after applying the requested dispositions.  A patch
   // that deletes a mention, retargets a statement, or leaves a shared scope
   // with one member must not pass merely because each field is well-shaped.
-  validateRecordRelationships(recordsAfterPatchForValidation(candidate, operations), evidenceById, issues);
+  const groundingRecordIDs = options.allowPartial ? new Set([...required, ...operations.filter(operation => operation.op === 'add').map(operation => operation.candidateId)]) : undefined;
+  validateRecordRelationships(recordsAfterPatchForValidation(candidate, operations), evidenceById, issues, true, groundingRecordIDs);
   return resultForValidation(issues, [...seen]);
 }
 
@@ -1927,7 +1929,7 @@ function validateFieldChanges(
     const path = normalizePatchPath(change.path);
     if (seen.has(path)) issues.push(makeIssue('other', 'error', `重复 field path：${path}`, base.id, path, []));
     seen.add(path);
-    if (!isSafePath(path) || !isAllowedPatchPath(base.kind, path) || IMMUTABLE_PATHS.has(path) || path === 'payload' || path.includes('payload.evidence')) {
+    if (!isSafePath(path) || !isAllowedPatchPath(base.kind, path) || IMMUTABLE_PATHS.has(path) || path === 'payload') {
       issues.push(makeIssue('unsupported_value', 'error', `禁止修改字段：${change.path}`, base.id, path, []));
       continue;
     }

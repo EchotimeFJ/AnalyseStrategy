@@ -90,6 +90,17 @@ const changed = applyReviewPatch(candidate, changedPatch);
 const changedStatement = changed.records.find((record) => record.id === statement.id);
 assert.equal((changedStatement as Extract<ReviewRecord, { kind: 'statement' }>).payload.rationale.value, '订单增长');
 
+const signal = candidate.records.find((record): record is Extract<ReviewRecord, { kind: 'signal' }> => record.kind === 'signal');
+if (signal) {
+  const signalGuard = buildReviewFieldGuards(signal).find((guard) => guard.path === 'payload.evidenceIDs');
+  assert.ok(signalGuard);
+  const signalPatch: ReviewPatch = { ...validPatch, operations: keepOperations().map(operation => operation.candidateId === signal.id ? {
+    op: 'modify' as const, candidateId: signal.id, reason: '替换为更具体的原文证据',
+    fieldChanges: [{ path: 'payload.evidenceIDs', expectedValueHash: signalGuard!.expectedValueHash, value: signal.payload.evidenceIDs, evidenceIDs: signal.payload.evidenceIDs }],
+  } : operation) };
+  assert.equal(validateReviewPatch(signalPatch, candidate).valid, true, 'signal evidence references may be corrected while the record evidence inventory stays immutable');
+}
+
 const wrongRating: ReviewPatch = { ...validPatch, operations: keepOperations().map(op => op.candidateId === statement.id ? { op:'modify', candidateId:statement.id, reason:'不合法的映射', fieldChanges:[{path:ratingGuard!.path,expectedValueHash:ratingGuard!.expectedValueHash,value:{...statement.payload.rating.value!,normalizedLabel:'sell'},evidenceIDs:statement.payload.rating.evidenceIDs}] } : op) };
 assert.equal(validateReviewPatch(wrongRating,candidate).valid,false,'a literal Buy must not be normalized to Sell');
 
