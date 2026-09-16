@@ -1,6 +1,7 @@
 import path from 'node:path';
 import { createReviewStore, contentHash } from './reviewStore.js';
 import { getReportDir } from '../runtimeConfig.js';
+import { aiConfigStore } from './aiConfig.js';
 
 let workerRunning = false;
 export function setReviewWorkerRunning(value: boolean) { workerRunning = value; }
@@ -28,11 +29,15 @@ export async function reviewStatus() {
     REVIEW_FAILED: '复核未完成，请检查配置或重试',
   };
   const latest = jobs.filter(j => j.errorCode).sort((a, b) => b.updatedAt.localeCompare(a.updatedAt))[0];
+  let automatedModel: string | undefined;
+  try { automatedModel = (await aiConfigStore.resolveProvider('deepseek'))?.model; } catch { /* Status must remain readable when a key is unavailable. */ }
   return {
     enabled, automatedProvider: 'deepseek' as const, total: jobs.length, queued: count('queued', 'retry_wait'), running: count('running'),
     succeeded: count('succeeded'), partial: count('partial'), failed: count('failed'),
     paused: count('budget_paused', 'config_paused'), legacy: enabled ? 0 : jobs.length,
     lastError: latest ? errors[latest.errorCode!] ?? '输出或证据未通过校验，等待核对' : undefined,
-    model: jobs.filter(j => j.pin).sort((a, b) => b.updatedAt.localeCompare(a.updatedAt))[0]?.pin?.model,
+    // This is the model used for future automated reviews. Historical local
+    // backfill pins must not make the status banner look like the online model.
+    model: automatedModel,
   };
 }
