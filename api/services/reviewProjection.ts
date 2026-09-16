@@ -2,7 +2,7 @@ import path from 'node:path';
 import { groundingErrors } from './reviewGrounding.js';
 import { dictionaryCodeNames } from './securityDictionary.js';
 import { createIdentityStore } from './researchIdentity.js';
-import type { IdentityGraph, IdentityMapping } from '../domain/identity.js';
+import type { IdentityGraph, IdentityMapping, IdentityMentionLike } from '../domain/identity.js';
 import { RATING_DISPLAY_LABELS } from '../../src/shared/researchVocabulary.js';
 import type { OpinionRecord, ReportOverview, SecurityEntity, SourceEvidence } from '../domain/research.js';
 import type { MentionRecord, ReviewedReport, SignalRecord, StatementRecord, ReviewClaim, ReviewPriceValue } from '../domain/review.js';
@@ -105,7 +105,7 @@ export async function loadReviewProjection(reports: ReportDocument[], sourceDir:
   const state=await store.read();
   const output: ReviewProjection={reports:[],opinions:[],mentions:[],signals:[],facts:[],factRefs:{},overviewSignals:{},overviewSummaries:{},entities:new Map(),states:{},fingerprint:''};
   const keepFacts = Boolean(storeOverride) || process.env.REVIEW_KEEP_FACTS === 'true';
-  const identityInputs: Array<MentionRecord & { reportId: string; date?: string }> = [];
+  const identityInputs: Array<IdentityMentionLike & { reportId: string; date?: string }> = [];
   const statementMentions = new Map<string, string>();
   for (const report of reports) {
     const hash=contentHash(report.markdown);
@@ -148,21 +148,32 @@ export async function loadReviewProjection(reports: ReportDocument[], sourceDir:
     output.overviewSignals[id]=reportSignals;
     output.overviewSummaries[id]=reportSummaries;
     for(const record of activeRecords){
-      if(record.kind==='mention') identityInputs.push({...record,reportId:id,date:published.date});
+      if(record.kind==='mention') identityInputs.push({
+        id:record.id, reportId:id, date:published.date,
+        articleRef:record.articleRef, evidenceIDs:record.evidenceIDs,
+        payload:{articleRef:record.payload.articleRef,rawName:record.payload.rawName,rawCode:record.payload.rawCode,roles:record.payload.roles,nameEvidenceIDs:record.payload.nameEvidenceIDs,rawIdentifiers:record.payload.rawIdentifiers,resolution:record.payload.resolution},
+      });
       if(record.kind==='statement') statementMentions.set(record.id,record.payload.subject.mentionRef??'');
     }
     info.publishedSourceHash=selected.sourceHash;info.issueCount=saved.result.issues.length;
     for(const opinion of projection.opinions)output.entities.set(opinion.security.key,opinion.security);
   }
   if (identityInputs.length) {
-    const resolved = await createIdentityStore(path.join(store.directory, 'identities')).resolveMentions(identityInputs);
-    output.identityGraph = resolved.identityGraph; output.identityMapping = resolved.mapping;
+    const identityStore = createIdentityStore(path.join(store.directory, 'identities'));
+    let identityGraph: IdentityGraph | undefined;
+    const identityMapping: Record<string, IdentityMapping> = {};
+    for (let offset = 0; offset < identityInputs.length; offset += 500) {
+      const resolved = await identityStore.resolveMentions(identityInputs.slice(offset, offset + 500));
+      identityGraph = resolved.identityGraph;
+      Object.assign(identityMapping, resolved.mapping);
+    }
+    output.identityGraph = identityGraph; output.identityMapping = identityMapping;
     output.opinions = output.opinions.filter(opinion => {
-      const identity = resolved.mapping[statementMentions.get(opinion.id) ?? ''];
+      const identity = identityMapping[statementMentions.get(opinion.id) ?? ''];
       if (!identity) return false;
       if (identity.status === 'conflict' || identity.status === 'ambiguous') return false;
-      const standardSecurity=resolved.identityGraph.securities.find(s=>s.securityId===identity.securityId);
-      const standardCompany=resolved.identityGraph.organizations.find(o=>o.organizationId===identity.organizationId);
+      const standardSecurity=identityGraph?.securities.find(s=>s.securityId===identity.securityId);
+      const standardCompany=identityGraph?.organizations.find(o=>o.organizationId===identity.organizationId);
       const displayName=standardSecurity?.displayName??(standardCompany?.verificationState==='verified'?standardCompany.canonicalName:opinion.security.displayName);
       opinion.security = { ...opinion.security, displayName, aliases:[...new Set([...opinion.security.aliases,displayName,...(standardSecurity?.aliases??[]),...(standardCompany?.aliases??[])])], organizationId: identity.organizationId ?? undefined, securityId: identity.securityId ?? undefined, listingId: identity.listingId ?? undefined,
         key: identity.securityId ?? (identity.organizationId ? `organization:${identity.organizationId}` : opinion.security.key), code: identity.resolvedCode,
