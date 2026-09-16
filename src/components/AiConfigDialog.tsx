@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { KeyRound, X } from 'lucide-react';
 import { apiGet, apiPost, apiPut } from '@/lib/api';
-import { buildAiConfigInput, type AiConfigFormValues } from '@/lib/aiConfigForm';
+import { buildAiConfigInput, DEFAULT_AI_REVIEW_CONFIG, normalizeAiReviewConfig, type AiConfigFormValues } from '@/lib/aiConfigForm';
 import { configIdentity, createConfigDrafts } from '@/lib/aiConfigDrafts';
 import { aiConfigRequest } from '@/lib/aiConfigRequest';
 import type { AiProviderPreset, AiStatus, AiSavedProfile } from '@/types';
@@ -55,8 +55,15 @@ export function AiConfigDialog(props: Props) {
 }
 
 function ConfigEditor({ open, status, onClose, onSaved, initialAdminToken, onSettings }: Props & { initialAdminToken: string; onSettings: (settings: AiStatus) => void }) {
-  const [form, setForm] = useState<AiConfigFormValues>(() => ({ providerId: status?.providerId ?? 'custom', providerName: status?.providerName ?? '', baseUrl: status?.baseUrl ?? '', model: status?.model ?? '', apiKey: '' }));
-  const { providerId, providerName, baseUrl, model, apiKey } = form;
+  const [form, setForm] = useState<AiConfigFormValues>(() => ({
+    providerId: status?.providerId ?? 'custom',
+    providerName: status?.providerName ?? '',
+    baseUrl: status?.baseUrl ?? '',
+    model: status?.model ?? '',
+    apiKey: '',
+    ...normalizeAiReviewConfig(status ?? DEFAULT_AI_REVIEW_CONFIG),
+  }));
+  const { providerId, providerName, baseUrl, model, apiKey, reviewTimeoutMs, reviewMaxTokens, reviewThinking } = form;
   const drafts = useRef(createConfigDrafts());
   const [adminToken, setAdminToken] = useState(initialAdminToken);
   const [busy, setBusy] = useState<'test' | 'save' | 'switch' | ''>('');
@@ -69,13 +76,24 @@ function ConfigEditor({ open, status, onClose, onSaved, initialAdminToken, onSet
   const headers = { 'X-AI-Admin-Token': adminToken };
   const matchingProfile = status?.profiles?.find(profile => configIdentity(profile) === configIdentity(form));
   function selectProfile(profile: AiSavedProfile) {
-    setForm(drafts.current.select(form, { providerId: profile.providerId, providerName: profile.providerName, baseUrl: profile.baseUrl, model: profile.model, apiKey: '' })); setMessage('');
+    setForm(drafts.current.select(form, {
+      providerId: profile.providerId,
+      providerName: profile.providerName,
+      baseUrl: profile.baseUrl,
+      model: profile.model,
+      apiKey: '',
+      ...normalizeAiReviewConfig(profile),
+    })); setMessage('');
   }
 
   function selectProvider(provider: AiProviderPreset) {
     if (provider.id === providerId) return;
-    setForm(drafts.current.provider(form, provider, status?.profiles ?? []));
+    const next = drafts.current.provider(form, provider, status?.profiles ?? []);
+    setForm({ ...next, ...normalizeAiReviewConfig(next) });
     setMessage('');
+  }
+  function changeReview(patch: Partial<Pick<AiConfigFormValues, 'reviewTimeoutMs' | 'reviewMaxTokens' | 'reviewThinking'>>) {
+    setForm({ ...form, ...patch }); setMessage('');
   }
   function changeIdentity(patch: Partial<Pick<AiConfigFormValues, 'baseUrl' | 'model'>>) {
     setForm(drafts.current.select(form, { ...form, ...patch, apiKey: '' })); setMessage('');
@@ -113,7 +131,7 @@ function ConfigEditor({ open, status, onClose, onSaved, initialAdminToken, onSet
     <div className="fixed inset-0 z-[120] flex items-end justify-center bg-slate-950/45 p-0 backdrop-blur-sm sm:items-center sm:p-5" role="dialog" aria-modal="true" aria-label="研究助手全局配置">
       <div className="max-h-[92vh] w-full overflow-auto rounded-t-3xl bg-white p-5 shadow-2xl sm:max-w-2xl sm:rounded-3xl sm:p-6">
         <fieldset disabled={Boolean(busy)} className="contents">
-        <div className="flex items-start justify-between gap-4"><div><div className="flex items-center gap-2 text-sm font-semibold text-blue-700"><KeyRound className="h-4 w-4" />服务器级全局配置</div><h2 className="mt-2 text-2xl font-semibold text-slate-950">配置研究助手</h2><p className="mt-2 text-sm leading-6 text-slate-500">保存后所有访问者共享 AI 能力；聊天历史仍只保存在各自浏览器。</p></div><button onClick={onClose} className="min-h-11 min-w-11 rounded-full bg-slate-100 p-3" aria-label="关闭配置窗口"><X className="h-5 w-5" /></button></div>
+        <div className="flex items-start justify-between gap-4"><div><div className="flex items-center gap-2 text-sm font-semibold text-blue-700"><KeyRound className="h-4 w-4" />服务器级全局配置</div><h2 className="mt-2 text-2xl font-semibold text-slate-950">配置研究助手</h2><p className="mt-2 text-sm leading-6 text-slate-500">保存后所有访问者共享 AI 能力；聊天历史仍只保存在各自浏览器。</p><p className="mt-1 text-sm leading-6 text-blue-700">报告自动整理固定使用 DeepSeek；这里切换的全站模型用于助手对话和连接测试。</p></div><button onClick={onClose} className="min-h-11 min-w-11 rounded-full bg-slate-100 p-3" aria-label="关闭配置窗口"><X className="h-5 w-5" /></button></div>
         <div className="mt-6">
           {status?.profiles?.length ? <label className="mb-5 block text-sm text-slate-600">已保存的配置<select aria-label="已保存的配置" value={matchingProfile?.id ?? ''} onChange={event => { const profile = status.profiles?.find(item => item.id === event.target.value); if (profile) selectProfile(profile); }} className="mt-2 min-h-11 w-full rounded-xl border border-slate-200 bg-white px-3"><option value="" disabled>新配置</option>{status.profiles.map(profile => <option key={profile.id} value={profile.id}>{profile.providerName} · {profile.model} · {profile.baseUrl}{profile.id === status.activeProfileId ? '（正在使用）' : ''}</option>)}</select></label> : null}
           <div className="mb-2 text-xs font-semibold text-slate-600">服务商</div>
@@ -137,6 +155,10 @@ function ConfigEditor({ open, status, onClose, onSaved, initialAdminToken, onSet
           <Field label="模型"><><input list={`provider-models-${providerId}`} value={model} onChange={(e) => changeIdentity({ model: e.target.value })} placeholder={selectedPreset?.defaultModel || '输入模型名称'} /><datalist id={`provider-models-${providerId}`}>{selectedPreset?.models.map((modelName) => <option key={modelName} value={modelName} />)}</datalist></></Field>
           <Field label="API 基础地址" wide><input value={baseUrl} onChange={(e) => changeIdentity({ baseUrl: e.target.value })} placeholder="https://api.openai.com/v1" /></Field>
           <Field label={`API Key ${apiKey ? '（新输入，尚未保存）' : matchingProfile?.apiKeyMask ? `（此配置已保存 ${matchingProfile.apiKeyMask}）` : '（新配置需填写）'}`} wide><input type="password" value={apiKey} onChange={(e) => setForm({ ...form, apiKey: e.target.value })} placeholder={matchingProfile ? '留空保留此配置的 Key' : '输入此配置专用的 API Key'} autoComplete="new-password" /></Field>
+          <Field label="复核超时（毫秒）"><input type="number" min={3_000} max={180_000} step={1_000} value={reviewTimeoutMs ?? DEFAULT_AI_REVIEW_CONFIG.reviewTimeoutMs} onChange={(e) => changeReview({ reviewTimeoutMs: Number(e.target.value) })} /></Field>
+          <Field label="复核最大输出 Tokens"><input type="number" min={1_000} max={16_000} step={100} value={reviewMaxTokens ?? DEFAULT_AI_REVIEW_CONFIG.reviewMaxTokens} onChange={(e) => changeReview({ reviewMaxTokens: Number(e.target.value) })} /></Field>
+          <Field label="复核推理模式"><select value={reviewThinking ?? DEFAULT_AI_REVIEW_CONFIG.reviewThinking} onChange={(e) => changeReview({ reviewThinking: e.target.value as AiConfigFormValues['reviewThinking'] })} className="min-h-11 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm outline-none focus:border-blue-400"><option value="disabled">关闭</option><option value="low">低强度</option></select></Field>
+          <p className="text-xs leading-5 text-slate-500 sm:col-span-2">复核参数按每套模型配置独立保存；超时范围 3,000–180,000 毫秒，最大输出范围 1,000–16,000 Tokens。</p>
           <p className="text-xs text-slate-500 sm:col-span-2">各配置独立保存 Key。切换服务商会保留本次未保存输入；请分别保存，关闭窗口后未保存输入会清除。切换全站模型不需要重新填写 Key。</p>
           <Field label="管理员密码" wide><input type="password" value={adminToken} onChange={(e) => setAdminToken(e.target.value)} placeholder="输入网站管理员密码" autoComplete="current-password" /></Field>
           <p className="-mt-2 text-xs leading-5 text-slate-500 sm:col-span-2">仅在测试、保存或修改全站 AI 配置时需要；普通访客使用研究助手无需填写。</p>

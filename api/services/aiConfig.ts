@@ -20,9 +20,12 @@ export type AiConfigInput = {
   timeoutMs?: number;
   dailyTokenBudget?: number;
   maxConcurrency?: number;
+  reviewTimeoutMs?: number;
+  reviewMaxTokens?: number;
+  reviewThinking?: 'disabled' | 'low';
 };
 
-export type ResolvedAiConfig = Required<Omit<AiConfigInput, 'providerId'>> & { providerId: AiProviderId };
+export type ResolvedAiConfig = Required<Omit<AiConfigInput, 'providerId' | 'reviewTimeoutMs' | 'reviewMaxTokens' | 'reviewThinking'>> & Pick<AiConfigInput, 'reviewTimeoutMs' | 'reviewMaxTokens' | 'reviewThinking'> & { providerId: AiProviderId };
 
 type StoredAiConfig = Omit<ResolvedAiConfig, 'apiKey'> & {
   apiKeyEncrypted: EncryptedValue;
@@ -30,7 +33,7 @@ type StoredAiConfig = Omit<ResolvedAiConfig, 'apiKey'> & {
   updatedAt: string;
 };
 type ConfigFile = { version: 2; activeProfileId: string; profiles: StoredAiConfig[] };
-function profileId(config: Pick<ResolvedAiConfig, 'providerId' | 'baseUrl' | 'model'>) {
+export function profileId(config: Pick<ResolvedAiConfig, 'providerId' | 'baseUrl' | 'model'>) {
   return createHash('sha256').update(JSON.stringify([config.providerId, normalizeBaseUrl(config.baseUrl), config.model.trim()])).digest('hex');
 }
 
@@ -84,6 +87,9 @@ export function createAiConfigStore(options: AiConfigStoreOptions = {}) {
       timeoutMs: numberValue(env.AI_TIMEOUT_MS, stored?.timeoutMs, 45_000, 3_000, 180_000),
       dailyTokenBudget: numberValue(env.AI_DAILY_TOKEN_BUDGET, stored?.dailyTokenBudget, 500_000, 1_000, 50_000_000),
       maxConcurrency: numberValue(env.AI_MAX_CONCURRENCY, stored?.maxConcurrency, 2, 1, 20),
+      reviewTimeoutMs: numberValue(undefined, stored?.reviewTimeoutMs, 120_000, 3_000, 180_000),
+      reviewMaxTokens: numberValue(undefined, stored?.reviewMaxTokens, 8_000, 1_000, 16_000),
+      reviewThinking: stored?.reviewThinking ?? (providerId === 'openrouter' ? 'low' : 'disabled'),
     };
   }
 
@@ -101,11 +107,14 @@ export function createAiConfigStore(options: AiConfigStoreOptions = {}) {
       timeoutMs: config?.timeoutMs ?? 45_000,
       dailyTokenBudget: config?.dailyTokenBudget ?? 500_000,
       maxConcurrency: config?.maxConcurrency ?? 2,
+      reviewTimeoutMs: config?.reviewTimeoutMs ?? 120_000,
+      reviewMaxTokens: config?.reviewMaxTokens ?? 8_000,
+      reviewThinking: config?.reviewThinking ?? 'disabled',
       canPersist: Boolean(secret),
       adminProtected: Boolean(adminToken),
       providerPresets: AI_PROVIDER_PRESETS,
       overriddenFields: ['AI_PROVIDER_ID', 'AI_PROVIDER_NAME', 'AI_BASE_URL', 'AI_MODEL', 'AI_API_KEY'].filter(key => Boolean(env[key])),
-      profiles: (file?.profiles ?? []).map(profile => ({ id: profileId(profile), providerId: profile.providerId, providerName: profile.providerName, baseUrl: profile.baseUrl, model: profile.model, apiKeyMask: `••••${profile.apiKeyTail}` })),
+      profiles: (file?.profiles ?? []).map(profile => ({ id: profileId(profile), providerId: profile.providerId, providerName: profile.providerName, baseUrl: profile.baseUrl, model: profile.model, reviewTimeoutMs: profile.reviewTimeoutMs ?? 120_000, reviewMaxTokens: profile.reviewMaxTokens ?? 8_000, reviewThinking: profile.reviewThinking ?? (profile.providerId === 'openrouter' ? 'low' : 'disabled'), apiKeyMask: `••••${profile.apiKeyTail}` })),
       activeProfileId: file?.activeProfileId ?? null,
     };
   }
@@ -129,6 +138,9 @@ export function createAiConfigStore(options: AiConfigStoreOptions = {}) {
       timeoutMs: candidate.timeoutMs,
       dailyTokenBudget: candidate.dailyTokenBudget,
       maxConcurrency: candidate.maxConcurrency,
+      reviewTimeoutMs: candidate.reviewTimeoutMs,
+      reviewMaxTokens: candidate.reviewMaxTokens,
+      reviewThinking: candidate.reviewThinking,
       updatedAt: new Date().toISOString(),
     };
     const previous = await readFile();
@@ -166,6 +178,7 @@ export function createAiConfigStore(options: AiConfigStoreOptions = {}) {
 
   async function preview(input: AiConfigInput, token: string): Promise<ResolvedAiConfig> {
     assertAdminToken(token, adminToken);
+    if (input.reviewThinking !== undefined && !['disabled', 'low'].includes(input.reviewThinking)) throw new Error('AI_CONFIG_INVALID');
     const existing = await resolve();
     const providerId = normalizeProviderId(input.providerId || inferAiProviderId(input.baseUrl, input.providerName));
     const preset = getAiProviderPreset(providerId);
@@ -187,10 +200,53 @@ export function createAiConfigStore(options: AiConfigStoreOptions = {}) {
       timeoutMs: numberValue(input.timeoutMs, existing?.timeoutMs, 45_000, 3_000, 180_000),
       dailyTokenBudget: numberValue(input.dailyTokenBudget, existing?.dailyTokenBudget, 500_000, 1_000, 50_000_000),
       maxConcurrency: numberValue(input.maxConcurrency, existing?.maxConcurrency, 2, 1, 20),
+      reviewTimeoutMs: numberValue(input.reviewTimeoutMs, saved?.reviewTimeoutMs, 120_000, 3_000, 180_000),
+      reviewMaxTokens: numberValue(input.reviewMaxTokens, saved?.reviewMaxTokens, 8_000, 1_000, 16_000),
+      reviewThinking: input.reviewThinking ?? saved?.reviewThinking ?? (providerId === 'openrouter' ? 'low' : 'disabled'),
     };
   }
 
-  return { getPublic, resolve, preview, save, activate };
+  async function resolveProfile(id: string): Promise<ResolvedAiConfig | null> {
+    const current = await resolve();
+    if (current && profileId(current) === id) return current;
+    const stored = (await readFile())?.profiles.find(item => profileId(item) === id);
+    if (!stored || !secret) return null;
+    return {
+      providerId: stored.providerId, providerName: stored.providerName,
+      baseUrl: stored.baseUrl, model: stored.model,
+      apiKey: decryptSecret(stored.apiKeyEncrypted, secret),
+      timeoutMs: current?.timeoutMs ?? stored.timeoutMs,
+      dailyTokenBudget: current?.dailyTokenBudget ?? stored.dailyTokenBudget,
+      maxConcurrency: current?.maxConcurrency ?? stored.maxConcurrency,
+      reviewTimeoutMs: stored.reviewTimeoutMs, reviewMaxTokens: stored.reviewMaxTokens,
+      reviewThinking: stored.reviewThinking,
+    };
+  }
+  /** Resolve an automated-review provider without changing the website's selection. */
+  async function resolveProvider(providerId: AiProviderId): Promise<ResolvedAiConfig | null> {
+    const file = await readFile();
+    const matches = (file?.profiles ?? []).filter(profile => profile.providerId === providerId);
+    const stored = matches.find(profile => profileId(profile) === file?.activeProfileId)
+      ?? matches.slice().sort((left, right) => String(right.updatedAt ?? '').localeCompare(String(left.updatedAt ?? '')))[0];
+    if (stored && secret) {
+      // Keep shared operational limits from the currently effective config,
+      // while using this provider's own credentials and review settings.
+      const current = await resolve();
+      return {
+        providerId: stored.providerId, providerName: stored.providerName,
+        baseUrl: stored.baseUrl, model: stored.model,
+        apiKey: decryptSecret(stored.apiKeyEncrypted, secret),
+        timeoutMs: current?.timeoutMs ?? stored.timeoutMs,
+        dailyTokenBudget: current?.dailyTokenBudget ?? stored.dailyTokenBudget,
+        maxConcurrency: current?.maxConcurrency ?? stored.maxConcurrency,
+        reviewTimeoutMs: stored.reviewTimeoutMs, reviewMaxTokens: stored.reviewMaxTokens,
+        reviewThinking: stored.reviewThinking,
+      };
+    }
+    const environment = await resolve();
+    return environment?.providerId === providerId ? environment : null;
+  }
+  return { getPublic, resolve, resolveProfile, resolveProvider, preview, save, activate };
 }
 
 function normalizeProviderId(value: string): AiProviderId {

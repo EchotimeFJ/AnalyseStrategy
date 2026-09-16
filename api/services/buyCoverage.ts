@@ -10,7 +10,7 @@ export function isExplicitBuy(opinion: OpinionRecord) {
 // Every literal reference has a visible destination, even when parsing is unsure.
 export function getBuyCoverage(report: ReportDocument, opinions: OpinionRecord[]): BuyCoverage {
   const buys = opinions.filter(isExplicitBuy);
-  const result: BuyCoverage = { references: 0, covered: 0, companyCount: new Set(buys.map((opinion) => opinion.sourceName ?? opinion.security.displayName)).size, review: [], other: [] };
+  const result: BuyCoverage = { references: 0, covered: 0, companyCount: new Set(buys.map((opinion) => opinion.security.organizationId ?? opinion.sourceName ?? opinion.security.displayName)).size, review: [], other: [] };
   let fenced = false;
   report.lines.forEach((line, index) => {
     if (/^\s*(?:```|~~~)/.test(line)) { fenced = !fenced; return; }

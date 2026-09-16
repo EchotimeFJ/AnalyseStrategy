@@ -6,9 +6,10 @@ import type { GroupedSearchResponse, RawSearchResponse, SearchHit } from '@/type
 import { Layout, PageHeader } from '@/components/Layout';
 import { Badge, EmptyState, ErrorBlock, LoadingBlock, Panel } from '@/components/ui';
 import { buildReportLink, searchHitHighlightTerms } from '@/lib/reportLinks';
+import { RATING_LABELS, RATING_DISPLAY_LABELS } from '@/shared/researchVocabulary';
 import { compactSearchParams } from '@/lib/searchParams';
 
-const ratingShortcuts = ['买入', '增持', '中性', '持有', '减持', '卖出'];
+const ratingShortcuts = RATING_LABELS.filter(label => label !== 'other').map(label => RATING_DISPLAY_LABELS[label]);
 
 export default function SearchPage() {
   const [params, setParams] = useSearchParams();
@@ -40,8 +41,8 @@ export default function SearchPage() {
     setResult(null);
     try {
       const searchParams = { ...(paging && lastSearch ? lastSearch : { q: value, mode: nextMode, from, to, institution: params.get('institution') ?? undefined, raw: nextStrict ? 'true' : undefined }), paginated: 'true', limit: '100', offset: String(offset) };
-      const data = await apiGet<GroupedSearchResponse | RawSearchResponse>(`/api/search${queryString(searchParams)}`);
-      setLastSearch(searchParams);
+      const data = await apiGet<(GroupedSearchResponse | RawSearchResponse) & { publicationId?: string }>(`/api/search${queryString(searchParams)}`);
+      setLastSearch({ ...searchParams, publicationId: data.publicationId });
       setResult(data);
       setParams(compactSearchParams(searchParams));
     } catch (reason) {
@@ -117,7 +118,7 @@ function GroupedResults({ result, query, mode }: { result: GroupedSearchResponse
           <article key={group.reportId} className="rounded-2xl border border-slate-200 bg-white p-4">
             <div className="flex flex-wrap items-center gap-2"><Badge tone="amber">{group.date}</Badge>{group.institutions.map((institution) => <Badge key={institution} tone="blue">{institution}</Badge>)}<span className="text-xs text-slate-400">{group.matchCount} 处命中</span></div>
             <div className="mt-3 space-y-2">{group.snippets.map((snippet) => (
-              <Link key={snippet.startLine} to={buildReportLink({ reportId: group.reportId, lineNumber: snippet.startLine, highlightTerms: [query] })} className="block rounded-xl bg-slate-50 p-3 text-sm leading-7 text-slate-700 transition hover:bg-blue-50">{cleanSnippet(snippet.text)}<span className="ml-2 whitespace-nowrap text-xs font-semibold text-blue-700">第 {snippet.startLine} 行</span></Link>
+              <Link key={snippet.startLine} to={buildReportLink({ reportId: group.reportId, sourceHash: group.sourceHash, lineNumber: snippet.startLine, highlightTerms: [query] })} className="block rounded-xl bg-slate-50 p-3 text-sm leading-7 text-slate-700 transition hover:bg-blue-50">{cleanSnippet(snippet.text)}<span className="ml-2 whitespace-nowrap text-xs font-semibold text-blue-700">第 {snippet.startLine} 行</span></Link>
             ))}</div>
           </article>
         ))}</div> : <EmptyState title="暂无结果" description="尝试缩短关键词、换用公司代码，或取消日期范围。" />}
@@ -130,7 +131,7 @@ function RawResults({ hits, query }: { hits: SearchHit[]; query: string }) {
   return (
     <Panel title={`本页严格原文结果 ${hits.length} 条`} eyebrow="Raw source">
       {hits.length ? <div className="space-y-3">{hits.map((hit, index) => (
-        <Link key={`${hit.reportId}-${hit.lineNumber}-${index}`} to={buildReportLink({ reportId: hit.reportId, lineNumber: hit.lineNumber, highlightTerms: searchHitHighlightTerms({ matchedText: hit.matchedText, query }) })} className="block rounded-2xl border border-slate-200 p-4 transition hover:border-blue-300">
+        <Link key={`${hit.reportId}-${hit.lineNumber}-${index}`} to={buildReportLink({ reportId: hit.reportId, sourceHash: hit.sourceHash, lineNumber: hit.lineNumber, highlightTerms: searchHitHighlightTerms({ matchedText: hit.matchedText, query }) })} className="block rounded-2xl border border-slate-200 p-4 transition hover:border-blue-300">
           <div className="flex flex-wrap gap-2"><Badge tone="amber">{hit.date}</Badge><Badge tone="blue">{hit.institution}</Badge><Badge tone="slate">第 {hit.lineNumber} 行</Badge></div>
           <p className="mt-3 text-sm leading-7 text-slate-700">{cleanSnippet(hit.snippet)}</p>
         </Link>

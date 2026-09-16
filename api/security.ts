@@ -39,11 +39,16 @@ export const validateQuery: RequestHandler = (req, res, next) => {
 
 // Apply to all public JSON, including pre-compressed cached responses. Paths are
 // operational metadata, never report content. Keep the internal index intact.
-const privateFields = new Set(['sourceDir', 'filePath', 'strategyDir', 'stdout', 'stderr', 'apiKeyMask', 'baseUrl', 'timeoutMs', 'dailyTokenBudget', 'maxConcurrency', 'canPersist', 'adminProtected', 'providerPresets', 'overriddenFields', 'profiles', 'activeProfileId', 'usage']);
+const privateFields = new Set(['sourceDir', 'filePath', 'strategyDir', 'stdout', 'stderr', 'apiKeyMask', 'baseUrl', 'timeoutMs', 'dailyTokenBudget', 'maxConcurrency', 'canPersist', 'adminProtected', 'providerPresets', 'overriddenFields', 'profiles', 'activeProfileId', 'reviewTimeoutMs', 'reviewMaxTokens', 'reviewThinking', 'usage']);
 export function publicJsonReplacer(key: string, value: unknown): unknown {
-  return privateFields.has(key) ? undefined : value;
+  return privateFields.has(key) ? undefined : key === 'model' ? publicModelName(value) : value;
 }
 
 export function publicData<T>(value: T): T {
   return JSON.parse(JSON.stringify(value, publicJsonReplacer)) as T;
+}
+
+export function publicModelName(value: unknown): string | undefined {
+  if (typeof value !== 'string' || value.length > 160 || !/^[A-Za-z0-9][A-Za-z0-9._:/-]*$/.test(value) || /:\/\/|^sk-|^Bearer|(?:^|\/)Users\/|\.\./i.test(value)) return undefined;
+  return value;
 }

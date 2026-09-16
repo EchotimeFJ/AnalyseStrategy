@@ -1,0 +1,648 @@
+{
+  "schemaVersion": "1.0.0",
+  "reportRevisionRef": "example-source-sha256:7498849104c2cb829d1e1bd20fc670b1bc2a8c50e7d47995aa1b129940735a56",
+  "coverage": [
+    {
+      "range": {
+        "startLine": 223,
+        "endLine": 223
+      },
+      "state": "processed",
+      "articleRefs": [
+        "a-1"
+      ],
+      "note": "Only the actual line223 excerpt is included in this format example; not a complete report extraction."
+    }
+  ],
+  "articles": [
+    {
+      "localId": "a-1",
+      "title": "野村证券核心推荐股票",
+      "summary": {
+        "state": "not_stated",
+        "value": null,
+        "evidenceRefs": []
+      },
+      "titleOrigin": "source",
+      "titleEvidenceRefs": [
+        "e-header"
+      ],
+      "ranges": [
+        {
+          "startLine": 223,
+          "endLine": 223
+        }
+      ],
+      "articleKind": "industry",
+      "publisher": {
+        "state": "stated",
+        "value": "野村证券",
+        "evidenceRefs": [
+          "e-institution"
+        ]
+      },
+      "articleDate": {
+        "state": "not_stated",
+        "value": null,
+        "evidenceRefs": []
+      },
+      "mainMentionRefs": [
+        "m-1",
+        "m-2",
+        "m-3",
+        "m-4"
+      ],
+      "topicRefs": []
+    }
+  ],
+  "evidence": [
+    {
+      "localId": "e-header",
+      "quote": "==野村证券核心推荐股票（评级均为“买入”）：==",
+      "range": {
+        "startLine": 223,
+        "endLine": 223
+      }
+    },
+    {
+      "localId": "e-institution",
+      "quote": "野村证券",
+      "range": {
+        "startLine": 223,
+        "endLine": 223
+      }
+    },
+    {
+      "localId": "e-subject-1",
+      "quote": "中际旭创（300308 CH，目标价 1,375.00 港元）",
+      "range": {
+        "startLine": 223,
+        "endLine": 223
+      }
+    },
+    {
+      "localId": "e-price-1",
+      "quote": "目标价 1,375.00 港元",
+      "range": {
+        "startLine": 223,
+        "endLine": 223
+      }
+    },
+    {
+      "localId": "e-subject-2",
+      "quote": "光迅科技（002281 CH，目标价 217.50 元）",
+      "range": {
+        "startLine": 223,
+        "endLine": 223
+      }
+    },
+    {
+      "localId": "e-price-2",
+      "quote": "目标价 217.50 元",
+      "range": {
+        "startLine": 223,
+        "endLine": 223
+      }
+    },
+    {
+      "localId": "e-subject-3",
+      "quote": "天孚通信（300394 CH，目标价 282.00 元）",
+      "range": {
+        "startLine": 223,
+        "endLine": 223
+      }
+    },
+    {
+      "localId": "e-price-3",
+      "quote": "目标价 282.00 元",
+      "range": {
+        "startLine": 223,
+        "endLine": 223
+      }
+    },
+    {
+      "localId": "e-subject-4",
+      "quote": "太辰光（300570 CH，目标价 231.50 元）",
+      "range": {
+        "startLine": 223,
+        "endLine": 223
+      }
+    },
+    {
+      "localId": "e-price-4",
+      "quote": "目标价 231.50 元",
+      "range": {
+        "startLine": 223,
+        "endLine": 223
+      }
+    }
+  ],
+  "mentions": [
+    {
+      "localId": "m-1",
+      "articleRef": "a-1",
+      "rawName": "中际旭创",
+      "roles": [
+        "recommended_target"
+      ],
+      "nameEvidenceRefs": [
+        "e-subject-1"
+      ],
+      "rawIdentifiers": [
+        {
+          "text": "300308 CH",
+          "interpretation": "ticker",
+          "evidenceRefs": [
+            "e-subject-1"
+          ]
+        }
+      ]
+    },
+    {
+      "localId": "m-2",
+      "articleRef": "a-1",
+      "rawName": "光迅科技",
+      "roles": [
+        "recommended_target"
+      ],
+      "nameEvidenceRefs": [
+        "e-subject-2"
+      ],
+      "rawIdentifiers": [
+        {
+          "text": "002281 CH",
+          "interpretation": "ticker",
+          "evidenceRefs": [
+            "e-subject-2"
+          ]
+        }
+      ]
+    },
+    {
+      "localId": "m-3",
+      "articleRef": "a-1",
+      "rawName": "天孚通信",
+      "roles": [
+        "recommended_target"
+      ],
+      "nameEvidenceRefs": [
+        "e-subject-3"
+      ],
+      "rawIdentifiers": [
+        {
+          "text": "300394 CH",
+          "interpretation": "ticker",
+          "evidenceRefs": [
+            "e-subject-3"
+          ]
+        }
+      ]
+    },
+    {
+      "localId": "m-4",
+      "articleRef": "a-1",
+      "rawName": "太辰光",
+      "roles": [
+        "recommended_target"
+      ],
+      "nameEvidenceRefs": [
+        "e-subject-4"
+      ],
+      "rawIdentifiers": [
+        {
+          "text": "300570 CH",
+          "interpretation": "ticker",
+          "evidenceRefs": [
+            "e-subject-4"
+          ]
+        }
+      ]
+    }
+  ],
+  "topics": [],
+  "statements": [
+    {
+      "localId": "s-1",
+      "articleRef": "a-1",
+      "attribution": {
+        "kind": "article_publisher",
+        "name": null,
+        "evidenceRefs": [
+          "e-institution"
+        ]
+      },
+      "subject": {
+        "scope": "listing",
+        "mentionRefs": [
+          "m-1"
+        ],
+        "topicLabel": null,
+        "evidenceRefs": [
+          "e-subject-1"
+        ]
+      },
+      "asOf": {
+        "state": "not_stated",
+        "value": null,
+        "evidenceRefs": []
+      },
+      "polarity": "affirmative",
+      "modality": "actual",
+      "temporalContext": "current",
+      "conditionText": null,
+      "rating": {
+        "state": "stated",
+        "value": {
+          "rawLabel": "买入",
+          "coverage": "rated",
+          "normalizedLabel": "buy",
+          "scaleRef": null,
+          "benchmarkText": null,
+          "horizonText": null,
+          "basis": "unknown"
+        },
+        "evidenceRefs": [
+          "e-header"
+        ]
+      },
+      "recommendation": {
+        "state": "not_stated",
+        "value": null,
+        "evidenceRefs": []
+      },
+      "ratingAction": {
+        "state": "not_stated",
+        "value": null,
+        "evidenceRefs": []
+      },
+      "priorRating": {
+        "state": "not_stated",
+        "value": null,
+        "evidenceRefs": []
+      },
+      "targetPrice": {
+        "state": "stated",
+        "value": {
+          "rawText": "目标价 1,375.00 港元",
+          "currency": "HKD",
+          "unit": "unknown",
+          "unitText": null,
+          "horizonText": null,
+          "shape": "point",
+          "amount": "1375.00",
+          "lower": null,
+          "upper": null
+        },
+        "evidenceRefs": [
+          "e-price-1"
+        ]
+      },
+      "targetPriceAction": {
+        "state": "not_stated",
+        "value": null,
+        "evidenceRefs": []
+      },
+      "priorTargetPrice": {
+        "state": "not_stated",
+        "value": null,
+        "evidenceRefs": []
+      },
+      "currentPrice": {
+        "state": "not_stated",
+        "value": null,
+        "evidenceRefs": []
+      },
+      "rationale": {
+        "state": "not_stated",
+        "value": null,
+        "evidenceRefs": []
+      },
+      "sharedScopeId": "scope-1"
+    },
+    {
+      "localId": "s-2",
+      "articleRef": "a-1",
+      "attribution": {
+        "kind": "article_publisher",
+        "name": null,
+        "evidenceRefs": [
+          "e-institution"
+        ]
+      },
+      "subject": {
+        "scope": "listing",
+        "mentionRefs": [
+          "m-2"
+        ],
+        "topicLabel": null,
+        "evidenceRefs": [
+          "e-subject-2"
+        ]
+      },
+      "asOf": {
+        "state": "not_stated",
+        "value": null,
+        "evidenceRefs": []
+      },
+      "polarity": "affirmative",
+      "modality": "actual",
+      "temporalContext": "current",
+      "conditionText": null,
+      "rating": {
+        "state": "stated",
+        "value": {
+          "rawLabel": "买入",
+          "coverage": "rated",
+          "normalizedLabel": "buy",
+          "scaleRef": null,
+          "benchmarkText": null,
+          "horizonText": null,
+          "basis": "unknown"
+        },
+        "evidenceRefs": [
+          "e-header"
+        ]
+      },
+      "recommendation": {
+        "state": "not_stated",
+        "value": null,
+        "evidenceRefs": []
+      },
+      "ratingAction": {
+        "state": "not_stated",
+        "value": null,
+        "evidenceRefs": []
+      },
+      "priorRating": {
+        "state": "not_stated",
+        "value": null,
+        "evidenceRefs": []
+      },
+      "targetPrice": {
+        "state": "stated",
+        "value": {
+          "rawText": "目标价 217.50 元",
+          "currency": "CNY",
+          "unit": "unknown",
+          "unitText": null,
+          "horizonText": null,
+          "shape": "point",
+          "amount": "217.50",
+          "lower": null,
+          "upper": null
+        },
+        "evidenceRefs": [
+          "e-price-2"
+        ]
+      },
+      "targetPriceAction": {
+        "state": "not_stated",
+        "value": null,
+        "evidenceRefs": []
+      },
+      "priorTargetPrice": {
+        "state": "not_stated",
+        "value": null,
+        "evidenceRefs": []
+      },
+      "currentPrice": {
+        "state": "not_stated",
+        "value": null,
+        "evidenceRefs": []
+      },
+      "rationale": {
+        "state": "not_stated",
+        "value": null,
+        "evidenceRefs": []
+      },
+      "sharedScopeId": "scope-1"
+    },
+    {
+      "localId": "s-3",
+      "articleRef": "a-1",
+      "attribution": {
+        "kind": "article_publisher",
+        "name": null,
+        "evidenceRefs": [
+          "e-institution"
+        ]
+      },
+      "subject": {
+        "scope": "listing",
+        "mentionRefs": [
+          "m-3"
+        ],
+        "topicLabel": null,
+        "evidenceRefs": [
+          "e-subject-3"
+        ]
+      },
+      "asOf": {
+        "state": "not_stated",
+        "value": null,
+        "evidenceRefs": []
+      },
+      "polarity": "affirmative",
+      "modality": "actual",
+      "temporalContext": "current",
+      "conditionText": null,
+      "rating": {
+        "state": "stated",
+        "value": {
+          "rawLabel": "买入",
+          "coverage": "rated",
+          "normalizedLabel": "buy",
+          "scaleRef": null,
+          "benchmarkText": null,
+          "horizonText": null,
+          "basis": "unknown"
+        },
+        "evidenceRefs": [
+          "e-header"
+        ]
+      },
+      "recommendation": {
+        "state": "not_stated",
+        "value": null,
+        "evidenceRefs": []
+      },
+      "ratingAction": {
+        "state": "not_stated",
+        "value": null,
+        "evidenceRefs": []
+      },
+      "priorRating": {
+        "state": "not_stated",
+        "value": null,
+        "evidenceRefs": []
+      },
+      "targetPrice": {
+        "state": "stated",
+        "value": {
+          "rawText": "目标价 282.00 元",
+          "currency": "CNY",
+          "unit": "unknown",
+          "unitText": null,
+          "horizonText": null,
+          "shape": "point",
+          "amount": "282.00",
+          "lower": null,
+          "upper": null
+        },
+        "evidenceRefs": [
+          "e-price-3"
+        ]
+      },
+      "targetPriceAction": {
+        "state": "not_stated",
+        "value": null,
+        "evidenceRefs": []
+      },
+      "priorTargetPrice": {
+        "state": "not_stated",
+        "value": null,
+        "evidenceRefs": []
+      },
+      "currentPrice": {
+        "state": "not_stated",
+        "value": null,
+        "evidenceRefs": []
+      },
+      "rationale": {
+        "state": "not_stated",
+        "value": null,
+        "evidenceRefs": []
+      },
+      "sharedScopeId": "scope-1"
+    },
+    {
+      "localId": "s-4",
+      "articleRef": "a-1",
+      "attribution": {
+        "kind": "article_publisher",
+        "name": null,
+        "evidenceRefs": [
+          "e-institution"
+        ]
+      },
+      "subject": {
+        "scope": "listing",
+        "mentionRefs": [
+          "m-4"
+        ],
+        "topicLabel": null,
+        "evidenceRefs": [
+          "e-subject-4"
+        ]
+      },
+      "asOf": {
+        "state": "not_stated",
+        "value": null,
+        "evidenceRefs": []
+      },
+      "polarity": "affirmative",
+      "modality": "actual",
+      "temporalContext": "current",
+      "conditionText": null,
+      "rating": {
+        "state": "stated",
+        "value": {
+          "rawLabel": "买入",
+          "coverage": "rated",
+          "normalizedLabel": "buy",
+          "scaleRef": null,
+          "benchmarkText": null,
+          "horizonText": null,
+          "basis": "unknown"
+        },
+        "evidenceRefs": [
+          "e-header"
+        ]
+      },
+      "recommendation": {
+        "state": "not_stated",
+        "value": null,
+        "evidenceRefs": []
+      },
+      "ratingAction": {
+        "state": "not_stated",
+        "value": null,
+        "evidenceRefs": []
+      },
+      "priorRating": {
+        "state": "not_stated",
+        "value": null,
+        "evidenceRefs": []
+      },
+      "targetPrice": {
+        "state": "stated",
+        "value": {
+          "rawText": "目标价 231.50 元",
+          "currency": "CNY",
+          "unit": "unknown",
+          "unitText": null,
+          "horizonText": null,
+          "shape": "point",
+          "amount": "231.50",
+          "lower": null,
+          "upper": null
+        },
+        "evidenceRefs": [
+          "e-price-4"
+        ]
+      },
+      "targetPriceAction": {
+        "state": "not_stated",
+        "value": null,
+        "evidenceRefs": []
+      },
+      "priorTargetPrice": {
+        "state": "not_stated",
+        "value": null,
+        "evidenceRefs": []
+      },
+      "currentPrice": {
+        "state": "not_stated",
+        "value": null,
+        "evidenceRefs": []
+      },
+      "rationale": {
+        "state": "not_stated",
+        "value": null,
+        "evidenceRefs": []
+      },
+      "sharedScopeId": "scope-1"
+    }
+  ],
+  "sharedScopes": [
+    {
+      "localId": "scope-1",
+      "articleRef": "a-1",
+      "kind": "rating",
+      "evidenceRefs": [
+        "e-header"
+      ],
+      "memberMentionRefs": [
+        "m-1",
+        "m-2",
+        "m-3",
+        "m-4"
+      ]
+    }
+  ],
+  "signals": [],
+  "issues": [
+    {
+      "localId": "issue-1",
+      "articleRef": "a-1",
+      "recordRef": "s-1",
+      "fieldPath": "targetPrice.value.currency",
+      "category": "contradictory_text",
+      "description": "原文同时给出300308 CH及港元目标价；保留原文币种，交由系统解析与核对，不自动改成人民币。",
+      "evidenceRefs": [
+        "e-subject-1",
+        "e-price-1"
+      ]
+    }
+  ]
+}

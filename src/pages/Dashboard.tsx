@@ -39,7 +39,7 @@ export default function Dashboard() {
           <div className="mt-5 flex flex-wrap gap-x-5 gap-y-2 text-xs text-slate-500">
             <span>最新报告 {overview.data.latestDate ?? '-'}</span>
             <PublicationStatus />
-            <span className={overview.data.errorCount ? 'text-amber-700' : 'text-emerald-700'}>{overview.data.errorCount ? `${overview.data.errorCount} 个读取问题` : '数据状态正常'}</span>
+            <span className={overview.data.errorCount ? 'text-amber-700' : 'text-emerald-700'}>{overview.data.errorCount ? `${overview.data.errorCount} 个读取问题` : '原文读取正常'}</span>
           </div>
         ) : null}
       </section>
@@ -53,7 +53,7 @@ export default function Dashboard() {
         <div className="mt-6 space-y-6">
           <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
             <StatCard label="报告库" value={overview.data.reportCount} hint={`最新 ${overview.data.latestDate ?? '-'}`} />
-            <StatCard label="有效公司" value={overview.data.securityCount} hint="优先按上市代码归并" />
+            <StatCard label={overview.data.companyCount === undefined ? "已识别标的" : "公司主体"} value={overview.data.companyCount ?? overview.data.securityCount} hint="同一公司不同证券分别保留观点" />
             <StatCard label="结构化观点" value={overview.data.opinionCount} hint="含评级、目标价、风险与催化剂" />
             <StatCard label="数据质量" value={overview.data.qualityIssueCount ? '待检查' : '良好'} hint={`${overview.data.qualityIssueCount} 个待识别项`} />
           </div>
@@ -71,7 +71,7 @@ export default function Dashboard() {
               <div className="space-y-3">
                 {overview.data.reportOverviews.slice(0, 8).map((report) => (
                   <Link key={report.reportId} to={`/reports?id=${encodeURIComponent(report.reportId)}`} className="block rounded-2xl border border-slate-200 p-4 transition hover:-translate-y-0.5 hover:border-blue-300 hover:shadow-md">
-                    <div className="flex items-center justify-between gap-3"><div className="font-semibold text-slate-950">{report.date}</div><div className="text-xs text-slate-500">{report.securities.length} 家公司</div></div>
+                    <div className="flex items-center justify-between gap-3"><div className="font-semibold text-slate-950">{report.date}</div><div className="text-xs text-slate-500">{report.companyCount ?? report.securities.length} {report.companyCount === undefined ? '个标的' : '家公司'}</div></div>
                     <div className="mt-3 flex flex-wrap gap-2">
                       {report.positiveCount ? <Badge tone="green">积极 {report.positiveCount}</Badge> : null}
                       {report.ratingChangeCount ? <Badge tone="blue">评级变化 {report.ratingChangeCount}</Badge> : null}
@@ -101,7 +101,7 @@ export default function Dashboard() {
 function OpinionCard({ opinion }: { opinion: OpinionRecord }) {
   const source = opinion.evidence[0];
   return (
-    <Link to={buildReportLink({ reportId: opinion.reportId, lineNumber: source?.lineNumber, highlightTerms: [opinion.security.displayName, opinion.security.code ?? ''].filter(Boolean) })} className="block rounded-2xl border border-slate-200 bg-slate-50/70 p-4 transition hover:border-emerald-300 hover:bg-white hover:shadow-md">
+    <Link to={buildReportLink({ reportId: opinion.reportId, sourceHash: opinion.sourceHash, lineNumber: source?.lineNumber, highlightTerms: [opinion.sourceName ?? '', opinion.security.displayName, opinion.security.code ?? ''].filter(Boolean) })} className="block rounded-2xl border border-slate-200 bg-slate-50/70 p-4 transition hover:border-emerald-300 hover:bg-white hover:shadow-md">
       <div className="flex flex-wrap gap-2"><Badge tone="green">{opinion.rating ?? '积极观点'}</Badge><Badge tone="blue">{opinion.institution}</Badge><Badge tone="slate">{opinion.reportDate}</Badge></div>
       <div className="mt-3 font-semibold text-slate-950">{opinion.security.displayName}</div>
       <div className="mt-1 text-xs text-slate-500">{opinion.security.code ?? '未识别代码'}{opinion.targetPrice ? ` · 目标价 ${opinion.targetPrice}` : ''}</div>

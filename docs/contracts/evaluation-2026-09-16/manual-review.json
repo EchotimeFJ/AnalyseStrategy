@@ -1,0 +1,29 @@
+{
+  "scope": "Manual semantic checks supplement narrow automated score; no production qualification.",
+  "reviewer": "primary Codex reviewer; independently checked in luna-rule-audit.md",
+  "adapted-openrouter": {
+    "overall": "not_qualified",
+    "findings": [
+      "Extra signal.note property violates schema",
+      "One R1 quotation is not exact",
+      "YOFC abbreviation incorrectly put in rawCode",
+      "R4 market issue partly trusts rule-derived A-share candidate as original source evidence"
+    ]
+  },
+  "adapted-deepseek": {
+    "overall": "not_qualified",
+    "findings": [
+      "Four R2 buy ratings lack shared rating clause in record evidence",
+      "R3 general demand support incorrectly classified as a catalyst despite v2 restriction"
+    ]
+  },
+  "adapted-mimo": {
+    "overall": "not_qualified",
+    "findings": [
+      "Four R2 buy ratings lack shared rating clause in record evidence",
+      "R2 currency/market inconsistency not explicitly flagged",
+      "S2 explicit article publisher omitted",
+      "R3 explicit future ESS slowdown risk omitted; event recall not fully benchmarked"
+    ]
+  }
+}

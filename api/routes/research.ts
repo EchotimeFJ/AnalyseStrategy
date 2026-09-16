@@ -95,6 +95,7 @@ router.get('/search', asyncRoute(async (req: Request, res: Response): Promise<vo
       mode: asString(req.query.mode),
       raw: asBoolean(req.query.raw),
       paginated: asBoolean(req.query.paginated),
+      publicationId: asString(req.query.publicationId),
       offset: Number(asString(req.query.offset) ?? 0),
       limit: Number(asString(req.query.limit) ?? 500),
     }),
@@ -191,7 +192,11 @@ router.post('/reindex', asyncRoute(async (_req: Request, res: Response): Promise
 }));
 
 router.post('/update-strategy', asyncRoute(async (_req: Request, res: Response): Promise<void> => {
-  res.json({ success: true, data: await dataUpdater.update() });
+  const publication = await dataUpdater.update();
+  const index = await ensureIndex({ checkSource: false });
+  // Keep the original publication fields at the top level and add a source
+  // index carrying the explicit added/modified/removed report delta.
+  res.json({ success: true, data: { ...publication, index: toIndexStatus(index, publication.reportChanges) } });
 }));
 
 function asyncRoute(handler: (req: Request, res: Response) => Promise<void>): RequestHandler {

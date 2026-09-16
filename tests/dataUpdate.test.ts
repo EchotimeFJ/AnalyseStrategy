@@ -33,6 +33,9 @@ const updater = createDataUpdater({ statusFile, now: () => now });
 try {
   const [first, overlapping] = await Promise.all([updater.update(), updater.update()]);
   assert.equal(first.publishedAt, '2026-09-07T01:00:00.000Z');
+  assert.equal(first.reportChanges?.added.length, 0, 'the initial baseline is already indexed before the first pull');
+  assert.equal(first.reportChanges?.modified.length, 0);
+  assert.equal(first.reportChanges?.removed.length, 0);
   assert.deepEqual(first, overlapping, 'overlapping jobs share a single result');
   const version = (await ensureIndex({ checkSource: false })).version;
   now = new Date('2026-09-07T02:00:00Z');
@@ -48,8 +51,27 @@ try {
   await git(seed, 'push', 'origin', 'HEAD');
   const published = await updater.update();
   assert.equal(published.publishedAt, '2026-09-07T02:00:00.000Z');
-  const good = await ensureIndex({ checkSource: false });
+  assert.equal(published.reportChanges?.added.length, 1, 'the next source scan reports the new report');
+  assert.equal(published.reportChanges?.modified.length, 0);
+  assert.equal(published.reportChanges?.removed.length, 0);
+  assert.equal((await restarted.status()).reportChanges?.added.length, 1, 'the last source delta survives an updater restart');
+  let good = await ensureIndex({ checkSource: false });
   assert.equal(good.reports.length, 2);
+
+  // A later hourly pull can contain all three operations in one source
+  // snapshot. The updater reports them together before review is considered.
+  await fs.writeFile(path.join(seed, 'reports/2026-09-07.md'), '# 中金\n\n修改后的公司 (1234.HK)\n买入。');
+  await fs.rm(path.join(seed, 'reports/2026-09-08.md'));
+  await fs.writeFile(path.join(seed, 'reports/2026-09-10.md'), '# 中金\n\n再次新增公司 (6789.HK)\n买入。');
+  await git(seed, 'add', '.');
+  await git(seed, 'commit', '-m', 'modify remove and add reports');
+  await git(seed, 'push', 'origin', 'HEAD');
+  const delta = await updater.update();
+  assert.equal(delta.reportChanges?.added.length, 1);
+  assert.equal(delta.reportChanges?.modified.length, 1);
+  assert.equal(delta.reportChanges?.removed.length, 1);
+  good = await ensureIndex({ checkSource: false });
+  assert.equal(good.reports.length, 2, 'the removed report is absent while modified and added reports remain');
 
   await git(checkout, 'remote', 'set-url', 'origin', path.join(root, 'missing.git'));
   await assert.rejects(updater.update(), /更新失败/);

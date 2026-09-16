@@ -20,6 +20,7 @@ import { ErrorBlock, LoadingBlock } from '@/components/ui';
 import { AssistantMessage } from '@/components/assistant/AssistantMessage';
 import { ChatComposer } from '@/components/assistant/ChatComposer';
 import { AiConfigDialog, type AiConfigAccess } from '@/components/AiConfigDialog';
+import { ReviewStatus } from '@/components/PublicationStatus';
 
 const prompts = [
   { title: '最新报告速览', prompt: '今天是多少号？请分析最新报告里最值得关注的内容，并说明报告库更新到哪一天。' },
@@ -151,6 +152,12 @@ export default function ResearchAssistant() {
               {switching ? <span className="shrink-0">切换中…</span> : null}
             </div>
             {switchError ? <p role="alert" className="mt-2 text-xs text-rose-600">{switchError}</p> : null}
+            <div className="mt-3">
+              <ReviewStatus
+                adminToken={configAccess?.token}
+                onRequestAdmin={() => setConfigOpen(true)}
+              />
+            </div>
             <div className={`assistant-filter-grid ${filtersOpen ? 'assistant-filter-grid-open' : ''}`} aria-hidden={!filtersOpen}>
               <div className="pt-3">
                 <div className="grid gap-2 rounded-2xl border border-slate-200 bg-slate-50 p-3 sm:grid-cols-2 xl:grid-cols-4">
@@ -289,7 +296,7 @@ function ConversationRail({
         ))}
       </div>
       <div className="mt-3 rounded-2xl border border-slate-200 bg-slate-50 p-3">
-        <div className="flex items-center gap-2 text-xs font-semibold text-slate-700"><span className={`h-2 w-2 rounded-full ${configured ? 'bg-emerald-500' : 'bg-amber-500'}`} />{configured ? 'AI 服务正常' : 'AI 尚未配置'}</div>
+        <div className="flex items-center gap-2 text-xs font-semibold text-slate-700"><span className={`h-2 w-2 rounded-full ${configured ? 'bg-emerald-500' : 'bg-amber-500'}`} />{configured ? 'AI 已配置' : 'AI 尚未配置'}</div>
         {configured ? <div className="mt-2 truncate text-[10px] text-slate-500">{provider} · {model}</div> : null}
       </div>
     </aside>

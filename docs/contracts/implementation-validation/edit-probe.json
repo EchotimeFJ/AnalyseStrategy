@@ -1,0 +1,18 @@
+{
+  "sampleType": "synthetic_fault_injection",
+  "source": "# 花旗\n\n首选标的组合：同时覆盖国电南瑞（买入，目标价28元）。\n\n催化剂：10月项目验收。",
+  "mutations": [
+    "候选名称设为同时覆盖国电南瑞",
+    "目标价设为60元",
+    "注入栏目首选标的组合作为假公司及买入观点",
+    "不提供催化剂候选，由模型补漏"
+  ],
+  "expected": [
+    "唯一公司国电南瑞",
+    "买入，28元",
+    "排除栏目公司",
+    "补充10月项目验收催化剂"
+  ],
+  "lastMimoAttempt": "upstream usage measured 15343; feedback repair blocked before request by remaining budget; no complete final result saved",
+  "productionConfigChanged": false
+}

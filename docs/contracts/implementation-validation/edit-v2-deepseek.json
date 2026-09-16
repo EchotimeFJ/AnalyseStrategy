@@ -1,0 +1,69 @@
+{
+  "provider": "deepseek",
+  "model": "deepseek-flash",
+  "source": "synthetic name/price/title/catalyst fault injection",
+  "readiness": "failed",
+  "complete": false,
+  "validationState": "rejected",
+  "issues": [
+    {
+      "issueId": "issue:development-edit-probe:1",
+      "recordRef": "mention:development-edit-probe:3:0",
+      "fieldPath": "payload.rawName",
+      "category": "subject_role",
+      "severity": "warning",
+      "status": "resolved",
+      "description": "候选名称含动词前缀，已纠正为国电南瑞",
+      "evidenceIDs": [
+        "evidence:development-edit-probe:3:04121d02e1b1"
+      ]
+    },
+    {
+      "issueId": "issue:development-edit-probe:2",
+      "recordRef": "mention:fixture-fake",
+      "fieldPath": "payload.rawName",
+      "category": "subject_role",
+      "severity": "error",
+      "status": "resolved",
+      "description": "首选标的组合为栏目名，非公司实体，已删除",
+      "evidenceIDs": [
+        "evidence:development-edit-probe:3:04121d02e1b1"
+      ]
+    },
+    {
+      "issueId": "issue:development-edit-probe:3",
+      "recordRef": "statement:development-edit-probe:3:0",
+      "fieldPath": "payload.targetPrice",
+      "category": "price_conflict",
+      "severity": "error",
+      "status": "resolved",
+      "description": "候选目标价60元与原文28元不符，已纠正",
+      "evidenceIDs": [
+        "evidence:development-edit-probe:3:04121d02e1b1"
+      ]
+    },
+    {
+      "issueId": "issue:5c6c45b15169672b",
+      "recordRef": "statement:development-edit-probe:3:0",
+      "fieldPath": "payload.subject.rawText",
+      "category": "unsupported_value",
+      "severity": "error",
+      "status": "open",
+      "description": "禁止修改字段：payload.subject.rawText",
+      "evidenceIDs": []
+    },
+    {
+      "issueId": "issue:59b9f6b0c4ee4b32",
+      "recordRef": null,
+      "fieldPath": "operations",
+      "category": "incomplete_output",
+      "severity": "error",
+      "status": "open",
+      "description": "复核没有返回任何候选处置",
+      "evidenceIDs": []
+    }
+  ],
+  "elapsedMs": 4658,
+  "configUnchanged": true,
+  "actualTokens": 12927
+}

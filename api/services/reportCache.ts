@@ -14,7 +14,7 @@ import { getAppVersion } from './version.js';
 import { packSnapshotStrings, unpackSnapshotStrings } from './snapshotStrings.js';
 
 const decompress = promisify(gunzip);
-const SCHEMA_VERSION = 4;
+const SCHEMA_VERSION = 5;
 const MAX_SNAPSHOT_BYTES = 256 * 1024 * 1024;
 const LINE_FORMAT = 'report-snapshot-lines-v2';
 
@@ -59,7 +59,7 @@ export async function readReportSnapshot(manifest: SourceManifest, options: { fi
     const file = options.file ?? reportCachePath(manifest.sourceDir);
     if ((await fs.stat(file)).size > MAX_SNAPSHOT_BYTES) return null;
     const envelope = await readEnvelope(file);
-    const compatible = options.published ? /^[234]:/.test(String(envelope.revision)) : envelope.revision === revision();
+    const compatible = options.published ? /^[2345]:/.test(String(envelope.revision)) : envelope.revision === revision();
     if (!compatible || envelope.sourceDir !== manifest.sourceDir ||
       !options.published && envelope.fingerprint !== manifest.fingerprint) return null;
     const data = envelope.data;
@@ -97,6 +97,7 @@ export async function writeReportSnapshot(index: IndexState, options: { file?: s
       })),
     })),
     mentions: index.mentions, opinions: index.opinions,
+    ...(index.reviewStates ? { reviewStates: index.reviewStates, reviewFacts: index.reviewFacts ?? [], reviewSignals: index.reviewSignals ?? [], reviewFingerprint: index.reviewFingerprint ?? '', identityGraph: index.identityGraph ?? null, identityMapping: index.identityMapping ?? {} } : {}),
     entities: [...index.entities], qualityIssues: index.qualityIssues,
     errors: index.errors, views: index.views,
   });

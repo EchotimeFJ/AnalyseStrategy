@@ -1,0 +1,560 @@
+[
+  {
+    "file": "adapted-deepseek.json",
+    "provider": "deepseek",
+    "model": "deepseek-flash",
+    "status": "received",
+    "elapsedMs": 6445,
+    "usage": {
+      "prompt_tokens": 4505,
+      "completion_tokens": 2042,
+      "total_tokens": 6547,
+      "prompt_tokens_details": {
+        "cached_tokens": 0
+      },
+      "prompt_cache_hit_tokens": 0,
+      "prompt_cache_miss_tokens": 4505
+    },
+    "jsonParseable": true,
+    "schemaValid": true,
+    "schemaErrors": [],
+    "score": {
+      "correctRecords": 18,
+      "expectedRecords": 18,
+      "returnedRecords": 18,
+      "exactQuotes": 24,
+      "totalQuotes": 24,
+      "errors": [],
+      "caseResults": [
+        {
+          "id": "R1",
+          "correctRecords": 4,
+          "expectedRecords": 4,
+          "returnedRecords": 4
+        },
+        {
+          "id": "R2",
+          "correctRecords": 4,
+          "expectedRecords": 4,
+          "returnedRecords": 4
+        },
+        {
+          "id": "R3",
+          "correctRecords": 2,
+          "expectedRecords": 2,
+          "returnedRecords": 2
+        },
+        {
+          "id": "R4",
+          "correctRecords": 2,
+          "expectedRecords": 2,
+          "returnedRecords": 2
+        },
+        {
+          "id": "S1",
+          "correctRecords": 3,
+          "expectedRecords": 3,
+          "returnedRecords": 3
+        },
+        {
+          "id": "S2",
+          "correctRecords": 1,
+          "expectedRecords": 1,
+          "returnedRecords": 1
+        },
+        {
+          "id": "S3",
+          "correctRecords": 2,
+          "expectedRecords": 2,
+          "returnedRecords": 2
+        },
+        {
+          "id": "S4",
+          "correctRecords": 0,
+          "expectedRecords": 0,
+          "returnedRecords": 0
+        }
+      ]
+    }
+  },
+  {
+    "file": "adapted-mimo.json",
+    "provider": "mimo",
+    "model": "mimo-v2.5-pro",
+    "status": "received",
+    "elapsedMs": 105646,
+    "usage": {
+      "completion_tokens": 6921,
+      "prompt_tokens": 5125,
+      "total_tokens": 12046,
+      "completion_tokens_details": {
+        "reasoning_tokens": 0
+      },
+      "prompt_tokens_details": {
+        "cached_tokens": 0
+      }
+    },
+    "jsonParseable": true,
+    "schemaValid": true,
+    "schemaErrors": [],
+    "score": {
+      "correctRecords": 18,
+      "expectedRecords": 18,
+      "returnedRecords": 18,
+      "exactQuotes": 21,
+      "totalQuotes": 21,
+      "errors": [],
+      "caseResults": [
+        {
+          "id": "R1",
+          "correctRecords": 4,
+          "expectedRecords": 4,
+          "returnedRecords": 4
+        },
+        {
+          "id": "R2",
+          "correctRecords": 4,
+          "expectedRecords": 4,
+          "returnedRecords": 4
+        },
+        {
+          "id": "R3",
+          "correctRecords": 2,
+          "expectedRecords": 2,
+          "returnedRecords": 2
+        },
+        {
+          "id": "R4",
+          "correctRecords": 2,
+          "expectedRecords": 2,
+          "returnedRecords": 2
+        },
+        {
+          "id": "S1",
+          "correctRecords": 3,
+          "expectedRecords": 3,
+          "returnedRecords": 3
+        },
+        {
+          "id": "S2",
+          "correctRecords": 1,
+          "expectedRecords": 1,
+          "returnedRecords": 1
+        },
+        {
+          "id": "S3",
+          "correctRecords": 2,
+          "expectedRecords": 2,
+          "returnedRecords": 2
+        },
+        {
+          "id": "S4",
+          "correctRecords": 0,
+          "expectedRecords": 0,
+          "returnedRecords": 0
+        }
+      ]
+    }
+  },
+  {
+    "file": "adapted-openrouter.json",
+    "provider": "openrouter",
+    "model": "z-ai/glm-5.3-flash",
+    "status": "received",
+    "elapsedMs": 24273,
+    "usage": {
+      "prompt_tokens": 4513,
+      "completion_tokens": 2488,
+      "total_tokens": 7001,
+      "cost": 0.0019017405,
+      "is_byok": false,
+      "prompt_tokens_details": {
+        "cached_tokens": 0,
+        "cache_write_tokens": 0,
+        "audio_tokens": 0,
+        "video_tokens": 0
+      },
+      "cost_details": {
+        "upstream_inference_cost": 0.00192095,
+        "upstream_inference_prompt_cost": 0.00067695,
+        "upstream_inference_completions_cost": 0.001244
+      },
+      "completion_tokens_details": {
+        "reasoning_tokens": 252,
+        "image_tokens": 0,
+        "audio_tokens": 0
+      }
+    },
+    "jsonParseable": true,
+    "schemaValid": false,
+    "schemaErrors": [
+      {
+        "path": "/results/3/signals/0",
+        "keyword": "additionalProperties",
+        "message": "must NOT have additional properties"
+      }
+    ],
+    "score": {
+      "correctRecords": 18,
+      "expectedRecords": 18,
+      "returnedRecords": 18,
+      "exactQuotes": 43,
+      "totalQuotes": 44,
+      "errors": [
+        "R1:nonliteral quote 思源电气"
+      ],
+      "caseResults": [
+        {
+          "id": "R1",
+          "correctRecords": 4,
+          "expectedRecords": 4,
+          "returnedRecords": 4
+        },
+        {
+          "id": "R2",
+          "correctRecords": 4,
+          "expectedRecords": 4,
+          "returnedRecords": 4
+        },
+        {
+          "id": "R3",
+          "correctRecords": 2,
+          "expectedRecords": 2,
+          "returnedRecords": 2
+        },
+        {
+          "id": "R4",
+          "correctRecords": 2,
+          "expectedRecords": 2,
+          "returnedRecords": 2
+        },
+        {
+          "id": "S1",
+          "correctRecords": 3,
+          "expectedRecords": 3,
+          "returnedRecords": 3
+        },
+        {
+          "id": "S2",
+          "correctRecords": 1,
+          "expectedRecords": 1,
+          "returnedRecords": 1
+        },
+        {
+          "id": "S3",
+          "correctRecords": 2,
+          "expectedRecords": 2,
+          "returnedRecords": 2
+        },
+        {
+          "id": "S4",
+          "correctRecords": 0,
+          "expectedRecords": 0,
+          "returnedRecords": 0
+        }
+      ]
+    }
+  },
+  {
+    "file": "base-deepseek.json",
+    "provider": "deepseek",
+    "model": "deepseek-flash",
+    "status": "truncated",
+    "elapsedMs": 25960,
+    "usage": {
+      "prompt_tokens": 3397,
+      "completion_tokens": 6000,
+      "total_tokens": 9397,
+      "prompt_tokens_details": {
+        "cached_tokens": 0
+      },
+      "completion_tokens_details": {
+        "reasoning_tokens": 6000
+      },
+      "prompt_cache_hit_tokens": 0,
+      "prompt_cache_miss_tokens": 3397
+    },
+    "jsonParseable": false,
+    "schemaValid": false,
+    "schemaErrors": [],
+    "score": null
+  },
+  {
+    "file": "base-mimo.json",
+    "provider": "mimo",
+    "model": "mimo-v2.5-pro",
+    "status": "timeout",
+    "elapsedMs": 45005,
+    "usage": null,
+    "jsonParseable": false,
+    "schemaValid": false,
+    "schemaErrors": [],
+    "score": null
+  },
+  {
+    "file": "base-openrouter.json",
+    "provider": "openrouter",
+    "model": "z-ai/glm-5.3-flash",
+    "status": "received",
+    "elapsedMs": 25946,
+    "usage": {
+      "prompt_tokens": 3367,
+      "completion_tokens": 2713,
+      "total_tokens": 6080,
+      "cost": 0.0018429345,
+      "is_byok": false,
+      "prompt_tokens_details": {
+        "cached_tokens": 0,
+        "cache_write_tokens": 0,
+        "audio_tokens": 0,
+        "video_tokens": 0
+      },
+      "cost_details": {
+        "upstream_inference_cost": 0.00186155,
+        "upstream_inference_prompt_cost": 0.00050505,
+        "upstream_inference_completions_cost": 0.0013565
+      },
+      "completion_tokens_details": {
+        "reasoning_tokens": 284,
+        "image_tokens": 0,
+        "audio_tokens": 0
+      }
+    },
+    "jsonParseable": true,
+    "schemaValid": true,
+    "schemaErrors": [],
+    "score": {
+      "correctRecords": 18,
+      "expectedRecords": 18,
+      "returnedRecords": 18,
+      "exactQuotes": 20,
+      "totalQuotes": 26,
+      "errors": [
+        "R1:nonliteral quote 思源电气",
+        "R1:nonliteral quote 平高电气",
+        "R1:nonliteral quote 特变电工",
+        "R1:nonliteral quote 国电南瑞",
+        "R1:invented source tag 首选标的组合",
+        "R1:invented source tag 电力设备",
+        "R2:invented source tag 核心推荐股票",
+        "R2:invented source tag 光模块",
+        "R3:invented source tag 锂",
+        "R3:invented source tag 碳酸锂",
+        "R3:invented source tag 库存",
+        "R3:invented source tag 储能",
+        "R4:nonliteral quote 长飞光纤",
+        "R4:invented source tag 光缆集采",
+        "R4:invented source tag 光纤",
+        "R4:invented source tag 中国移动",
+        "R4:nonliteral signal",
+        "S1:invented source tag 买入评级",
+        "S2:invented source tag 评级调整",
+        "S3:invented candidate id",
+        "S4:invented source tag 储能"
+      ],
+      "caseResults": [
+        {
+          "id": "R1",
+          "correctRecords": 4,
+          "expectedRecords": 4,
+          "returnedRecords": 4
+        },
+        {
+          "id": "R2",
+          "correctRecords": 4,
+          "expectedRecords": 4,
+          "returnedRecords": 4
+        },
+        {
+          "id": "R3",
+          "correctRecords": 2,
+          "expectedRecords": 2,
+          "returnedRecords": 2
+        },
+        {
+          "id": "R4",
+          "correctRecords": 2,
+          "expectedRecords": 2,
+          "returnedRecords": 2
+        },
+        {
+          "id": "S1",
+          "correctRecords": 3,
+          "expectedRecords": 3,
+          "returnedRecords": 3
+        },
+        {
+          "id": "S2",
+          "correctRecords": 1,
+          "expectedRecords": 1,
+          "returnedRecords": 1
+        },
+        {
+          "id": "S3",
+          "correctRecords": 2,
+          "expectedRecords": 2,
+          "returnedRecords": 2
+        },
+        {
+          "id": "S4",
+          "correctRecords": 0,
+          "expectedRecords": 0,
+          "returnedRecords": 0
+        }
+      ]
+    }
+  },
+  {
+    "file": "common-deepseek.json",
+    "provider": "deepseek",
+    "model": "deepseek-flash",
+    "status": "truncated",
+    "elapsedMs": 28025,
+    "usage": {
+      "prompt_tokens": 3906,
+      "completion_tokens": 6000,
+      "total_tokens": 9906,
+      "prompt_tokens_details": {
+        "cached_tokens": 128
+      },
+      "completion_tokens_details": {
+        "reasoning_tokens": 6000
+      },
+      "prompt_cache_hit_tokens": 128,
+      "prompt_cache_miss_tokens": 3778
+    },
+    "jsonParseable": false,
+    "schemaValid": false,
+    "schemaErrors": [],
+    "score": null
+  },
+  {
+    "file": "common-mimo.json",
+    "provider": "mimo",
+    "model": "mimo-v2.5-pro",
+    "status": "truncated",
+    "elapsedMs": 109791,
+    "usage": {
+      "completion_tokens": 6000,
+      "prompt_tokens": 4368,
+      "total_tokens": 10368,
+      "completion_tokens_details": {
+        "reasoning_tokens": 0
+      },
+      "prompt_tokens_details": {
+        "cached_tokens": 0
+      }
+    },
+    "jsonParseable": false,
+    "schemaValid": false,
+    "schemaErrors": [],
+    "score": null
+  },
+  {
+    "file": "common-openrouter.json",
+    "provider": "openrouter",
+    "model": "z-ai/glm-5.3-flash",
+    "status": "received",
+    "elapsedMs": 25028,
+    "usage": {
+      "prompt_tokens": 3889,
+      "completion_tokens": 2797,
+      "total_tokens": 6686,
+      "cost": 0.0019620315,
+      "is_byok": false,
+      "prompt_tokens_details": {
+        "cached_tokens": 0,
+        "cache_write_tokens": 0,
+        "audio_tokens": 0,
+        "video_tokens": 0
+      },
+      "cost_details": {
+        "upstream_inference_cost": 0.00198185,
+        "upstream_inference_prompt_cost": 0.00058335,
+        "upstream_inference_completions_cost": 0.0013985
+      },
+      "completion_tokens_details": {
+        "reasoning_tokens": 235,
+        "image_tokens": 0,
+        "audio_tokens": 0
+      }
+    },
+    "jsonParseable": true,
+    "schemaValid": true,
+    "schemaErrors": [],
+    "score": {
+      "correctRecords": 18,
+      "expectedRecords": 18,
+      "returnedRecords": 18,
+      "exactQuotes": 28,
+      "totalQuotes": 33,
+      "errors": [
+        "R1:nonliteral quote 思源电气",
+        "R1:nonliteral quote 平高电气",
+        "R1:nonliteral quote 特变电工",
+        "R1:nonliteral quote 国电南瑞",
+        "R1:invented source tag 首选标的组合",
+        "R2:invented source tag 核心推荐股票",
+        "R3:invented source tag 碳酸锂",
+        "R3:invented source tag 锂业",
+        "R3:invented source tag ESS",
+        "R4:nonliteral quote 长飞光纤",
+        "R4:invented source tag 光缆集采",
+        "R4:invented source tag 中国移动",
+        "S2:invented source tag 评级调整",
+        "S3:invented candidate id",
+        "S4:invented source tag 储能"
+      ],
+      "caseResults": [
+        {
+          "id": "R1",
+          "correctRecords": 4,
+          "expectedRecords": 4,
+          "returnedRecords": 4
+        },
+        {
+          "id": "R2",
+          "correctRecords": 4,
+          "expectedRecords": 4,
+          "returnedRecords": 4
+        },
+        {
+          "id": "R3",
+          "correctRecords": 2,
+          "expectedRecords": 2,
+          "returnedRecords": 2
+        },
+        {
+          "id": "R4",
+          "correctRecords": 2,
+          "expectedRecords": 2,
+          "returnedRecords": 2
+        },
+        {
+          "id": "S1",
+          "correctRecords": 3,
+          "expectedRecords": 3,
+          "returnedRecords": 3
+        },
+        {
+          "id": "S2",
+          "correctRecords": 1,
+          "expectedRecords": 1,
+          "returnedRecords": 1
+        },
+        {
+          "id": "S3",
+          "correctRecords": 2,
+          "expectedRecords": 2,
+          "returnedRecords": 2
+        },
+        {
+          "id": "S4",
+          "correctRecords": 0,
+          "expectedRecords": 0,
+          "returnedRecords": 0
+        }
+      ]
+    }
+  }
+]

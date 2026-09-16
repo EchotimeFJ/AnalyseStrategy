@@ -1,0 +1,47 @@
+{
+  "provider": "openrouter",
+  "model": "z-ai/glm-5.3-flash",
+  "source": "synthetic name/price/title/catalyst fault injection",
+  "readiness": "failed",
+  "complete": false,
+  "validationState": "rejected",
+  "issues": [
+    {
+      "issueId": "issue-1",
+      "recordRef": "statement:development-edit-probe:3:0",
+      "fieldPath": "payload.targetPrice",
+      "category": "price_conflict",
+      "severity": "error",
+      "status": "resolved",
+      "description": "候选目标价60元与原文28元不符，已修正",
+      "evidenceIDs": [
+        "evidence:development-edit-probe:3:04121d02e1b1"
+      ]
+    },
+    {
+      "issueId": "issue-2",
+      "recordRef": "mention:fixture-fake",
+      "fieldPath": "payload.rawName",
+      "category": "subject_role",
+      "severity": "warning",
+      "status": "resolved",
+      "description": "首选标的组合为栏目名，非公司主体，已删除",
+      "evidenceIDs": [
+        "evidence:development-edit-probe:3:04121d02e1b1"
+      ]
+    },
+    {
+      "issueId": "issue:59b9f6b0c4ee4b32",
+      "recordRef": null,
+      "fieldPath": "operations",
+      "category": "incomplete_output",
+      "severity": "error",
+      "status": "open",
+      "description": "复核没有返回任何候选处置",
+      "evidenceIDs": []
+    }
+  ],
+  "elapsedMs": 8227,
+  "configUnchanged": true,
+  "actualTokens": 12936
+}

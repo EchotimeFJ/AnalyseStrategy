@@ -1,0 +1,39 @@
+{
+  "provider": "deepseek",
+  "model": "deepseek-flash",
+  "source": "real report 2026-09-08 line16 with its header; development excerpt only",
+  "readiness": "ready",
+  "complete": true,
+  "validationState": "valid",
+  "issues": [],
+  "opinions": [
+    {
+      "name": "思源电气",
+      "rating": "买入",
+      "targetPrice": "216 元",
+      "code": "002028.SZ"
+    },
+    {
+      "name": "平高电气",
+      "rating": "买入",
+      "targetPrice": "24.5 元",
+      "code": "600312.SS"
+    },
+    {
+      "name": "特变电工",
+      "rating": "买入",
+      "targetPrice": "28 元",
+      "code": "600089.SS"
+    },
+    {
+      "name": "国电南瑞",
+      "rating": "买入",
+      "targetPrice": "28 元",
+      "code": "600406.SS"
+    }
+  ],
+  "exactFour": true,
+  "elapsedMs": 2343,
+  "actualTokens": 16225,
+  "configUnchanged": true
+}

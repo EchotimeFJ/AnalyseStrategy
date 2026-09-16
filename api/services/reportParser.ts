@@ -34,6 +34,7 @@ export type ReportDocument = {
 };
 
 export type SearchHit = {
+  sourceHash?: string;
   reportId: string;
   date: string;
   institution: string;
@@ -43,6 +44,7 @@ export type SearchHit = {
 };
 
 export type CatalystRiskItem = {
+  sourceHash?: string;
   reportId: string;
   date: string;
   institution: string;
@@ -54,6 +56,11 @@ export type CatalystRiskItem = {
 };
 
 export type TargetMention = {
+  sourceHash?: string;
+  reviewStatementId?: string;
+  ratingScaleRef?: string;
+  targetPriceHorizon?: string;
+  targetPriceComparable?: string;
   reportId: string;
   date: string;
   institution: string;

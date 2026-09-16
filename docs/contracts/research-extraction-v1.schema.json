@@ -1,0 +1,2385 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:analyse-strategy:research-extraction:1.0.0",
+  "title": "Research extraction proposals v1.0.0",
+  "type": "object",
+  "properties": {
+    "schemaVersion": {
+      "const": "1.0.0"
+    },
+    "reportRevisionRef": {
+      "type": "string",
+      "minLength": 1
+    },
+    "coverage": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/Coverage"
+      },
+      "minItems": 1
+    },
+    "articles": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/Article"
+      },
+      "minItems": 0
+    },
+    "evidence": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/Evidence"
+      },
+      "minItems": 0
+    },
+    "mentions": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/Mention"
+      },
+      "minItems": 0
+    },
+    "topics": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/Topic"
+      },
+      "minItems": 0
+    },
+    "statements": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/Statement"
+      },
+      "minItems": 0
+    },
+    "sharedScopes": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/SharedScope"
+      },
+      "minItems": 0
+    },
+    "signals": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/Signal"
+      },
+      "minItems": 0
+    },
+    "issues": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/Issue"
+      },
+      "minItems": 0
+    }
+  },
+  "required": [
+    "schemaVersion",
+    "reportRevisionRef",
+    "coverage",
+    "articles",
+    "evidence",
+    "mentions",
+    "topics",
+    "statements",
+    "sharedScopes",
+    "signals",
+    "issues"
+  ],
+  "additionalProperties": false,
+  "$defs": {
+    "Range": {
+      "type": "object",
+      "properties": {
+        "startLine": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "endLine": {
+          "type": "integer",
+          "minimum": 1
+        }
+      },
+      "required": [
+        "startLine",
+        "endLine"
+      ],
+      "additionalProperties": false
+    },
+    "Evidence": {
+      "type": "object",
+      "properties": {
+        "localId": {
+          "type": "string",
+          "minLength": 1
+        },
+        "quote": {
+          "type": "string",
+          "minLength": 1
+        },
+        "range": {
+          "$ref": "#/$defs/Range"
+        }
+      },
+      "required": [
+        "localId",
+        "quote",
+        "range"
+      ],
+      "additionalProperties": false
+    },
+    "Date": {
+      "type": "object",
+      "properties": {
+        "date": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
+        },
+        "precision": {
+          "enum": [
+            "day",
+            "month",
+            "quarter",
+            "year",
+            "unknown"
+          ]
+        },
+        "rawText": {
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "required": [
+        "date",
+        "precision",
+        "rawText"
+      ],
+      "additionalProperties": false
+    },
+    "Identifier": {
+      "type": "object",
+      "properties": {
+        "text": {
+          "type": "string",
+          "minLength": 1
+        },
+        "interpretation": {
+          "enum": [
+            "ticker",
+            "abbreviation",
+            "unknown"
+          ]
+        },
+        "evidenceRefs": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          },
+          "minItems": 1
+        }
+      },
+      "required": [
+        "text",
+        "interpretation",
+        "evidenceRefs"
+      ],
+      "additionalProperties": false
+    },
+    "Mention": {
+      "type": "object",
+      "properties": {
+        "localId": {
+          "type": "string",
+          "minLength": 1
+        },
+        "articleRef": {
+          "type": "string",
+          "minLength": 1
+        },
+        "rawName": {
+          "type": "string",
+          "minLength": 1
+        },
+        "roles": {
+          "type": "array",
+          "items": {
+            "enum": [
+              "main_subject",
+              "recommended_target",
+              "peer",
+              "customer_supplier",
+              "publisher",
+              "analyst",
+              "terminology",
+              "other",
+              "unknown"
+            ]
+          },
+          "minItems": 1
+        },
+        "nameEvidenceRefs": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          },
+          "minItems": 1
+        },
+        "rawIdentifiers": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/Identifier"
+          },
+          "minItems": 0
+        }
+      },
+      "required": [
+        "localId",
+        "articleRef",
+        "rawName",
+        "roles",
+        "nameEvidenceRefs",
+        "rawIdentifiers"
+      ],
+      "additionalProperties": false
+    },
+    "Topic": {
+      "type": "object",
+      "properties": {
+        "localId": {
+          "type": "string",
+          "minLength": 1
+        },
+        "articleRef": {
+          "type": "string",
+          "minLength": 1
+        },
+        "label": {
+          "type": "string",
+          "minLength": 1
+        },
+        "kind": {
+          "enum": [
+            "sector",
+            "theme",
+            "market_scope"
+          ]
+        },
+        "origin": {
+          "enum": [
+            "source_tag",
+            "ai_extracted"
+          ]
+        },
+        "evidenceRefs": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          },
+          "minItems": 1
+        }
+      },
+      "required": [
+        "localId",
+        "articleRef",
+        "label",
+        "kind",
+        "origin",
+        "evidenceRefs"
+      ],
+      "additionalProperties": false
+    },
+    "Article": {
+      "type": "object",
+      "properties": {
+        "localId": {
+          "type": "string",
+          "minLength": 1
+        },
+        "title": {
+          "type": "string",
+          "minLength": 1
+        },
+        "summary": {
+          "oneOf": [
+            {
+              "type": "object",
+              "properties": {
+                "state": {
+                  "const": "stated"
+                },
+                "value": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "evidenceRefs": {
+                  "type": "array",
+                  "items": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "minItems": 1
+                }
+              },
+              "required": [
+                "state",
+                "value",
+                "evidenceRefs"
+              ],
+              "additionalProperties": false
+            },
+            {
+              "type": "object",
+              "properties": {
+                "state": {
+                  "enum": [
+                    "not_stated",
+                    "not_applicable"
+                  ]
+                },
+                "value": {
+                  "type": "null"
+                },
+                "evidenceRefs": {
+                  "type": "array",
+                  "items": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "minItems": 0
+                }
+              },
+              "required": [
+                "state",
+                "value",
+                "evidenceRefs"
+              ],
+              "additionalProperties": false
+            },
+            {
+              "type": "object",
+              "properties": {
+                "state": {
+                  "const": "ambiguous"
+                },
+                "value": {
+                  "type": "null"
+                },
+                "evidenceRefs": {
+                  "type": "array",
+                  "items": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "minItems": 1
+                },
+                "candidates": {
+                  "type": "array",
+                  "items": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "minItems": 2
+                }
+              },
+              "required": [
+                "state",
+                "value",
+                "evidenceRefs",
+                "candidates"
+              ],
+              "additionalProperties": false
+            }
+          ]
+        },
+        "titleOrigin": {
+          "enum": [
+            "source",
+            "generated"
+          ]
+        },
+        "titleEvidenceRefs": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          },
+          "minItems": 0
+        },
+        "ranges": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/Range"
+          },
+          "minItems": 1
+        },
+        "articleKind": {
+          "enum": [
+            "company",
+            "industry",
+            "macro",
+            "strategy",
+            "mixed",
+            "unknown"
+          ]
+        },
+        "publisher": {
+          "oneOf": [
+            {
+              "type": "object",
+              "properties": {
+                "state": {
+                  "const": "stated"
+                },
+                "value": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "evidenceRefs": {
+                  "type": "array",
+                  "items": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "minItems": 1
+                }
+              },
+              "required": [
+                "state",
+                "value",
+                "evidenceRefs"
+              ],
+              "additionalProperties": false
+            },
+            {
+              "type": "object",
+              "properties": {
+                "state": {
+                  "enum": [
+                    "not_stated",
+                    "not_applicable"
+                  ]
+                },
+                "value": {
+                  "type": "null"
+                },
+                "evidenceRefs": {
+                  "type": "array",
+                  "items": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "minItems": 0
+                }
+              },
+              "required": [
+                "state",
+                "value",
+                "evidenceRefs"
+              ],
+              "additionalProperties": false
+            },
+            {
+              "type": "object",
+              "properties": {
+                "state": {
+                  "const": "ambiguous"
+                },
+                "value": {
+                  "type": "null"
+                },
+                "evidenceRefs": {
+                  "type": "array",
+                  "items": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "minItems": 1
+                },
+                "candidates": {
+                  "type": "array",
+                  "items": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "minItems": 2
+                }
+              },
+              "required": [
+                "state",
+                "value",
+                "evidenceRefs",
+                "candidates"
+              ],
+              "additionalProperties": false
+            }
+          ]
+        },
+        "articleDate": {
+          "oneOf": [
+            {
+              "type": "object",
+              "properties": {
+                "state": {
+                  "const": "stated"
+                },
+                "value": {
+                  "$ref": "#/$defs/Date"
+                },
+                "evidenceRefs": {
+                  "type": "array",
+                  "items": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "minItems": 1
+                }
+              },
+              "required": [
+                "state",
+                "value",
+                "evidenceRefs"
+              ],
+              "additionalProperties": false
+            },
+            {
+              "type": "object",
+              "properties": {
+                "state": {
+                  "enum": [
+                    "not_stated",
+                    "not_applicable"
+                  ]
+                },
+                "value": {
+                  "type": "null"
+                },
+                "evidenceRefs": {
+                  "type": "array",
+                  "items": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "minItems": 0
+                }
+              },
+              "required": [
+                "state",
+                "value",
+                "evidenceRefs"
+              ],
+              "additionalProperties": false
+            },
+            {
+              "type": "object",
+              "properties": {
+                "state": {
+                  "const": "ambiguous"
+                },
+                "value": {
+                  "type": "null"
+                },
+                "evidenceRefs": {
+                  "type": "array",
+                  "items": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "minItems": 1
+                },
+                "candidates": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/$defs/Date"
+                  },
+                  "minItems": 2
+                }
+              },
+              "required": [
+                "state",
+                "value",
+                "evidenceRefs",
+                "candidates"
+              ],
+              "additionalProperties": false
+            }
+          ]
+        },
+        "mainMentionRefs": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          },
+          "minItems": 0
+        },
+        "topicRefs": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          },
+          "minItems": 0
+        }
+      },
+      "required": [
+        "localId",
+        "title",
+        "summary",
+        "titleOrigin",
+        "titleEvidenceRefs",
+        "ranges",
+        "articleKind",
+        "publisher",
+        "articleDate",
+        "mainMentionRefs",
+        "topicRefs"
+      ],
+      "additionalProperties": false
+    },
+    "Subject": {
+      "oneOf": [
+        {
+          "type": "object",
+          "properties": {
+            "scope": {
+              "enum": [
+                "company",
+                "security",
+                "listing",
+                "unresolved"
+              ]
+            },
+            "mentionRefs": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "minLength": 1
+              },
+              "minItems": 1
+            },
+            "topicLabel": {
+              "type": "null"
+            },
+            "evidenceRefs": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "minLength": 1
+              },
+              "minItems": 1
+            }
+          },
+          "required": [
+            "scope",
+            "mentionRefs",
+            "topicLabel",
+            "evidenceRefs"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "scope": {
+              "enum": [
+                "theme",
+                "market"
+              ]
+            },
+            "mentionRefs": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "minLength": 1
+              },
+              "minItems": 0
+            },
+            "topicLabel": {
+              "type": "string",
+              "minLength": 1
+            },
+            "evidenceRefs": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "minLength": 1
+              },
+              "minItems": 1
+            }
+          },
+          "required": [
+            "scope",
+            "mentionRefs",
+            "topicLabel",
+            "evidenceRefs"
+          ],
+          "additionalProperties": false
+        }
+      ]
+    },
+    "Attribution": {
+      "oneOf": [
+        {
+          "type": "object",
+          "properties": {
+            "kind": {
+              "const": "article_publisher"
+            },
+            "name": {
+              "type": "null"
+            },
+            "evidenceRefs": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "minLength": 1
+              },
+              "minItems": 0
+            }
+          },
+          "required": [
+            "kind",
+            "name",
+            "evidenceRefs"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "kind": {
+              "const": "quoted_party"
+            },
+            "name": {
+              "type": "string",
+              "minLength": 1
+            },
+            "evidenceRefs": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "minLength": 1
+              },
+              "minItems": 1
+            }
+          },
+          "required": [
+            "kind",
+            "name",
+            "evidenceRefs"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "kind": {
+              "const": "unknown"
+            },
+            "name": {
+              "type": "null"
+            },
+            "evidenceRefs": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "minLength": 1
+              },
+              "minItems": 0
+            }
+          },
+          "required": [
+            "kind",
+            "name",
+            "evidenceRefs"
+          ],
+          "additionalProperties": false
+        }
+      ]
+    },
+    "Rating": {
+      "type": "object",
+      "properties": {
+        "rawLabel": {
+          "type": "string",
+          "minLength": 1
+        },
+        "coverage": {
+          "enum": [
+            "rated",
+            "not_covered",
+            "unrated"
+          ]
+        },
+        "normalizedLabel": {
+          "enum": [
+            "buy",
+            "overweight",
+            "neutral",
+            "hold",
+            "underweight",
+            "sell",
+            "other",
+            null
+          ]
+        },
+        "scaleRef": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "benchmarkText": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "horizonText": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "basis": {
+          "enum": [
+            "absolute_return",
+            "relative_benchmark",
+            "portfolio_weight",
+            "unknown"
+          ]
+        }
+      },
+      "required": [
+        "rawLabel",
+        "coverage",
+        "normalizedLabel",
+        "scaleRef",
+        "benchmarkText",
+        "horizonText",
+        "basis"
+      ],
+      "additionalProperties": false,
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "coverage": {
+                "const": "rated"
+              }
+            },
+            "required": [
+              "coverage"
+            ]
+          },
+          "then": {
+            "properties": {
+              "normalizedLabel": {
+                "type": "string"
+              }
+            }
+          },
+          "else": {
+            "properties": {
+              "normalizedLabel": {
+                "type": "null"
+              }
+            }
+          }
+        }
+      ]
+    },
+    "Price": {
+      "oneOf": [
+        {
+          "type": "object",
+          "properties": {
+            "rawText": {
+              "type": "string",
+              "minLength": 1
+            },
+            "currency": {
+              "type": [
+                "string",
+                "null"
+              ],
+              "pattern": "^[A-Z]{3}$"
+            },
+            "unit": {
+              "enum": [
+                "per_share",
+                "per_ads",
+                "index_point",
+                "other",
+                "unknown"
+              ]
+            },
+            "unitText": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "horizonText": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "shape": {
+              "const": "point"
+            },
+            "amount": {
+              "type": "string",
+              "pattern": "^-?\\d+(\\.\\d+)?$"
+            },
+            "lower": {
+              "type": "null"
+            },
+            "upper": {
+              "type": "null"
+            }
+          },
+          "required": [
+            "rawText",
+            "currency",
+            "unit",
+            "unitText",
+            "horizonText",
+            "shape",
+            "amount",
+            "lower",
+            "upper"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "rawText": {
+              "type": "string",
+              "minLength": 1
+            },
+            "currency": {
+              "type": [
+                "string",
+                "null"
+              ],
+              "pattern": "^[A-Z]{3}$"
+            },
+            "unit": {
+              "enum": [
+                "per_share",
+                "per_ads",
+                "index_point",
+                "other",
+                "unknown"
+              ]
+            },
+            "unitText": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "horizonText": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "shape": {
+              "const": "range"
+            },
+            "amount": {
+              "type": "null"
+            },
+            "lower": {
+              "type": "string",
+              "pattern": "^-?\\d+(\\.\\d+)?$"
+            },
+            "upper": {
+              "type": "string",
+              "pattern": "^-?\\d+(\\.\\d+)?$"
+            }
+          },
+          "required": [
+            "rawText",
+            "currency",
+            "unit",
+            "unitText",
+            "horizonText",
+            "shape",
+            "amount",
+            "lower",
+            "upper"
+          ],
+          "additionalProperties": false
+        }
+      ]
+    },
+    "Recommendation": {
+      "type": "object",
+      "properties": {
+        "rawText": {
+          "type": "string",
+          "minLength": 1
+        },
+        "action": {
+          "enum": [
+            "buy",
+            "hold",
+            "sell",
+            "top_pick",
+            "positive",
+            "avoid",
+            "other"
+          ]
+        }
+      },
+      "required": [
+        "rawText",
+        "action"
+      ],
+      "additionalProperties": false
+    },
+    "Statement": {
+      "type": "object",
+      "properties": {
+        "localId": {
+          "type": "string",
+          "minLength": 1
+        },
+        "articleRef": {
+          "type": "string",
+          "minLength": 1
+        },
+        "attribution": {
+          "$ref": "#/$defs/Attribution"
+        },
+        "subject": {
+          "$ref": "#/$defs/Subject"
+        },
+        "asOf": {
+          "oneOf": [
+            {
+              "type": "object",
+              "properties": {
+                "state": {
+                  "const": "stated"
+                },
+                "value": {
+                  "$ref": "#/$defs/Date"
+                },
+                "evidenceRefs": {
+                  "type": "array",
+                  "items": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "minItems": 1
+                }
+              },
+              "required": [
+                "state",
+                "value",
+                "evidenceRefs"
+              ],
+              "additionalProperties": false
+            },
+            {
+              "type": "object",
+              "properties": {
+                "state": {
+                  "enum": [
+                    "not_stated",
+                    "not_applicable"
+                  ]
+                },
+                "value": {
+                  "type": "null"
+                },
+                "evidenceRefs": {
+                  "type": "array",
+                  "items": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "minItems": 0
+                }
+              },
+              "required": [
+                "state",
+                "value",
+                "evidenceRefs"
+              ],
+              "additionalProperties": false
+            },
+            {
+              "type": "object",
+              "properties": {
+                "state": {
+                  "const": "ambiguous"
+                },
+                "value": {
+                  "type": "null"
+                },
+                "evidenceRefs": {
+                  "type": "array",
+                  "items": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "minItems": 1
+                },
+                "candidates": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/$defs/Date"
+                  },
+                  "minItems": 2
+                }
+              },
+              "required": [
+                "state",
+                "value",
+                "evidenceRefs",
+                "candidates"
+              ],
+              "additionalProperties": false
+            }
+          ]
+        },
+        "polarity": {
+          "enum": [
+            "affirmative",
+            "negated",
+            "unknown"
+          ]
+        },
+        "modality": {
+          "enum": [
+            "actual",
+            "conditional",
+            "hypothetical",
+            "unknown"
+          ]
+        },
+        "temporalContext": {
+          "enum": [
+            "current",
+            "historical",
+            "unknown"
+          ]
+        },
+        "conditionText": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "rating": {
+          "oneOf": [
+            {
+              "type": "object",
+              "properties": {
+                "state": {
+                  "const": "stated"
+                },
+                "value": {
+                  "$ref": "#/$defs/Rating"
+                },
+                "evidenceRefs": {
+                  "type": "array",
+                  "items": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "minItems": 1
+                }
+              },
+              "required": [
+                "state",
+                "value",
+                "evidenceRefs"
+              ],
+              "additionalProperties": false
+            },
+            {
+              "type": "object",
+              "properties": {
+                "state": {
+                  "enum": [
+                    "not_stated",
+                    "not_applicable"
+                  ]
+                },
+                "value": {
+                  "type": "null"
+                },
+                "evidenceRefs": {
+                  "type": "array",
+                  "items": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "minItems": 0
+                }
+              },
+              "required": [
+                "state",
+                "value",
+                "evidenceRefs"
+              ],
+              "additionalProperties": false
+            },
+            {
+              "type": "object",
+              "properties": {
+                "state": {
+                  "const": "ambiguous"
+                },
+                "value": {
+                  "type": "null"
+                },
+                "evidenceRefs": {
+                  "type": "array",
+                  "items": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "minItems": 1
+                },
+                "candidates": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/$defs/Rating"
+                  },
+                  "minItems": 2
+                }
+              },
+              "required": [
+                "state",
+                "value",
+                "evidenceRefs",
+                "candidates"
+              ],
+              "additionalProperties": false
+            }
+          ]
+        },
+        "recommendation": {
+          "oneOf": [
+            {
+              "type": "object",
+              "properties": {
+                "state": {
+                  "const": "stated"
+                },
+                "value": {
+                  "$ref": "#/$defs/Recommendation"
+                },
+                "evidenceRefs": {
+                  "type": "array",
+                  "items": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "minItems": 1
+                }
+              },
+              "required": [
+                "state",
+                "value",
+                "evidenceRefs"
+              ],
+              "additionalProperties": false
+            },
+            {
+              "type": "object",
+              "properties": {
+                "state": {
+                  "enum": [
+                    "not_stated",
+                    "not_applicable"
+                  ]
+                },
+                "value": {
+                  "type": "null"
+                },
+                "evidenceRefs": {
+                  "type": "array",
+                  "items": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "minItems": 0
+                }
+              },
+              "required": [
+                "state",
+                "value",
+                "evidenceRefs"
+              ],
+              "additionalProperties": false
+            },
+            {
+              "type": "object",
+              "properties": {
+                "state": {
+                  "const": "ambiguous"
+                },
+                "value": {
+                  "type": "null"
+                },
+                "evidenceRefs": {
+                  "type": "array",
+                  "items": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "minItems": 1
+                },
+                "candidates": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/$defs/Recommendation"
+                  },
+                  "minItems": 2
+                }
+              },
+              "required": [
+                "state",
+                "value",
+                "evidenceRefs",
+                "candidates"
+              ],
+              "additionalProperties": false
+            }
+          ]
+        },
+        "ratingAction": {
+          "oneOf": [
+            {
+              "type": "object",
+              "properties": {
+                "state": {
+                  "const": "stated"
+                },
+                "value": {
+                  "enum": [
+                    "maintain",
+                    "upgrade",
+                    "downgrade",
+                    "initiate",
+                    "resume",
+                    "withdraw",
+                    "other"
+                  ]
+                },
+                "evidenceRefs": {
+                  "type": "array",
+                  "items": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "minItems": 1
+                }
+              },
+              "required": [
+                "state",
+                "value",
+                "evidenceRefs"
+              ],
+              "additionalProperties": false
+            },
+            {
+              "type": "object",
+              "properties": {
+                "state": {
+                  "enum": [
+                    "not_stated",
+                    "not_applicable"
+                  ]
+                },
+                "value": {
+                  "type": "null"
+                },
+                "evidenceRefs": {
+                  "type": "array",
+                  "items": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "minItems": 0
+                }
+              },
+              "required": [
+                "state",
+                "value",
+                "evidenceRefs"
+              ],
+              "additionalProperties": false
+            },
+            {
+              "type": "object",
+              "properties": {
+                "state": {
+                  "const": "ambiguous"
+                },
+                "value": {
+                  "type": "null"
+                },
+                "evidenceRefs": {
+                  "type": "array",
+                  "items": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "minItems": 1
+                },
+                "candidates": {
+                  "type": "array",
+                  "items": {
+                    "enum": [
+                      "maintain",
+                      "upgrade",
+                      "downgrade",
+                      "initiate",
+                      "resume",
+                      "withdraw",
+                      "other"
+                    ]
+                  },
+                  "minItems": 2
+                }
+              },
+              "required": [
+                "state",
+                "value",
+                "evidenceRefs",
+                "candidates"
+              ],
+              "additionalProperties": false
+            }
+          ]
+        },
+        "priorRating": {
+          "oneOf": [
+            {
+              "type": "object",
+              "properties": {
+                "state": {
+                  "const": "stated"
+                },
+                "value": {
+                  "$ref": "#/$defs/Rating"
+                },
+                "evidenceRefs": {
+                  "type": "array",
+                  "items": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "minItems": 1
+                }
+              },
+              "required": [
+                "state",
+                "value",
+                "evidenceRefs"
+              ],
+              "additionalProperties": false
+            },
+            {
+              "type": "object",
+              "properties": {
+                "state": {
+                  "enum": [
+                    "not_stated",
+                    "not_applicable"
+                  ]
+                },
+                "value": {
+                  "type": "null"
+                },
+                "evidenceRefs": {
+                  "type": "array",
+                  "items": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "minItems": 0
+                }
+              },
+              "required": [
+                "state",
+                "value",
+                "evidenceRefs"
+              ],
+              "additionalProperties": false
+            },
+            {
+              "type": "object",
+              "properties": {
+                "state": {
+                  "const": "ambiguous"
+                },
+                "value": {
+                  "type": "null"
+                },
+                "evidenceRefs": {
+                  "type": "array",
+                  "items": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "minItems": 1
+                },
+                "candidates": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/$defs/Rating"
+                  },
+                  "minItems": 2
+                }
+              },
+              "required": [
+                "state",
+                "value",
+                "evidenceRefs",
+                "candidates"
+              ],
+              "additionalProperties": false
+            }
+          ]
+        },
+        "targetPrice": {
+          "oneOf": [
+            {
+              "type": "object",
+              "properties": {
+                "state": {
+                  "const": "stated"
+                },
+                "value": {
+                  "$ref": "#/$defs/Price"
+                },
+                "evidenceRefs": {
+                  "type": "array",
+                  "items": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "minItems": 1
+                }
+              },
+              "required": [
+                "state",
+                "value",
+                "evidenceRefs"
+              ],
+              "additionalProperties": false
+            },
+            {
+              "type": "object",
+              "properties": {
+                "state": {
+                  "enum": [
+                    "not_stated",
+                    "not_applicable"
+                  ]
+                },
+                "value": {
+                  "type": "null"
+                },
+                "evidenceRefs": {
+                  "type": "array",
+                  "items": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "minItems": 0
+                }
+              },
+              "required": [
+                "state",
+                "value",
+                "evidenceRefs"
+              ],
+              "additionalProperties": false
+            },
+            {
+              "type": "object",
+              "properties": {
+                "state": {
+                  "const": "ambiguous"
+                },
+                "value": {
+                  "type": "null"
+                },
+                "evidenceRefs": {
+                  "type": "array",
+                  "items": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "minItems": 1
+                },
+                "candidates": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/$defs/Price"
+                  },
+                  "minItems": 2
+                }
+              },
+              "required": [
+                "state",
+                "value",
+                "evidenceRefs",
+                "candidates"
+              ],
+              "additionalProperties": false
+            }
+          ]
+        },
+        "targetPriceAction": {
+          "oneOf": [
+            {
+              "type": "object",
+              "properties": {
+                "state": {
+                  "const": "stated"
+                },
+                "value": {
+                  "enum": [
+                    "maintain",
+                    "raise",
+                    "lower",
+                    "initiate",
+                    "withdraw",
+                    "other"
+                  ]
+                },
+                "evidenceRefs": {
+                  "type": "array",
+                  "items": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "minItems": 1
+                }
+              },
+              "required": [
+                "state",
+                "value",
+                "evidenceRefs"
+              ],
+              "additionalProperties": false
+            },
+            {
+              "type": "object",
+              "properties": {
+                "state": {
+                  "enum": [
+                    "not_stated",
+                    "not_applicable"
+                  ]
+                },
+                "value": {
+                  "type": "null"
+                },
+                "evidenceRefs": {
+                  "type": "array",
+                  "items": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "minItems": 0
+                }
+              },
+              "required": [
+                "state",
+                "value",
+                "evidenceRefs"
+              ],
+              "additionalProperties": false
+            },
+            {
+              "type": "object",
+              "properties": {
+                "state": {
+                  "const": "ambiguous"
+                },
+                "value": {
+                  "type": "null"
+                },
+                "evidenceRefs": {
+                  "type": "array",
+                  "items": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "minItems": 1
+                },
+                "candidates": {
+                  "type": "array",
+                  "items": {
+                    "enum": [
+                      "maintain",
+                      "raise",
+                      "lower",
+                      "initiate",
+                      "withdraw",
+                      "other"
+                    ]
+                  },
+                  "minItems": 2
+                }
+              },
+              "required": [
+                "state",
+                "value",
+                "evidenceRefs",
+                "candidates"
+              ],
+              "additionalProperties": false
+            }
+          ]
+        },
+        "priorTargetPrice": {
+          "oneOf": [
+            {
+              "type": "object",
+              "properties": {
+                "state": {
+                  "const": "stated"
+                },
+                "value": {
+                  "$ref": "#/$defs/Price"
+                },
+                "evidenceRefs": {
+                  "type": "array",
+                  "items": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "minItems": 1
+                }
+              },
+              "required": [
+                "state",
+                "value",
+                "evidenceRefs"
+              ],
+              "additionalProperties": false
+            },
+            {
+              "type": "object",
+              "properties": {
+                "state": {
+                  "enum": [
+                    "not_stated",
+                    "not_applicable"
+                  ]
+                },
+                "value": {
+                  "type": "null"
+                },
+                "evidenceRefs": {
+                  "type": "array",
+                  "items": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "minItems": 0
+                }
+              },
+              "required": [
+                "state",
+                "value",
+                "evidenceRefs"
+              ],
+              "additionalProperties": false
+            },
+            {
+              "type": "object",
+              "properties": {
+                "state": {
+                  "const": "ambiguous"
+                },
+                "value": {
+                  "type": "null"
+                },
+                "evidenceRefs": {
+                  "type": "array",
+                  "items": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "minItems": 1
+                },
+                "candidates": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/$defs/Price"
+                  },
+                  "minItems": 2
+                }
+              },
+              "required": [
+                "state",
+                "value",
+                "evidenceRefs",
+                "candidates"
+              ],
+              "additionalProperties": false
+            }
+          ]
+        },
+        "currentPrice": {
+          "oneOf": [
+            {
+              "type": "object",
+              "properties": {
+                "state": {
+                  "const": "stated"
+                },
+                "value": {
+                  "$ref": "#/$defs/Price"
+                },
+                "evidenceRefs": {
+                  "type": "array",
+                  "items": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "minItems": 1
+                }
+              },
+              "required": [
+                "state",
+                "value",
+                "evidenceRefs"
+              ],
+              "additionalProperties": false
+            },
+            {
+              "type": "object",
+              "properties": {
+                "state": {
+                  "enum": [
+                    "not_stated",
+                    "not_applicable"
+                  ]
+                },
+                "value": {
+                  "type": "null"
+                },
+                "evidenceRefs": {
+                  "type": "array",
+                  "items": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "minItems": 0
+                }
+              },
+              "required": [
+                "state",
+                "value",
+                "evidenceRefs"
+              ],
+              "additionalProperties": false
+            },
+            {
+              "type": "object",
+              "properties": {
+                "state": {
+                  "const": "ambiguous"
+                },
+                "value": {
+                  "type": "null"
+                },
+                "evidenceRefs": {
+                  "type": "array",
+                  "items": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "minItems": 1
+                },
+                "candidates": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/$defs/Price"
+                  },
+                  "minItems": 2
+                }
+              },
+              "required": [
+                "state",
+                "value",
+                "evidenceRefs",
+                "candidates"
+              ],
+              "additionalProperties": false
+            }
+          ]
+        },
+        "rationale": {
+          "oneOf": [
+            {
+              "type": "object",
+              "properties": {
+                "state": {
+                  "const": "stated"
+                },
+                "value": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "evidenceRefs": {
+                  "type": "array",
+                  "items": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "minItems": 1
+                }
+              },
+              "required": [
+                "state",
+                "value",
+                "evidenceRefs"
+              ],
+              "additionalProperties": false
+            },
+            {
+              "type": "object",
+              "properties": {
+                "state": {
+                  "enum": [
+                    "not_stated",
+                    "not_applicable"
+                  ]
+                },
+                "value": {
+                  "type": "null"
+                },
+                "evidenceRefs": {
+                  "type": "array",
+                  "items": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "minItems": 0
+                }
+              },
+              "required": [
+                "state",
+                "value",
+                "evidenceRefs"
+              ],
+              "additionalProperties": false
+            },
+            {
+              "type": "object",
+              "properties": {
+                "state": {
+                  "const": "ambiguous"
+                },
+                "value": {
+                  "type": "null"
+                },
+                "evidenceRefs": {
+                  "type": "array",
+                  "items": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "minItems": 1
+                },
+                "candidates": {
+                  "type": "array",
+                  "items": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "minItems": 2
+                }
+              },
+              "required": [
+                "state",
+                "value",
+                "evidenceRefs",
+                "candidates"
+              ],
+              "additionalProperties": false
+            }
+          ]
+        },
+        "sharedScopeId": {
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "required": [
+        "localId",
+        "articleRef",
+        "attribution",
+        "subject",
+        "asOf",
+        "polarity",
+        "modality",
+        "temporalContext",
+        "conditionText",
+        "rating",
+        "recommendation",
+        "ratingAction",
+        "priorRating",
+        "targetPrice",
+        "targetPriceAction",
+        "priorTargetPrice",
+        "currentPrice",
+        "rationale",
+        "sharedScopeId"
+      ],
+      "additionalProperties": false
+    },
+    "SharedScope": {
+      "type": "object",
+      "properties": {
+        "localId": {
+          "type": "string",
+          "minLength": 1
+        },
+        "articleRef": {
+          "type": "string",
+          "minLength": 1
+        },
+        "kind": {
+          "enum": [
+            "rating",
+            "recommendation",
+            "both"
+          ]
+        },
+        "evidenceRefs": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          },
+          "minItems": 1
+        },
+        "memberMentionRefs": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          },
+          "minItems": 1
+        }
+      },
+      "required": [
+        "localId",
+        "articleRef",
+        "kind",
+        "evidenceRefs",
+        "memberMentionRefs"
+      ],
+      "additionalProperties": false
+    },
+    "Signal": {
+      "type": "object",
+      "properties": {
+        "localId": {
+          "type": "string",
+          "minLength": 1
+        },
+        "articleRef": {
+          "type": "string",
+          "minLength": 1
+        },
+        "subject": {
+          "$ref": "#/$defs/Subject"
+        },
+        "kind": {
+          "enum": [
+            "risk",
+            "catalyst"
+          ]
+        },
+        "summary": {
+          "type": "string",
+          "minLength": 1
+        },
+        "evidenceRefs": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          },
+          "minItems": 1
+        },
+        "temporalContext": {
+          "enum": [
+            "current",
+            "historical",
+            "future",
+            "unknown"
+          ]
+        },
+        "polarity": {
+          "enum": [
+            "affirmative",
+            "negated",
+            "unknown"
+          ]
+        },
+        "modality": {
+          "enum": [
+            "actual",
+            "conditional",
+            "hypothetical",
+            "unknown"
+          ]
+        },
+        "relatedStatementRefs": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          },
+          "minItems": 0
+        },
+        "expectedWindowText": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "eventDate": {
+          "oneOf": [
+            {
+              "type": "object",
+              "properties": {
+                "state": {
+                  "const": "stated"
+                },
+                "value": {
+                  "$ref": "#/$defs/Date"
+                },
+                "evidenceRefs": {
+                  "type": "array",
+                  "items": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "minItems": 1
+                }
+              },
+              "required": [
+                "state",
+                "value",
+                "evidenceRefs"
+              ],
+              "additionalProperties": false
+            },
+            {
+              "type": "object",
+              "properties": {
+                "state": {
+                  "enum": [
+                    "not_stated",
+                    "not_applicable"
+                  ]
+                },
+                "value": {
+                  "type": "null"
+                },
+                "evidenceRefs": {
+                  "type": "array",
+                  "items": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "minItems": 0
+                }
+              },
+              "required": [
+                "state",
+                "value",
+                "evidenceRefs"
+              ],
+              "additionalProperties": false
+            },
+            {
+              "type": "object",
+              "properties": {
+                "state": {
+                  "const": "ambiguous"
+                },
+                "value": {
+                  "type": "null"
+                },
+                "evidenceRefs": {
+                  "type": "array",
+                  "items": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "minItems": 1
+                },
+                "candidates": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/$defs/Date"
+                  },
+                  "minItems": 2
+                }
+              },
+              "required": [
+                "state",
+                "value",
+                "evidenceRefs",
+                "candidates"
+              ],
+              "additionalProperties": false
+            }
+          ]
+        },
+        "conditionText": {
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "required": [
+        "localId",
+        "articleRef",
+        "subject",
+        "kind",
+        "summary",
+        "evidenceRefs",
+        "temporalContext",
+        "polarity",
+        "modality",
+        "relatedStatementRefs",
+        "expectedWindowText",
+        "eventDate",
+        "conditionText"
+      ],
+      "additionalProperties": false
+    },
+    "Issue": {
+      "type": "object",
+      "properties": {
+        "localId": {
+          "type": "string",
+          "minLength": 1
+        },
+        "articleRef": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "recordRef": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "fieldPath": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "category": {
+          "enum": [
+            "unclear_attribution",
+            "ambiguous_subject",
+            "contradictory_text",
+            "missing_context",
+            "incomplete_input",
+            "other"
+          ]
+        },
+        "description": {
+          "type": "string",
+          "minLength": 1
+        },
+        "evidenceRefs": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          },
+          "minItems": 0
+        }
+      },
+      "required": [
+        "localId",
+        "articleRef",
+        "recordRef",
+        "fieldPath",
+        "category",
+        "description",
+        "evidenceRefs"
+      ],
+      "additionalProperties": false
+    },
+    "Coverage": {
+      "type": "object",
+      "properties": {
+        "range": {
+          "$ref": "#/$defs/Range"
+        },
+        "state": {
+          "enum": [
+            "processed",
+            "no_relevant_content",
+            "needs_review"
+          ]
+        },
+        "articleRefs": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          },
+          "minItems": 0
+        },
+        "note": {
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "required": [
+        "range",
+        "state",
+        "articleRefs",
+        "note"
+      ],
+      "additionalProperties": false
+    }
+  },
+  "description": "Draft aligned with research-vocabulary-v1.json; full extraction reference, not the planned ReviewPatch endpoint."
+}

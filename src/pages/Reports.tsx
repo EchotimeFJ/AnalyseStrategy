@@ -8,29 +8,35 @@ import { Badge, EmptyState, ErrorBlock, LoadingBlock, Panel } from '@/components
 import { MarkdownViewer } from '@/components/MarkdownViewer';
 import { findSourceLineElement, getCenteredScrollTop, getSourceLineScrollTop } from '@/lib/reportScroll';
 import { ReportOpinionTable } from '@/components/ReportOpinionTable';
+import { normalizeReportReview, reviewStatusLabel } from '@/lib/reviewDisplay';
 
 export default function Reports() {
   const [params, setParams] = useSearchParams();
   const selectedId = params.get('id');
+  const revision = params.get('revision');
   const focusedLine = parseLineNumber(params.get('line'));
   const highlightTerms = useMemo(() => params.getAll('highlight').map((item) => item.trim()).filter(Boolean), [params]);
   const reportListRef = useRef<HTMLElement | null>(null);
   const [year, setYear] = useState('');
   const [visibleCount, setVisibleCount] = useState(48);
+  const [refreshKey, setRefreshKey] = useState(0);
+  const [showDraft,setShowDraft]=useState(false);
   const reportsQuery = useMemo(() => (year ? `/api/reports?year=${year}` : '/api/reports'), [year]);
   const reports = useAsyncData(() => apiGet<ReportSummary[]>(reportsQuery), [reportsQuery]);
   const firstId = reports.data?.[0]?.id;
   const activeId = selectedId || firstId;
   const detail = useAsyncData(
-    () => (activeId ? apiGet<ReportDetail>(`/api/reports/${encodeURIComponent(activeId)}`) : Promise.resolve(null)),
-    [activeId],
+    () => (activeId ? apiGet<ReportDetail>(revision ? `/api/review/reports/${encodeURIComponent(activeId)}/revisions/${encodeURIComponent(revision)}` : `/api/reports/${encodeURIComponent(activeId)}`) : Promise.resolve(null)),
+    [activeId, revision, refreshKey],
   );
   const overview = useAsyncData(
-    () => (activeId ? apiGet<ReportOverview>(`/api/reports/${encodeURIComponent(activeId)}/overview`) : Promise.resolve(null)),
-    [activeId],
+    () => (activeId && !revision ? apiGet<ReportOverview>(`/api/reports/${encodeURIComponent(activeId)}/overview`) : Promise.resolve(null)),
+    [activeId, revision, refreshKey],
   );
+  const draft=useAsyncData(()=>activeId&&showDraft&&!revision?apiGet<ReportOverview>(`/api/review/reports/${encodeURIComponent(activeId)}/draft`):Promise.resolve(null),[activeId,showDraft,revision,refreshKey]);
   const activeDetail = detail.data?.id === activeId ? detail.data : null;
   const activeOverview = overview.data?.reportId === activeId ? overview.data : null;
+  const publicationsAligned = samePublication(activeDetail, activeOverview);
 
   useEffect(() => {
     if (!selectedId && firstId) {
@@ -39,7 +45,7 @@ export default function Reports() {
   }, [firstId, selectedId, setParams]);
 
   useEffect(() => {
-    if (!detail.data || detail.data.id !== activeId || detail.loading || overview.loading || !focusedLine) {
+    if (!activeDetail || (!revision && (!activeOverview || !publicationsAligned)) || detail.loading || overview.loading || !focusedLine) {
       return;
     }
 
@@ -72,7 +78,7 @@ export default function Reports() {
       window.cancelAnimationFrame(frame);
       focusedElement?.classList.remove('report-line-focus');
     };
-  }, [activeId, detail.data, detail.loading, overview.data, overview.loading, focusedLine, highlightTerms]);
+  }, [activeId, activeDetail, detail.loading, activeOverview, overview.loading, focusedLine, highlightTerms, publicationsAligned, revision]);
 
   useEffect(() => {
     if (!activeId || !reports.data?.length) {
@@ -151,20 +157,24 @@ export default function Reports() {
           {detail.loading || overview.loading ? <LoadingBlock label="正在加载报告与速览..." /> : null}
           {detail.error ? <ErrorBlock message={detail.error} /> : null}
           {overview.error ? <ErrorBlock message={overview.error} /> : null}
+          {activeDetail && activeOverview && !publicationsAligned ? <PublicationMismatchNotice onRefresh={() => setRefreshKey((value) => value + 1)} /> : null}
           {activeDetail ? (
             <>
               <Panel title={activeDetail.date} eyebrow="Report meta">
                 <div className="grid gap-3 md:grid-cols-3">
                   <Meta label="机构" value={`${activeDetail.institutions.length} 家`} />
-                  <Meta label="标的提及" value={`${activeDetail.mentions.length} 条`} />
+                  <Meta label={revision ? "视图" : "标的提及"} value={revision ? "历史原文" : `${activeDetail.mentions.length} 条`} />
                   <Meta label="报告编号" value={activeDetail.id} />
+                  <Meta label="自动整理" value={revision ? "历史引用，仅展示原文" : reviewStatusLabel(normalizeReportReview(activeDetail.review).status)} />
                 </div>
               </Panel>
-              {activeOverview ? (
+              {activeOverview && publicationsAligned ? (
                 <Panel title="报告观点速览" eyebrow="Quick view">
-                  <ReportOpinionTable key={activeOverview.reportId} overview={activeOverview} />
+                  <ReportOpinionTable key={`${activeOverview.reportId}:${activeOverview.publicationId ?? 'legacy'}`} overview={activeOverview} />
                 </Panel>
               ) : null}
+              {!revision && normalizeReportReview(activeDetail.review).status !== 'succeeded' ? <Panel title="程序草稿" eyebrow="Unreviewed draft"><p className="text-sm text-slate-500">这里仅展示程序匹配结果，尚未通过 AI 复核，不计入默认统计。</p><button className="mt-3 text-sm font-semibold text-blue-600" onClick={()=>setShowDraft(!showDraft)}>{showDraft?'收起草稿':'查看规则草稿'}</button>{showDraft&&draft.loading?<LoadingBlock label="正在读取草稿…"/>:null}{showDraft&&draft.error?<ErrorBlock message={draft.error}/>:null}{showDraft&&draft.data?(draft.data.publicationId===activeDetail.publicationId?<ReportOpinionTable overview={draft.data}/>:<PublicationMismatchNotice onRefresh={()=>setRefreshKey(v=>v+1)}/>):null}</Panel> : null}
+              {revision ? <div className="rounded-xl border border-blue-200 p-3 text-sm text-slate-600">正在查看引用时保存的原文版本。<button className="ml-3 font-semibold text-blue-600" onClick={() => setParams({id:activeId!})}>查看当前版本</button></div> : null}
               <Panel title="Markdown 原文" eyebrow="Original" className="overflow-hidden">
                 <MarkdownViewer markdown={activeDetail.markdown} highlightTerms={highlightTerms} />
               </Panel>
@@ -175,6 +185,22 @@ export default function Reports() {
         </div>
       </div>
     </Layout>
+  );
+}
+
+function samePublication(detail: ReportDetail | null, overview: ReportOverview | null) {
+  if (!detail || !overview) return false;
+  if (!detail.publicationId && !overview.publicationId) return true;
+  return Boolean(detail.publicationId && overview.publicationId && detail.publicationId === overview.publicationId);
+}
+
+function PublicationMismatchNotice({ onRefresh }: { onRefresh: () => void }) {
+  return (
+    <div className="rounded-[24px] border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900" role="status">
+      <div className="font-semibold">报告数据正在更新</div>
+      <p className="mt-1 leading-6">原文和速览来自不同版本，已暂时隐藏带行号的观点链接，避免跳到不对应的原文位置。</p>
+      <button type="button" onClick={onRefresh} className="mt-3 min-h-10 rounded-xl border border-amber-300 bg-white px-3 text-xs font-semibold text-amber-900">刷新当前报告</button>
+    </div>
   );
 }
 

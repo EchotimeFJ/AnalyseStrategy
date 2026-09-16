@@ -1,4 +1,5 @@
 import type { SecurityEntity } from '../domain/research.js';
+import { dictionaryCodeNames } from './securityDictionary.js';
 import { normalizeSecurityCode } from './entityResolver.js';
 import { normalizeText, type SearchHit } from './reportParser.js';
 
@@ -36,7 +37,8 @@ export function classifySearchIntent(query: string, context: SearchContext): Sea
   const normalized = normalizeText(value);
   const code = normalizeSecurityCode(value);
   if (code) {
-    const security = context.securities.find((item) => item.code === code);
+    const names=new Set(dictionaryCodeNames(code).map(normalizeText));
+    const security = context.securities.find((item) => item.code === code) ?? context.securities.find(item => !item.code && [item.displayName,...item.aliases].some(name=>names.has(normalizeText(name))));
     return { type: 'security-code', query: value, securityKey: security?.key };
   }
 
@@ -74,6 +76,7 @@ export function groupSearchHits(hits: SearchHit[], gap = 2): SearchResultGroup[]
     }
     return {
       reportId,
+      sourceHash: ordered[0]?.sourceHash,
       date: ordered[0]?.date ?? '',
       institutions: [...new Set(ordered.map((hit) => hit.institution))],
       matchCount: ordered.length,

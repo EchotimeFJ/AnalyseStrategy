@@ -2,6 +2,7 @@ import fs from 'node:fs/promises';
 import path from 'node:path';
 import { createHash } from 'node:crypto';
 import type { IndexState } from './reportIndex.js';
+import type { ReportChangeSet } from './reportIndex.js';
 import { readReportSnapshot, readSourceManifest, writeReportSnapshot } from './reportCache.js';
 import { writeAtomicJson } from './atomicJson.js';
 
@@ -9,6 +10,8 @@ export type Publication = {
   publishedAt: string; checkedAt: string; revision: string | null;
   fingerprint: string; snapshot: string; appRevision: string;
   sourceDir: string;
+  reportChanges?: ReportChangeSet;
+  reviewRevisions?: Array<{ reportId: string; sourceHash: string }>;
 };
 export function publicationFile() {
   return process.env.REPORT_PUBLICATION_FILE || path.resolve('data/runtime/publication.json');
@@ -20,12 +23,19 @@ export async function readPublication(file = publicationFile()): Promise<Publica
     if (!/^[0-9a-f]{64}$/.test(value.fingerprint) || value.revision !== null && !/^[0-9a-f]{40,64}$/.test(value.revision) ||
       !/^[0-9a-f]{64}\.json\.gz$/.test(value.snapshot) || typeof value.appRevision !== 'string' ||
       typeof value.sourceDir !== 'string' || !path.isAbsolute(value.sourceDir) ||
-      !Number.isFinite(Date.parse(value.publishedAt)) || !Number.isFinite(Date.parse(value.checkedAt))) throw new Error('Invalid publication record');
+      !Number.isFinite(Date.parse(value.publishedAt)) || !Number.isFinite(Date.parse(value.checkedAt)) || value.reportChanges !== undefined && !validReportChanges(value.reportChanges)) throw new Error('Invalid publication record');
     return value;
   } catch (error) {
     if ((error as NodeJS.ErrnoException).code === 'ENOENT') return null;
     throw error;
   }
+}
+
+function validReportChanges(value: unknown): value is ReportChangeSet {
+  if (!value || typeof value !== 'object') return false;
+  const changes = value as Record<string, unknown>;
+  if (!Number.isFinite(Date.parse(String(changes.generatedAt)))) return false;
+  return ['added', 'modified', 'removed'].every(key => Array.isArray(changes[key]) && (changes[key] as unknown[]).length <= 100_000);
 }
 
 export async function restorePublishedIndex(sourceDir: string): Promise<IndexState | null> {
@@ -53,7 +63,9 @@ export async function commitPublication(
   // Prune abandoned candidates before staging the next one, while the caller
   // holds the update lock. Never run asynchronous cleanup across a later commit.
   try {
-    const names = await fs.readdir(`${file}.snapshots`);
+    // With no valid pointer, existing snapshots may be the only recovery copy.
+    // Do not prune them before a new publication has committed.
+    const names = previous ? await fs.readdir(`${file}.snapshots`) : [];
     await Promise.all(names.filter((name) => /^[0-9a-f]{64}\.json\.gz$/.test(name) && name !== previous?.snapshot)
       .map((name) => fs.unlink(path.join(`${file}.snapshots`, name)).catch(() => undefined)));
   } catch { /* A new deployment may not have a snapshot directory yet. */ }

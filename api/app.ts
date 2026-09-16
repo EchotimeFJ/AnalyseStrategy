@@ -14,6 +14,7 @@ import helmet from 'helmet'
 import { publicJsonReplacer, requireAdmin, requestLimit, validateQuery } from './security.js'
 import researchRoutes from './routes/research.js'
 import aiRoutes from './routes/ai.js'
+import reviewRoutes from './routes/review.js'
 
 const app: express.Application = express()
 
@@ -28,6 +29,7 @@ app.use('/api', requestLimit(120), validateQuery)
 app.use('/api/search', requestLimit(20))
 app.use('/api/export', requestLimit(4))
 app.use('/api/ai/chat', requestLimit(6))
+app.use('/api/review/retry', requestLimit(5))
 app.use('/api/ai/config', requestLimit(5))
 // Model selection does not consume provider tokens. Preserve the failed-admin
 // attempt limit while allowing successful selections under the global API cap.
@@ -46,6 +48,7 @@ app.use(express.json({ limit: '64kb', strict: true }))
  */
 app.use('/api', researchRoutes)
 app.use('/api/ai', aiRoutes)
+app.use('/api/review', reviewRoutes)
 
 /**
  * health
@@ -68,6 +71,7 @@ app.use((error: Error, req: Request, res: Response, next: NextFunction) => {
   void req
   void next
   res.setHeader('Cache-Control', 'no-store')
+  if (error.message === 'PUBLICATION_CHANGED') { res.status(409).json({ success: false, error: { code: 'PUBLICATION_CHANGED', message: '数据已更新，请从第一页重新查询' } }); return; }
   const isIndexUnavailable = 'code' in error && error.code === 'ENOENT'
   const parseStatus = 'status' in error ? error.status : undefined
   if (parseStatus === 400 || parseStatus === 413) {

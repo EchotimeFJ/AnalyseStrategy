@@ -1,15 +1,18 @@
 import fs from 'node:fs';
+import { applySecurityAliases } from './securityAliases.js';
 
 type Entry = { code: string; symbol: string; names: string[] };
 const data = JSON.parse(fs.readFileSync(new URL('../data/securities.json', import.meta.url), 'utf8')) as { securities: Entry[] };
 const bySymbol = new Map<string, Set<string>>();
 const byName = new Map<string, Set<string>>();
+const namesByCode = new Map<string, string[]>();
 const normalize = (text: string) => text.normalize('NFKC').trim().toLowerCase();
 function add(map: Map<string, Set<string>>, key: string, code: string) {
   const values = map.get(key) ?? new Set<string>();
   values.add(code); map.set(key, values);
 }
-for (const entry of data.securities) {
+for (const entry of applySecurityAliases(data.securities)) {
+  namesByCode.set(entry.code,entry.names);
   const symbols = entry.code.endsWith('.HK') ? [entry.symbol, entry.code.split('.')[0]] : [entry.symbol];
   for (const symbol of symbols) add(bySymbol, symbol.toUpperCase(), entry.code);
   for (const name of entry.names) add(byName, normalize(name), entry.code);
@@ -34,3 +37,5 @@ export function dictionaryName(text: string): { name: string; codes: string[] } 
   }
   return null;
 }
+
+export function dictionaryCodeNames(code: string): string[] { return namesByCode.get(code) ?? []; }

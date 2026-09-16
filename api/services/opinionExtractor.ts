@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto';
 import type { OpinionRecord, OpinionType, SecurityEntity, SourceEvidence } from '../domain/research.js';
 import {
   isInvalidEntityName,
@@ -9,6 +10,15 @@ import {
 import { extractTargetMentions, type ReportDocument, type TargetMention } from './reportParser.js';
 
 const POSITIVE_RATINGS = ['买入', '增持', '跑赢', '优于大市', 'overweight', 'buy', 'ow'];
+
+function isPseudoTargetName(value: string) {
+  const normalized = normalizeEntityName(value);
+  return /(?:核心\s*)?(?:推荐|精选).*(?:股票|个股|标的)$/.test(normalized)
+    || /(?:股票|个股|标的).*(?:列表|清单)$/.test(normalized)
+    || /(?:仪表盘|结果公布|前瞻|简评|研究观点|行业供需总览|市场展望)$/.test(normalized)
+    || /\d{4}\s*[/／-]\s*\d{1,2}.*(?:结果公布|集采|前瞻)$/.test(normalized)
+    || /^(?:.*(?:上调|下调|调升|调降).*(?:低配|标配|高配|超配)|(?:低配|标配|高配|超配)(?:评级|观点)?)$/.test(normalized);
+}
 
 export function isPositiveRating(value: string | null | undefined): boolean {
   const normalized = value?.normalize('NFKC').trim().toLowerCase() ?? '';
@@ -39,7 +49,16 @@ export function classifyOpinionTypes(input: {
 }
 
 export function extractOpinions(report: ReportDocument): OpinionRecord[] {
-  return extractTargetMentions(report).map((mention, index) => toOpinion(report, mention, index));
+  // Recognition keeps unscored security mentions for coverage and event
+  // views, but article/list labels must never become opinion records. Keep
+  // this boundary here as a second guard for downstream consumers.
+  const sourceHash = createHash('sha256').update(report.markdown).digest('hex');
+  return extractTargetMentions(report)
+    .filter((mention) => !isInvalidEntityName(mention.targetName) && !isPseudoTargetName(mention.targetName))
+    .map((mention, index) => {
+      const opinion = toOpinion(report, mention, index);
+      return {...opinion, sourceHash, evidence: opinion.evidence.map(item => ({...item, sourceHash}))};
+    });
 }
 
 function toOpinion(report: ReportDocument, mention: TargetMention, index: number): OpinionRecord {
@@ -95,6 +114,7 @@ function toOpinion(report: ReportDocument, mention: TargetMention, index: number
     rawRating: mention.rawRating ?? rating,
     action,
     targetPrice: mention.targetPrice ?? null,
+    previousTargetPrice: mention.previousTargetPrice ?? null,
     currentPrice: mention.currentPrice ?? null,
     types: [...new Set([...classifyOpinionTypes({ rating, action, text: mention.excerpt, ratingChanged: mention.ratingChanged, targetPriceChanged: mention.targetPriceChanged }),
       ...mention.signals.filter((signal) => signal.type === 'risk' || signal.type === 'catalyst').map((signal) => signal.type as OpinionType)])].filter((type) => !mention.ratingAlternatives?.length || type !== 'positive'),

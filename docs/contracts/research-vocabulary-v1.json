@@ -1,0 +1,377 @@
+{
+  "version": "1.0.0",
+  "status": "approved",
+  "rating": {
+    "display": {
+      "buy": "买入",
+      "overweight": "增持",
+      "neutral": "中性",
+      "hold": "持有",
+      "underweight": "减持",
+      "sell": "卖出",
+      "other": "其他原文评级"
+    },
+    "coverage": [
+      "rated",
+      "not_covered",
+      "unrated"
+    ],
+    "basis": [
+      "absolute_return",
+      "relative_benchmark",
+      "portfolio_weight",
+      "unknown"
+    ],
+    "requiredCompanions": [
+      "rawLabel",
+      "scaleRef",
+      "benchmarkText",
+      "horizonText",
+      "evidenceRefs"
+    ],
+    "displayAliases": {
+      "Buy": "buy",
+      "买入": "buy",
+      "买入/高风险": "buy",
+      "增持": "overweight",
+      "超配": "overweight",
+      "Overweight": "overweight",
+      "OW": "overweight",
+      "跑赢": "overweight",
+      "跑赢大市": "overweight",
+      "跑赢大盘": "overweight",
+      "跑赢行业": "overweight",
+      "优于大市": "overweight",
+      "Neutral": "neutral",
+      "中性": "neutral",
+      "Hold": "hold",
+      "持有": "hold",
+      "减持": "underweight",
+      "Underweight": "underweight",
+      "UW": "underweight",
+      "跑输": "underweight",
+      "跑输大市": "underweight",
+      "跑输大盘": "underweight",
+      "跑输行业": "underweight",
+      "弱于大市": "underweight",
+      "低于行业表现": "underweight",
+      "Sell": "sell",
+      "卖出": "sell"
+    },
+    "note": "Aliases affect legacy display/filter only. Keep original scale, risk qualifier and benchmark; do not compare cross-institution grades using this map alone. Unknown mapping remains other; absent/ambiguous is Claim state, not a rating. Number-only broker grades need institution-specific scale evidence."
+  },
+  "source": {
+    "articleKind": [
+      "company",
+      "industry",
+      "macro",
+      "strategy",
+      "mixed",
+      "unknown"
+    ],
+    "titleOrigin": [
+      "source",
+      "generated"
+    ],
+    "datePrecision": [
+      "day",
+      "month",
+      "quarter",
+      "year",
+      "unknown"
+    ],
+    "reportLifecycle": [
+      "active",
+      "withdrawn"
+    ],
+    "sourceChange": [
+      "added",
+      "modified",
+      "renamed",
+      "withdrawn",
+      "unchanged"
+    ]
+  },
+  "identity": {
+    "organizationKind": [
+      "company",
+      "research_institution",
+      "other",
+      "unknown"
+    ],
+    "instrumentType": [
+      "common_equity",
+      "preferred_equity",
+      "depositary_receipt",
+      "reit",
+      "etf",
+      "fund",
+      "other",
+      "unknown"
+    ],
+    "marketScope": [
+      "A",
+      "HK",
+      "US",
+      "SG",
+      "TW",
+      "JP",
+      "KR",
+      "other",
+      "unknown"
+    ],
+    "listingStatus": [
+      "active",
+      "suspended",
+      "delisted",
+      "unknown"
+    ],
+    "mentionRole": [
+      "main_subject",
+      "recommended_target",
+      "peer",
+      "customer_supplier",
+      "publisher",
+      "analyst",
+      "terminology",
+      "other",
+      "unknown"
+    ],
+    "identifierInterpretation": [
+      "ticker",
+      "abbreviation",
+      "unknown"
+    ],
+    "resolutionStatus": [
+      "resolved",
+      "ambiguous",
+      "unresolved",
+      "conflict"
+    ]
+  },
+  "statement": {
+    "subjectScope": [
+      "company",
+      "security",
+      "listing",
+      "theme",
+      "market",
+      "unresolved"
+    ],
+    "attribution": [
+      "article_publisher",
+      "quoted_party",
+      "unknown"
+    ],
+    "polarity": [
+      "affirmative",
+      "negated",
+      "unknown"
+    ],
+    "modality": [
+      "actual",
+      "conditional",
+      "hypothetical",
+      "unknown"
+    ],
+    "temporalContext": [
+      "current",
+      "historical",
+      "unknown"
+    ],
+    "recommendation": [
+      "buy",
+      "hold",
+      "sell",
+      "top_pick",
+      "positive",
+      "avoid",
+      "other"
+    ],
+    "ratingAction": [
+      "maintain",
+      "upgrade",
+      "downgrade",
+      "initiate",
+      "resume",
+      "withdraw",
+      "other"
+    ],
+    "targetPriceAction": [
+      "maintain",
+      "raise",
+      "lower",
+      "initiate",
+      "withdraw",
+      "other"
+    ],
+    "priceShape": [
+      "point",
+      "range"
+    ],
+    "priceUnit": [
+      "per_share",
+      "per_ads",
+      "index_point",
+      "other",
+      "unknown"
+    ],
+    "sharedScopeKind": [
+      "rating",
+      "recommendation",
+      "both"
+    ],
+    "opinionTypeCompatibility": [
+      "positive",
+      "rating-change",
+      "target-price-change",
+      "catalyst",
+      "risk"
+    ]
+  },
+  "signal": {
+    "kind": [
+      "risk",
+      "catalyst"
+    ],
+    "temporalContext": [
+      "current",
+      "historical",
+      "future",
+      "unknown"
+    ],
+    "realizationStatus": [
+      "not_tracked",
+      "pending",
+      "occurred",
+      "not_occurred",
+      "cancelled",
+      "unknown"
+    ],
+    "legacyContentClass": [
+      "valuation",
+      "financial",
+      "macro"
+    ],
+    "note": "Legacy valuation/financial/macro content remains searchable via article topics and evidence; not silently discarded or mislabeled as risk/catalyst. Realization tracking is optional future data, never inferred from expected dates."
+  },
+  "topic": {
+    "kind": [
+      "sector",
+      "theme",
+      "market_scope"
+    ],
+    "origin": [
+      "source_tag",
+      "ai_extracted",
+      "manual"
+    ],
+    "taxonomyState": [
+      "candidate",
+      "approved",
+      "deprecated"
+    ],
+    "note": "Individual topic names belong to a versioned taxonomy, not a closed hard-coded enum. AI suggests candidates; only system/manual review changes taxonomy."
+  },
+  "quality": {
+    "claimState": [
+      "stated",
+      "not_stated",
+      "ambiguous",
+      "not_applicable"
+    ],
+    "validationState": [
+      "valid",
+      "needs_review",
+      "rejected"
+    ],
+    "humanReviewState": [
+      "not_reviewed",
+      "confirmed",
+      "corrected",
+      "rejected"
+    ],
+    "readiness": [
+      "legacy_unreviewed",
+      "pending",
+      "ready",
+      "partial",
+      "failed",
+      "withdrawn"
+    ],
+    "jobStatus": [
+      "queued",
+      "running",
+      "retry_wait",
+      "budget_paused",
+      "config_paused",
+      "succeeded",
+      "partial",
+      "failed",
+      "superseded",
+      "withdrawn"
+    ],
+    "attemptStatus": [
+      "running",
+      "succeeded",
+      "failed",
+      "cancelled"
+    ],
+    "operation": [
+      "keep",
+      "add",
+      "modify",
+      "delete",
+      "defer"
+    ],
+    "issueCategory": [
+      "subject_role",
+      "attribution",
+      "identity_conflict",
+      "time_ambiguity",
+      "rating_conflict",
+      "price_conflict",
+      "evidence_unlocated",
+      "coverage_gap",
+      "incomplete_output",
+      "unsupported_value",
+      "provider_error",
+      "other"
+    ],
+    "severity": [
+      "info",
+      "warning",
+      "error"
+    ],
+    "issueStatus": [
+      "open",
+      "resolved",
+      "dismissed"
+    ],
+    "changeReason": [
+      "source_update",
+      "rule_correction",
+      "ai_review",
+      "identity_resolution",
+      "human_correction"
+    ],
+    "actorType": [
+      "system",
+      "ai",
+      "human"
+    ],
+    "profileReviewQualification": [
+      "untested",
+      "passed",
+      "failed",
+      "stale"
+    ]
+  },
+  "openValues": {
+    "currency": "Verified ISO currency code or null; preserve source text. Not limited to CNY/HKD/USD.",
+    "venue": "Verified trading venue identifier; unknown is null, not guessed from ticker format.",
+    "datesAmountsNames": "Data values, not enums. Monetary values use decimal strings.",
+    "providerModel": "Read saved configuration; do not hard-code the three tested models."
+  },
+  "runtimeSource": "src/shared/researchVocabulary.ts"
+}

@@ -1,0 +1,1 @@
+{"reserved":262055,"cap":290888,"actual":114444,"calls":8,"settlements":{"at":"2026-09-15T17:47:27.389Z","before":285157,"measured":74118,"unknownReservation":58737,"sourceFiles":["smoke-deepseek.json","smoke-mimo.json","smoke-v2-openrouter.json","smoke-v2-deepseek.json"]},"settledV4":{"reserved":54473,"actual":20223,"at":"2026-09-15T18:02:02.961Z"}}

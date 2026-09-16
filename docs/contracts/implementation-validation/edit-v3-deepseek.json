@@ -1,0 +1,87 @@
+{
+  "provider": "deepseek",
+  "model": "deepseek-flash",
+  "source": "synthetic name/price/title/catalyst fault injection",
+  "readiness": "ready",
+  "complete": true,
+  "validationState": "valid",
+  "issues": [
+    {
+      "issueId": "issue:development-edit-probe:1",
+      "recordRef": "mention:development-edit-probe:3:0",
+      "fieldPath": "payload.resolution.resolvedCode",
+      "category": "unsupported_value",
+      "severity": "warning",
+      "status": "open",
+      "description": "原文无股票代码，候选600406.SS无依据，该字段不可修改。",
+      "evidenceIDs": [
+        "evidence:development-edit-probe:3:04121d02e1b1"
+      ]
+    },
+    {
+      "issueId": "issue:development-edit-probe:2",
+      "recordRef": "statement:development-edit-probe:3:0",
+      "fieldPath": "payload.targetPrice.value.amount",
+      "category": "price_conflict",
+      "severity": "error",
+      "status": "resolved",
+      "description": "候选目标价60元与原文28元不符，已按原文修正。",
+      "evidenceIDs": [
+        "evidence:development-edit-probe:3:04121d02e1b1"
+      ]
+    },
+    {
+      "issueId": "issue:development-edit-probe:3",
+      "recordRef": "mention:fixture-fake",
+      "fieldPath": "payload.rawName",
+      "category": "subject_role",
+      "severity": "error",
+      "status": "resolved",
+      "description": "“首选标的组合”为栏目名，非公司实体，已删除。",
+      "evidenceIDs": [
+        "evidence:development-edit-probe:3:04121d02e1b1"
+      ]
+    }
+  ],
+  "elapsedMs": 9105,
+  "configUnchanged": true,
+  "actualTokens": 27710,
+  "opinions": [
+    {
+      "name": "国电南瑞",
+      "rating": "买入",
+      "targetPrice": "28元"
+    }
+  ],
+  "signals": [
+    {
+      "articleRef": "article:development-edit-probe:1-5",
+      "subject": {
+        "scope": "company",
+        "mentionRef": "mention:development-edit-probe:3:0",
+        "rawText": "国电南瑞",
+        "resolvedSecurityKey": null
+      },
+      "kind": "catalyst",
+      "summary": "10月项目验收",
+      "evidenceIDs": [
+        "evidence:development-edit-probe:5:043786360f39"
+      ],
+      "temporalContext": "current",
+      "polarity": "affirmative",
+      "modality": "actual",
+      "relatedStatementRefs": [
+        "statement:development-edit-probe:3:0"
+      ],
+      "expectedWindowText": "10月",
+      "eventDate": {
+        "state": "not_stated",
+        "value": null,
+        "evidenceIDs": []
+      },
+      "conditionText": null,
+      "realizationStatus": "not_tracked"
+    }
+  ],
+  "passed": true
+}

@@ -1,0 +1,67 @@
+{
+  "provider": "mimo",
+  "model": "mimo-v2.5-pro",
+  "source": "synthetic name/price/title/catalyst fault injection",
+  "readiness": "failed",
+  "complete": false,
+  "validationState": "rejected",
+  "issues": [
+    {
+      "issueId": "issue:04a5cbff09ac95bc",
+      "recordRef": null,
+      "fieldPath": "coverage.reason",
+      "category": "unsupported_value",
+      "severity": "error",
+      "status": "open",
+      "description": "不支持的字段：coverage.reason",
+      "evidenceIDs": []
+    },
+    {
+      "issueId": "issue-1",
+      "recordRef": "statement:development-edit-probe:3:0",
+      "fieldPath": "payload.targetPrice",
+      "category": "price_conflict",
+      "severity": "error",
+      "status": "resolved",
+      "description": "候选中目标价为60元，但原文为28元。已修正。",
+      "evidenceIDs": [
+        "evidence:development-edit-probe:3:04121d02e1b1"
+      ]
+    },
+    {
+      "issueId": "issue-2",
+      "recordRef": "mention:development-edit-probe:3:0",
+      "fieldPath": "payload.rawName",
+      "category": "identity_conflict",
+      "severity": "warning",
+      "status": "resolved",
+      "description": "候选原始名称为“同时覆盖国电南瑞”，但原文提及的公司实体为“国电南瑞”。已修正。",
+      "evidenceIDs": [
+        "evidence:development-edit-probe:3:04121d02e1b1"
+      ]
+    },
+    {
+      "issueId": "issue:6ed899ee796b6ef9",
+      "recordRef": "article:development-edit-probe:1-5",
+      "fieldPath": "payload.mainMentionRefs",
+      "category": "subject_role",
+      "severity": "error",
+      "status": "open",
+      "description": "article.mainMentionRefs 关系无效：mention:fixture-fake",
+      "evidenceIDs": []
+    },
+    {
+      "issueId": "issue:59b9f6b0c4ee4b32",
+      "recordRef": null,
+      "fieldPath": "operations",
+      "category": "incomplete_output",
+      "severity": "error",
+      "status": "open",
+      "description": "复核没有返回任何候选处置",
+      "evidenceIDs": []
+    }
+  ],
+  "elapsedMs": 31710,
+  "configUnchanged": true,
+  "actualTokens": 15303
+}

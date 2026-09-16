@@ -1,14 +1,16 @@
 import type { SignalItem, TargetMention } from '../types';
 
 type ReportLinkInput = {
+  sourceHash?: string;
   reportId: string;
   lineNumber?: number;
   highlightTerms?: Array<string | undefined>;
 };
 
-export function buildReportLink({ reportId, lineNumber, highlightTerms = [] }: ReportLinkInput) {
+export function buildReportLink({ reportId, lineNumber, sourceHash, highlightTerms = [] }: ReportLinkInput) {
   const params = new URLSearchParams();
   params.set('id', reportId);
+  if (sourceHash && /^[a-f0-9]{64}$/.test(sourceHash)) params.set('revision', sourceHash);
 
   if (lineNumber && Number.isFinite(lineNumber) && lineNumber > 0) {
     params.set('line', String(Math.floor(lineNumber)));

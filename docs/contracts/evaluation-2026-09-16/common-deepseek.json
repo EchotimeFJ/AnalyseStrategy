@@ -1,0 +1,40 @@
+{
+  "id": "common-deepseek",
+  "phase": "common",
+  "provider": "deepseek",
+  "configuredModel": "deepseek-flash",
+  "startedAt": "2026-09-15T16:26:48.726Z",
+  "timeoutMs": 120000,
+  "maxTokens": 6000,
+  "inputHash": "221defc7a9230d96277424e559bcfa99f65ada19dbe43f03f5a378da710de424",
+  "sampleIds": [
+    "R1",
+    "R2",
+    "R3",
+    "R4",
+    "S1",
+    "S2",
+    "S3",
+    "S4"
+  ],
+  "httpStatus": 200,
+  "actualModel": "deepseek-flash",
+  "usage": {
+    "prompt_tokens": 3906,
+    "completion_tokens": 6000,
+    "total_tokens": 9906,
+    "prompt_tokens_details": {
+      "cached_tokens": 128
+    },
+    "completion_tokens_details": {
+      "reasoning_tokens": 6000
+    },
+    "prompt_cache_hit_tokens": 128,
+    "prompt_cache_miss_tokens": 3778
+  },
+  "finishReason": "length",
+  "content": "",
+  "status": "truncated",
+  "elapsedMs": 28025,
+  "configUnchanged": true
+}

@@ -1,0 +1,51 @@
+{
+  "cap": 200000,
+  "reserved": 199112,
+  "attempts": [
+    {
+      "id": "base-openrouter",
+      "reserved": 20002,
+      "at": "2026-09-15T16:24:38.094Z"
+    },
+    {
+      "id": "base-deepseek",
+      "reserved": 20002,
+      "at": "2026-09-15T16:25:04.048Z"
+    },
+    {
+      "id": "base-mimo",
+      "reserved": 20002,
+      "at": "2026-09-15T16:25:30.008Z"
+    },
+    {
+      "id": "common-openrouter",
+      "reserved": 22306,
+      "at": "2026-09-15T16:26:23.692Z"
+    },
+    {
+      "id": "common-deepseek",
+      "reserved": 22306,
+      "at": "2026-09-15T16:26:48.725Z"
+    },
+    {
+      "id": "common-mimo",
+      "reserved": 22306,
+      "at": "2026-09-15T16:27:16.752Z"
+    },
+    {
+      "id": "adapted-openrouter",
+      "reserved": 22396,
+      "at": "2026-09-15T16:32:09.029Z"
+    },
+    {
+      "id": "adapted-deepseek",
+      "reserved": 22396,
+      "at": "2026-09-15T16:32:33.310Z"
+    },
+    {
+      "id": "adapted-mimo",
+      "reserved": 27396,
+      "at": "2026-09-15T16:32:39.755Z"
+    }
+  ]
+}

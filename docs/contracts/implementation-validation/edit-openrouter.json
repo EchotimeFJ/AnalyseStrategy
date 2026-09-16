@@ -1,0 +1,87 @@
+{
+  "provider": "openrouter",
+  "model": "z-ai/glm-5.3-flash",
+  "source": "synthetic name/price/title/catalyst fault injection",
+  "readiness": "failed",
+  "complete": false,
+  "validationState": "rejected",
+  "issues": [
+    {
+      "issueId": "issue-1",
+      "recordRef": "statement:development-edit-probe:3:0",
+      "fieldPath": "payload.targetPrice",
+      "category": "price_conflict",
+      "severity": "error",
+      "status": "resolved",
+      "description": "候选目标价60元与原文28元不符",
+      "evidenceIDs": [
+        "evidence:development-edit-probe:3:04121d02e1b1"
+      ]
+    },
+    {
+      "issueId": "issue-2",
+      "recordRef": "mention:fixture-fake",
+      "fieldPath": "payload.rawName",
+      "category": "subject_role",
+      "severity": "error",
+      "status": "resolved",
+      "description": "首选标的组合是栏目名，非公司主体，已删除",
+      "evidenceIDs": [
+        "evidence:development-edit-probe:3:04121d02e1b1"
+      ]
+    },
+    {
+      "issueId": "issue:8a3a72dfd1abbfd3",
+      "recordRef": "statement:development-edit-probe:3:0",
+      "fieldPath": "operation.payload",
+      "category": "unsupported_value",
+      "severity": "error",
+      "status": "open",
+      "description": "不支持的字段：operation.payload",
+      "evidenceIDs": []
+    },
+    {
+      "issueId": "issue:66cd65f70e819f2b",
+      "recordRef": "statement:development-edit-probe:3:0",
+      "fieldPath": "operation.expectedValueHashes",
+      "category": "unsupported_value",
+      "severity": "error",
+      "status": "open",
+      "description": "不支持的字段：operation.expectedValueHashes",
+      "evidenceIDs": []
+    },
+    {
+      "issueId": "issue:82bd1535e65c8104",
+      "recordRef": "statement:development-edit-probe:3:0",
+      "fieldPath": "fieldChanges",
+      "category": "incomplete_output",
+      "severity": "error",
+      "status": "open",
+      "description": "modify 必须携带 fieldChanges：statement:development-edit-probe:3:0",
+      "evidenceIDs": []
+    },
+    {
+      "issueId": "issue:6ed899ee796b6ef9",
+      "recordRef": "article:development-edit-probe:1-5",
+      "fieldPath": "payload.mainMentionRefs",
+      "category": "subject_role",
+      "severity": "error",
+      "status": "open",
+      "description": "article.mainMentionRefs 关系无效：mention:fixture-fake",
+      "evidenceIDs": []
+    },
+    {
+      "issueId": "issue:59b9f6b0c4ee4b32",
+      "recordRef": null,
+      "fieldPath": "operations",
+      "category": "incomplete_output",
+      "severity": "error",
+      "status": "open",
+      "description": "复核没有返回任何候选处置",
+      "evidenceIDs": []
+    }
+  ],
+  "elapsedMs": 6955,
+  "configUnchanged": true,
+  "actualTokens": 12235
+}

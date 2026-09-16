@@ -1,6 +1,7 @@
 export type ConfidenceLevel = 'high' | 'medium' | 'low';
 
 export interface SourceEvidence {
+  sourceHash?: string;
   reportId: string;
   filePath: string;
   lineNumber: number;
@@ -13,6 +14,9 @@ export interface SourceEvidence {
 }
 
 export interface SecurityEntity {
+  organizationId?: string;
+  securityId?: string;
+  listingId?: string;
   key: string;
   code: string | null;
   displayName: string;
@@ -28,6 +32,8 @@ export type OpinionType =
   | 'risk';
 
 export interface OpinionRecord {
+  rawCode?: string | null;
+  sourceHash?: string;
   id: string;
   reportId: string;
   reportDate: string;
@@ -39,6 +45,8 @@ export interface OpinionRecord {
   rawRating: string | null;
   action: string | null;
   targetPrice: string | null;
+  /** The prior target price stated in the same source statement, when any. */
+  previousTargetPrice?: string | null;
   currentPrice: string | null;
   types: OpinionType[];
   evidence: SourceEvidence[];
@@ -48,7 +56,7 @@ export interface OpinionRecord {
 }
 
 export interface DataQualityIssue {
-  type: 'parse-error' | 'unverified-institution' | 'low-confidence-security';
+  type: 'parse-error' | 'unverified-institution' | 'low-confidence-security' | 'review-pending' | 'review-partial' | 'review-failed';
   reportId?: string;
   filePath?: string;
   lineNumber?: number;
@@ -56,6 +64,12 @@ export interface DataQualityIssue {
 }
 
 export interface ReportOverview {
+  publicationId?: string;
+  review?: {status:string;sourceHash?:string;publishedSourceHash?:string;model?:string;issueCount?:number};
+  companyCount?: number;
+  signals?: Array<{id:string;kind:'risk'|'catalyst';subject:string;subjectScope:string;summary:string;lineNumber:number;sourceHash:string}>;
+  summaries?: Array<{id:string;title:string;summary:string;lineNumber:number;sourceHash:string}>;
+
   reportId: string;
   date: string;
   title: string;
@@ -85,6 +99,8 @@ export interface BuyCoverage {
 }
 
 export interface CompanyProfile {
+  companyId?: string;
+  listings?: SecurityEntity[];
   security: SecurityEntity;
   firstMention: string | null;
   latestMention: string | null;

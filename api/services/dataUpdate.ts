@@ -3,15 +3,16 @@ import path from 'node:path';
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
 import { getReportDir, getStrategyDir } from '../runtimeConfig.js';
-import { activatePublishedIndex, ensureIndex, prepareIndexForPublication, withIndexSourceUpdate } from './reportIndex.js';
+import { activatePublishedIndex, diffReportChanges, ensureIndex, prepareIndexForPublication, withIndexSourceUpdate, type IndexState, type ReportChangeSet } from './reportIndex.js';
 import { readSourceManifest } from './reportCache.js';
 import { pullStrategyRepository } from './gitUpdater.js';
 import { commitPublication, publicationFile, readPublication } from './publicationStore.js';
 import { getAppVersion } from './version.js';
+import { reviewEnabled } from './reviewRuntime.js';
 
 const exec = promisify(execFile);
 const HOUR = 60 * 60 * 1000;
-export type PublicationStatus = { publishedAt: string | null; checkedAt: string | null; state: 'ready' | 'pending' | 'delayed'; intervalSeconds: number };
+export type PublicationStatus = { publishedAt: string | null; checkedAt: string | null; state: 'ready' | 'pending' | 'delayed'; intervalSeconds: number; reportChanges?: ReportChangeSet; indexVersion?: string };
 
 // One updater per long-lived server process. PM2 must run one fork instance;
 // this is intentionally not started from the serverless request handler.
@@ -22,6 +23,7 @@ export function createDataUpdater(options: { statusFile?: string; now?: () => Da
   let running: Promise<PublicationStatus> | undefined;
   let timer: ReturnType<typeof setInterval> | undefined;
   let delayed = false;
+  let afterUpdate: (() => void) | undefined;
 
   async function currentPublication() {
     const record = await readPublication(file);
@@ -35,6 +37,7 @@ export function createDataUpdater(options: { statusFile?: string; now?: () => Da
       publishedAt: previous?.publishedAt ?? null,
       checkedAt: previous?.checkedAt ?? null,
       state: delayed || overdue ? 'delayed' : previous ? 'ready' : 'pending',
+      reportChanges: previous?.reportChanges,
       intervalSeconds: HOUR / 1000,
     };
   }
@@ -55,21 +58,28 @@ export function createDataUpdater(options: { statusFile?: string; now?: () => Da
       const manifest = await readSourceManifest(getReportDir());
       const app = getAppVersion();
       const appRevision = `${app.version}:${app.commit}`;
-      const reuseSnapshot = Boolean(!force && baseline && previous && manifest.fingerprint === baseline.sourceFingerprint && previous.appRevision === appRevision);
-      const index = reuseSnapshot ? baseline! : await prepareIndexForPublication();
+      let reuseSnapshot = Boolean(!reviewEnabled() && !force && baseline && previous && manifest.fingerprint === baseline.sourceFingerprint && previous.appRevision === appRevision);
+      let index = reuseSnapshot ? baseline! : await prepareIndexForPublication();
       const hash = createHash('sha256');
       for (const report of index.reports) hash.update(JSON.stringify([report.id, report.markdown]));
+      if (index.reviewFingerprint) hash.update(index.reviewFingerprint);
       const fingerprint = hash.digest('hex');
+      if (baseline && previous?.fingerprint === fingerprint && previous.appRevision === appRevision && baseline.sourceFingerprint === manifest.fingerprint) {
+        index = baseline; reuseSnapshot = true;
+      }
+      const reportChanges = diffReportChanges(baseline ?? emptyIndex(getReportDir()), index);
       const details = {
         publishedAt: previous?.fingerprint === fingerprint ? previous.publishedAt : now().toISOString(),
         checkedAt: now().toISOString(), revision, fingerprint, appRevision,
+        reportChanges,
+        reviewRevisions: [...new Map([...(previous?.reviewRevisions ?? []), ...index.reports.filter(r => index.reviewStates?.[r.id]).map(r => ({ reportId: r.id, sourceHash: createHash('sha256').update(r.markdown).digest('hex') }))].map(r => [`${r.reportId}:${r.sourceHash}`, r])).values()],
       };
       await commitPublication(file, index, details, previous, reuseSnapshot);
       activatePublishedIndex(index);
       delayed = false;
       // No fallible I/O after the commit point: a subsequent status read must
       // never roll back memory after the durable pointer has already advanced.
-      return { publishedAt: details.publishedAt, checkedAt: details.checkedAt, state: 'ready' as const, intervalSeconds: HOUR / 1000 };
+      return { publishedAt: details.publishedAt, checkedAt: details.checkedAt, state: 'ready' as const, reportChanges, indexVersion: index.version, intervalSeconds: HOUR / 1000 };
     }).catch((error) => {
       delayed = true;
       throw error;
@@ -78,9 +88,11 @@ export function createDataUpdater(options: { statusFile?: string; now?: () => Da
 
   function update(): Promise<PublicationStatus> {
     if (running) return running;
-    running = run(true, false).finally(() => { running = undefined; });
+    running = run(true, false).then(result => { notifyUpdate(); return result; }).finally(() => { running = undefined; });
     return running;
   }
+
+  function notifyUpdate() { if (afterUpdate) setImmediate(() => { try { afterUpdate?.(); } catch { /* Worker reports its own failure. */ } }); }
 
   function start() {
     if (timer) return;
@@ -96,7 +108,11 @@ export function createDataUpdater(options: { statusFile?: string; now?: () => Da
     await running?.catch(() => undefined);
   }
 
-  return { update, reindex: () => run(false, true), status, start, stop };
+  return { update, reindex: () => run(false, true).then(result => { notifyUpdate(); return result; }), status, start, stop, setAfterUpdate: (callback: () => void) => { afterUpdate = callback; } };
+}
+
+function emptyIndex(sourceDir: string): IndexState {
+  return { sourceDir: path.resolve(sourceDir), reports: [], mentions: [], opinions: [], entities: new Map(), qualityIssues: [], errors: [] };
 }
 
 export const dataUpdater = createDataUpdater();

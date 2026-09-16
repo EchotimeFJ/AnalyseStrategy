@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto';
 import type { ResolvedAiConfig } from './aiConfig.js';
 import { aiConfigStore } from './aiConfig.js';
 import { createOpenAiCompatibleProvider, type AiProvider, type ProviderMessage } from './aiProvider.js';
@@ -13,6 +14,7 @@ import {
 import type { OpinionRecord } from '../domain/research.js';
 import type { ReportDocument } from './reportParser.js';
 import { createAiUsage } from './aiUsage.js';
+import { aiResourceGroup } from './aiResources.js';
 import { buildBuyList, isBuyListQuestion } from './aiBuyList.js';
 
 type ConfigStore = {
@@ -20,7 +22,7 @@ type ConfigStore = {
   getPublic(): Promise<unknown>;
 };
 
-type AiIndex = { reports: ReportDocument[]; opinions: OpinionRecord[]; version?: string };
+type AiIndex = { reports: ReportDocument[]; opinions: OpinionRecord[]; version?: string; reviewStates?: Record<string, {status:string;sourceHash?:string;publishedSourceHash?:string}> };
 type ChatHistoryMessage = { role: 'user' | 'assistant'; content: string };
 type AiServiceOptions = {
   configStore?: ConfigStore;
@@ -39,11 +41,11 @@ export function createAiService(options: AiServiceOptions = {}) {
   const now = options.now ?? (() => new Date());
   const recentByIp = new Map<string, number[]>();
   const cache = new Map<string, string>();
-  let active = 0;
+  const resources = aiResourceGroup(options.usageFile);
   const usage = createAiUsage(options.usageFile, now);
 
   async function status() {
-    return { ...(await configStore.getPublic() as object), usage: { estimatedTokens: (await usage.read()).estimatedTokens, active } };
+    return { ...(await configStore.getPublic() as object), usage: { estimatedTokens: (await usage.read()).estimatedTokens, active: resources.active() } };
   }
 
   async function prepareChat(request: ChatRequest) {
@@ -55,15 +57,14 @@ export function createAiService(options: AiServiceOptions = {}) {
     const config = await configStore.resolve();
     if (!config) throw new Error('AI_NOT_CONFIGURED:研究助手尚未配置');
     assertRate(request.ip, recentByIp);
-    if (active >= config.maxConcurrency) throw new Error('AI_BUSY:当前问答较多，请稍后重试');
-    active += 1;
+    const releaseSlot = resources.acquire('chat', config.maxConcurrency);
     let released = false;
     const controller = new AbortController();
     const signal = request.signal ? AbortSignal.any([request.signal, controller.signal]) : controller.signal;
     const release = () => {
       if (released) return;
       released = true;
-      active -= 1;
+      releaseSlot();
       clearTimeout(timeout);
       signal.removeEventListener('abort', release);
     };
@@ -77,6 +78,7 @@ export function createAiService(options: AiServiceOptions = {}) {
       const reportIntent = resolveResearchIntent(question, request.scope, index.reports, now());
       if (isBuyListQuestion(question, reportIntent.scope, index.opinions)) {
         const result = buildBuyList(index.reports, index.opinions, reportIntent);
+        result.answer += reviewCoverageNotice(index, reportIntent.scope);
         signal.throwIfAborted();
         release();
         return { sources: result.sources, stream: stringStream(result.answer), cached: false };
@@ -86,6 +88,7 @@ export function createAiService(options: AiServiceOptions = {}) {
       const intent = resolveResearchIntent(question, contextualScope, chunks, now());
       if (isBuyListQuestion(question, intent.scope, index.opinions)) {
         const result = buildBuyList(index.reports, index.opinions, intent);
+        result.answer += reviewCoverageNotice(index, intent.scope);
         signal.throwIfAborted();
         release();
         return { sources: result.sources, stream: stringStream(result.answer), cached: false };
@@ -97,6 +100,7 @@ export function createAiService(options: AiServiceOptions = {}) {
       const sources = retrieval.chunks.map((chunk) => ({
         id: chunk.id,
         reportId: chunk.reportId,
+        sourceHash: (() => { const report=index.reports.find(r=>r.id===chunk.reportId); return report?createHash('sha256').update(report.markdown).digest('hex'):undefined; })(),
         date: chunk.date,
         institution: chunk.institution,
         securityName: chunk.securityName,
@@ -216,4 +220,13 @@ function assertRate(ip: string, store: Map<string, number[]>) {
   if (recent.length >= 12) throw new Error('AI_RATE_LIMIT:请求过于频繁，请稍后重试');
   recent.push(now);
   store.set(ip, recent);
+}
+
+function reviewCoverageNotice(index: AiIndex, scope: ResearchScope) {
+  if (!index.reviewStates) return '';
+  const pending = index.reports.filter(r => (!scope.from || r.date >= scope.from) && (!scope.to || r.date <= scope.to)).filter(r => {
+    const s = index.reviewStates?.[r.id];
+    return !s || s.status !== 'succeeded' || s.sourceHash !== s.publishedSourceHash;
+  }).length;
+  return pending ? `\n\n当前范围内有 ${pending} 份报告尚未完成新版复核。以上只列已发布结果，不能据此判断未处理原文中没有推荐。` : '';
 }

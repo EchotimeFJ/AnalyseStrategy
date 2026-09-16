@@ -25,7 +25,7 @@ export function AssistantSources({ sources }: { sources: AiSource[] }) {
               key={source.id}
               tabIndex={open ? 0 : -1}
               to={buildReportLink({
-                reportId: source.reportId,
+                reportId: source.reportId, sourceHash: source.sourceHash,
                 lineNumber: source.lineNumber,
                 highlightTerms: [source.securityName ?? undefined],
               })}

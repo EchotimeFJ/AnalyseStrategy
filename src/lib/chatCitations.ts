@@ -36,7 +36,7 @@ function splitCitations(value: string, sources: AiSource[]): MarkdownNode[] {
     nodes.push({
       type: 'link',
       url: buildReportLink({
-        reportId: source.reportId,
+        reportId: source.reportId, sourceHash: source.sourceHash,
         lineNumber: source.lineNumber,
         highlightTerms: [source.securityName ?? undefined],
       }),

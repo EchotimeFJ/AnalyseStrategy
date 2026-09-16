@@ -1,0 +1,137 @@
+{
+  "provider": "mimo",
+  "model": "mimo-v2.5-pro",
+  "source": "synthetic name/price/title/catalyst fault injection",
+  "readiness": "failed",
+  "complete": false,
+  "validationState": "rejected",
+  "issues": [
+    {
+      "issueId": "issue-1",
+      "recordRef": "statement:development-edit-probe:3:0",
+      "fieldPath": "payload.targetPrice.value.amount",
+      "category": "price_conflict",
+      "severity": "error",
+      "status": "open",
+      "description": "候选声明目标价为60元，但原文明确为28元。",
+      "evidenceIDs": [
+        "evidence:development-edit-probe:3:04121d02e1b1"
+      ]
+    },
+    {
+      "issueId": "issue-2",
+      "recordRef": "mention:fixture-fake",
+      "fieldPath": "payload.rawName",
+      "category": "subject_role",
+      "severity": "warning",
+      "status": "resolved",
+      "description": "候选将“首选标的组合”识别为公司提及，但原文中它仅是栏目标题，具体公司是“国电南瑞”。此提及已标记为删除。",
+      "evidenceIDs": [
+        "evidence:development-edit-probe:3:04121d02e1b1"
+      ]
+    },
+    {
+      "issueId": "issue:157e00009f1d92a4",
+      "recordRef": "article:development-edit-probe:1-5",
+      "fieldPath": "operation.payload",
+      "category": "unsupported_value",
+      "severity": "error",
+      "status": "open",
+      "description": "不支持的字段：operation.payload",
+      "evidenceIDs": []
+    },
+    {
+      "issueId": "issue:168d2e0a24337b0a",
+      "recordRef": "article:development-edit-probe:1-5",
+      "fieldPath": "fieldChanges",
+      "category": "incomplete_output",
+      "severity": "error",
+      "status": "open",
+      "description": "modify 必须携带 fieldChanges：article:development-edit-probe:1-5",
+      "evidenceIDs": []
+    },
+    {
+      "issueId": "issue:f678baf326ef1cc1",
+      "recordRef": "mention:development-edit-probe:3:0",
+      "fieldPath": "operation.payload",
+      "category": "unsupported_value",
+      "severity": "error",
+      "status": "open",
+      "description": "不支持的字段：operation.payload",
+      "evidenceIDs": []
+    },
+    {
+      "issueId": "issue:525a1d4403465c53",
+      "recordRef": "mention:development-edit-probe:3:0",
+      "fieldPath": "fieldChanges",
+      "category": "incomplete_output",
+      "severity": "error",
+      "status": "open",
+      "description": "modify 必须携带 fieldChanges：mention:development-edit-probe:3:0",
+      "evidenceIDs": []
+    },
+    {
+      "issueId": "issue:8a3a72dfd1abbfd3",
+      "recordRef": "statement:development-edit-probe:3:0",
+      "fieldPath": "operation.payload",
+      "category": "unsupported_value",
+      "severity": "error",
+      "status": "open",
+      "description": "不支持的字段：operation.payload",
+      "evidenceIDs": []
+    },
+    {
+      "issueId": "issue:82bd1535e65c8104",
+      "recordRef": "statement:development-edit-probe:3:0",
+      "fieldPath": "fieldChanges",
+      "category": "incomplete_output",
+      "severity": "error",
+      "status": "open",
+      "description": "modify 必须携带 fieldChanges：statement:development-edit-probe:3:0",
+      "evidenceIDs": []
+    },
+    {
+      "issueId": "issue:bf60aa9e031dc525",
+      "recordRef": "new:32dbc5ab69a6:bd1ccb7d3c50fa12",
+      "fieldPath": "operation.payload",
+      "category": "unsupported_value",
+      "severity": "error",
+      "status": "open",
+      "description": "不支持的字段：operation.payload",
+      "evidenceIDs": []
+    },
+    {
+      "issueId": "issue:7ffda3393d274f90",
+      "recordRef": "new:32dbc5ab69a6:bd1ccb7d3c50fa12",
+      "fieldPath": "record",
+      "category": "incomplete_output",
+      "severity": "error",
+      "status": "open",
+      "description": "add 必须携带同 ID typed record：new:32dbc5ab69a6:bd1ccb7d3c50fa12",
+      "evidenceIDs": []
+    },
+    {
+      "issueId": "issue:6ed899ee796b6ef9",
+      "recordRef": "article:development-edit-probe:1-5",
+      "fieldPath": "payload.mainMentionRefs",
+      "category": "subject_role",
+      "severity": "error",
+      "status": "open",
+      "description": "article.mainMentionRefs 关系无效：mention:fixture-fake",
+      "evidenceIDs": []
+    },
+    {
+      "issueId": "issue:59b9f6b0c4ee4b32",
+      "recordRef": null,
+      "fieldPath": "operations",
+      "category": "incomplete_output",
+      "severity": "error",
+      "status": "open",
+      "description": "复核没有返回任何候选处置",
+      "evidenceIDs": []
+    }
+  ],
+  "elapsedMs": 20483,
+  "configUnchanged": true,
+  "actualTokens": 14662
+}

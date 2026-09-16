@@ -28,8 +28,22 @@ export function createConfigDrafts() {
       const draft = drafts.get(lastByProvider.get(preset.id) ?? '');
       if (draft) return { ...draft };
       const saved = profiles.filter(profile => profile.providerId === preset.id).at(-1);
-      return select(form, saved ? { providerId: saved.providerId, providerName: saved.providerName, baseUrl: saved.baseUrl, model: saved.model, apiKey: '' }
-        : { providerId: preset.id, providerName: preset.name, baseUrl: preset.baseUrl, model: preset.defaultModel, apiKey: '' });
+      return select(form, saved ? savedProfileForm(saved) : { providerId: preset.id, providerName: preset.name, baseUrl: preset.baseUrl, model: preset.defaultModel, apiKey: '' }
+      );
     },
   };
+}
+
+function savedProfileForm(profile: AiSavedProfile): AiConfigFormValues {
+  const form: AiConfigFormValues = {
+    providerId: profile.providerId,
+    providerName: profile.providerName,
+    baseUrl: profile.baseUrl,
+    model: profile.model,
+    apiKey: '',
+  };
+  if (profile.reviewTimeoutMs !== undefined) form.reviewTimeoutMs = profile.reviewTimeoutMs;
+  if (profile.reviewMaxTokens !== undefined) form.reviewMaxTokens = profile.reviewMaxTokens;
+  if (profile.reviewThinking !== undefined) form.reviewThinking = profile.reviewThinking;
+  return form;
 }

@@ -1,6 +1,9 @@
 import fs from 'node:fs/promises';
+import type { ReviewedReport } from '../domain/review.js';
+import { loadReviewProjection, type ReportReviewState } from './reviewProjection.js';
+import { reviewEnabled, reviewStore } from './reviewRuntime.js';
 import path from 'node:path';
-import { randomUUID } from 'node:crypto';
+import { randomUUID, createHash } from 'node:crypto';
 import {
   buildReportFromMarkdown,
   createExactSearch,
@@ -18,7 +21,8 @@ import type {
   ReportOverview,
   SecurityEntity,
 } from '../domain/research.js';
-import { mergeSecurityEntities, resolveInstitution, securityKey } from './entityResolver.js';
+import { dictionaryCodeNames } from './securityDictionary.js';
+import { mergeSecurityEntities, resolveInstitution, securityKey, normalizeSecurityCode } from './entityResolver.js';
 import { extractOpinions } from './opinionExtractor.js';
 import { classifySearchIntent, groupSearchHits } from './searchService.js';
 import { readUserConfig, type WatchItem } from './localConfig.js';
@@ -31,11 +35,21 @@ import { resolveOpinions as dedupeOpinions } from './opinionResolution.js';
 
 export type IndexState = {
   sourceDir: string;
+  /** Current files read from disk before review overlays an older published
+   * result for a pending modification. This stays in memory for source-change
+   * reporting and is deliberately excluded from public snapshots. */
+  sourceReports?: ReportDocument[];
   reports: ReportDocument[];
   mentions: TargetMention[];
   opinions: OpinionRecord[];
   entities: Map<string, SecurityEntity>;
   qualityIssues: DataQualityIssue[];
+  reviewStates?: Record<string, ReportReviewState>;
+  reviewFacts?: ReviewedReport[];
+  reviewSignals?: import('./reportParser.js').CatalystRiskItem[];
+  reviewFingerprint?: string;
+  identityGraph?: import('../domain/identity.js').IdentityGraph;
+  identityMapping?: Record<string, import('../domain/identity.js').IdentityMapping>;
   version?: string;
   indexedAt?: string;
   errors: Array<{ filePath: string; message: string }>;
@@ -46,7 +60,7 @@ export type IndexState = {
 
 type IndexOverview = {
   sourceDir: string; indexedAt?: string; indexVersion?: string;
-  reportCount: number; securityCount: number; opinionCount: number;
+  reportCount: number; securityCount: number; companyCount?: number; opinionCount: number;
   errorCount: number; qualityIssueCount: number; latestDate?: string;
   positiveOpinions: OpinionRecord[]; reportOverviews: ReportOverview[];
 };
@@ -80,6 +94,7 @@ export type ReportChangeSet = {
 };
 
 type TargetChange = {
+  sourceHash?: string;
   targetName: string;
   institution: string;
   previousRating?: string;
@@ -167,6 +182,15 @@ export async function ensureIndex(options: { checkSource?: boolean } = {}): Prom
   initializing = (async () => {
     const published = await restorePublishedIndex(getReportDir());
     if (published) {
+      if (reviewEnabled() && !published.reviewFingerprint) {
+        // Old snapshots are readable originals, not AI-validated facts. Never
+        // promote a separately staged review result during pointer recovery.
+        published.opinions = []; published.mentions = []; published.entities = new Map();
+        published.reviewFacts = []; published.reviewSignals = [];
+        published.reviewStates = Object.fromEntries(published.reports.map(r => [r.id, { status: 'legacy_unreviewed', sourceHash: '' , issueCount: 0 }]));
+        published.version = `${published.version}:review-migration`;
+        published.views = buildIndexViews(published);
+      }
       state = published;
       publishedState = true;
       return state;
@@ -174,6 +198,13 @@ export async function ensureIndex(options: { checkSource?: boolean } = {}): Prom
     const manifest = await readSourceManifest(getReportDir());
     const restored = await readReportSnapshot(manifest);
     if (restored && (await readSourceManifest(manifest.sourceDir)).fingerprint === manifest.fingerprint) {
+      if (reviewEnabled() && !restored.reviewFingerprint) {
+        restored.opinions = []; restored.mentions = []; restored.entities = new Map();
+        restored.reviewFacts = []; restored.reviewSignals = [];
+        restored.reviewStates = Object.fromEntries(restored.reports.map(r => [r.id, { status: 'legacy_unreviewed', sourceHash: '', issueCount: 0 }]));
+        restored.version = `${restored.version}:review-migration`;
+        restored.views = buildIndexViews(restored);
+      }
       state = restored;
       return state;
     }
@@ -237,7 +268,7 @@ export function activatePublishedIndex(index: IndexState) {
 
 async function buildIndexCandidate(manifest: SourceManifest): Promise<IndexState> {
   const { sourceDir, files } = manifest;
-  const reports: ReportDocument[] = [];
+  let reports: ReportDocument[] = [];
   const errors: IndexState['errors'] = [];
 
   for (const filePath of files) {
@@ -260,6 +291,12 @@ async function buildIndexCandidate(manifest: SourceManifest): Promise<IndexState
     }
   }
 
+  if (errors.length) throw new Error(`Report rebuild failed: ${errors.length} unreadable reports`);
+  if (reviewEnabled()) {
+    const synced = await reviewStore(sourceDir).sync(reports);
+    reports = synced.map(item => item.report);
+  }
+  const sourceReports = reports.map(report => ({ ...report, lines: [...report.lines], institutions: report.institutions.map(block => ({ ...block })) }));
   const rawOpinions = reports.flatMap((report) => extractOpinions(report));
   const entities = mergeSecurityEntities(
     rawOpinions.map((opinion) => ({
@@ -272,12 +309,15 @@ async function buildIndexCandidate(manifest: SourceManifest): Promise<IndexState
     ...opinion,
     security: entities.get(opinion.security.key) ?? opinion.security,
   }));
+  const reportHashes = new Map(reports.map(r => [r.id, createHash('sha256').update(r.markdown).digest('hex')]));
   const mentions = reports.flatMap((report) => extractTargetMentions(report)).map((mention) => {
     const key = securityKey({ code: mention.code, name: mention.targetName });
     const entity = entities.get(key);
     const institution = resolveInstitution(mention.institution);
     return {
       ...mention,
+      sourceHash: reportHashes.get(mention.reportId),
+      signals: mention.signals.map(s=>({...s,sourceHash:reportHashes.get(mention.reportId)})),
       institution: institution.canonicalName || mention.institution,
       targetName: entity?.displayName ?? mention.targetName,
       aliases: entity?.aliases ?? mention.aliases,
@@ -292,6 +332,7 @@ async function buildIndexCandidate(manifest: SourceManifest): Promise<IndexState
   }
   const next: IndexState = {
     sourceDir,
+    sourceReports,
     reports: reports.sort((left, right) => left.date.localeCompare(right.date)),
     mentions,
     opinions,
@@ -303,6 +344,16 @@ async function buildIndexCandidate(manifest: SourceManifest): Promise<IndexState
     sourceFingerprint: manifest.fingerprint,
     cache: { origin: 'rebuilt', persisted: false },
   };
+  const reviewed = await loadReviewProjection(reports, sourceDir);
+  if (reviewed) {
+    next.reports = reviewed.reports;
+    next.opinions = reviewed.opinions; next.mentions = reviewed.mentions; next.entities = reviewed.entities;
+    next.reviewStates = reviewed.states; next.reviewFacts = reviewed.facts;
+    next.reviewSignals = reviewed.signals; next.reviewFingerprint = reviewed.fingerprint;
+    next.identityGraph = reviewed.identityGraph; next.identityMapping = reviewed.identityMapping;
+    next.qualityIssues = buildQualityIssues(next.reports, next.opinions);
+    for (const [reportId,review] of Object.entries(reviewed.states)) if(review.status!=='succeeded') next.qualityIssues.push({type:review.status==='partial'?'review-partial':review.status==='failed'?'review-failed':'review-pending',reportId,message:review.status==='partial'?'报告有待核对字段':review.status==='failed'?'报告复核失败':'报告尚待复核'});
+  }
   next.views = buildIndexViews(next);
   return next;
 }
@@ -337,13 +388,15 @@ function buildQualityIssues(reports: ReportDocument[], opinions: OpinionRecord[]
 }
 
 export function diffReportChanges(before: IndexState, after: IndexState): ReportChangeSet {
-  const beforeById = new Map(before.reports.map((report) => [report.id, report]));
-  const afterById = new Map(after.reports.map((report) => [report.id, report]));
+  const beforeReports = before.sourceReports ?? before.reports;
+  const afterReports = after.sourceReports ?? after.reports;
+  const beforeById = new Map(beforeReports.map((report) => [report.id, report]));
+  const afterById = new Map(afterReports.map((report) => [report.id, report]));
   const added: ReportChange[] = [];
   const modified: ReportChange[] = [];
   const removed: ReportChange[] = [];
 
-  for (const report of after.reports) {
+  for (const report of afterReports) {
     const previous = beforeById.get(report.id);
     if (!previous) {
       added.push(toReportChange('added', report, after.mentions));
@@ -355,7 +408,7 @@ export function diffReportChanges(before: IndexState, after: IndexState): Report
     }
   }
 
-  for (const report of before.reports) {
+  for (const report of beforeReports) {
     if (!afterById.has(report.id)) {
       removed.push(toReportChange('removed', report, before.mentions));
     }
@@ -406,7 +459,24 @@ function buildIndexViews(index: IndexState): IndexViews {
     group.push(opinion);
     opinionsByReport.set(opinion.reportId, group);
   }
-  const reportOverviews = reports.map((report) => buildReportOverview(report, opinionsByReport.get(report.id) ?? []));
+  const reportOverviews = reports.map(report => {
+    const overview=buildReportOverview(report,opinionsByReport.get(report.id)??[]);
+    const facts=index.reviewFacts?.find(f=>f.reportId===report.id);
+    const evidence=new Map(facts?.evidence.map(e=>[e.evidenceId,e])??[]);
+    const active=facts?.records.filter(r=>!r.status||r.status==='active')??[];
+    const signals:NonNullable<ReportOverview['signals']>=active.flatMap(r=>{
+      if(r.kind!=='signal'||r.payload.polarity!=='affirmative'||r.payload.temporalContext==='historical')return [];
+      if(facts?.issues.some(i=>i.severity==='error'&&(!i.recordRef||[r.id,r.articleRef,r.payload.subject.mentionRef].includes(i.recordRef))))return [];
+      const e=evidence.get(r.payload.evidenceIDs[0]);if(!e)return [];
+      const subject=active.find(m=>m.id===r.payload.subject.mentionRef);
+      return [{id:r.id,kind:r.payload.kind,subject:subject?.kind==='mention'?subject.payload.rawName:r.payload.subject.rawText??'未明确对象',subjectScope:r.payload.subject.scope,summary:r.payload.summary,lineNumber:e.startLine,sourceHash:facts!.sourceHash}];
+    });
+    const summaries:NonNullable<ReportOverview['summaries']>=active.flatMap(r=>{
+      if(r.kind!=='article'||r.payload.summary.state!=='stated'||!r.payload.summary.value)return [];
+      const e=evidence.get(r.payload.summary.evidenceIDs[0]);return e?[{id:r.id,title:r.payload.title,summary:r.payload.summary.value,lineNumber:e.startLine,sourceHash:facts!.sourceHash}]:[];
+    });
+    return {...overview,companyCount:index.identityGraph?new Set(overview.securities.map(s=>s.organizationId??s.key)).size:undefined,signals,summaries,review:index.reviewStates?.[report.id]??{status:'legacy_unreviewed'},publicationId:index.version};
+  });
   const mentionCounts = new Map<string, number>();
   for (const mention of index.mentions) mentionCounts.set(mention.reportId, (mentionCounts.get(mention.reportId) ?? 0) + 1);
   const summaries = index.reports.map((report) => ({
@@ -421,6 +491,7 @@ function buildIndexViews(index: IndexState): IndexViews {
     indexVersion: index.version,
     reportCount: index.reports.length,
     securityCount: index.entities.size,
+    companyCount: index.identityGraph?new Set([...index.entities.values()].map(s=>s.organizationId??s.key)).size:undefined,
     opinionCount: index.opinions.length,
     errorCount: index.errors.length,
     qualityIssueCount: index.qualityIssues.length,
@@ -435,6 +506,13 @@ function getIndexViews(index: IndexState) {
   return index.views ?? (index.views = buildIndexViews(index));
 }
 
+
+export async function getReportDraft(reportId: string, snapshot?: IndexState): Promise<ReportOverview | null> {
+  const index=snapshot??await ensureIndex();const report=index.reports.find(r=>r.id===reportId);
+  if(!report)return null;
+  return {...buildReportOverview(report,extractOpinions(report)),review:{status:'legacy_unreviewed',sourceHash:createHash('sha256').update(report.markdown).digest('hex')},publicationId:index.version} as ReportOverview;
+}
+
 export async function getReportOverview(reportId: string, snapshot?: IndexState): Promise<ReportOverview | null> {
   const index = snapshot ?? await ensureIndex();
   return getIndexViews(index).reportOverviews.find((item) => item.reportId === reportId) ?? null;
@@ -443,21 +521,30 @@ export async function getReportOverview(reportId: string, snapshot?: IndexState)
 export async function getCompanyProfiles(query = ''): Promise<CompanyProfile[]> {
   const index = await ensureIndex();
   const normalized = normalizeText(query);
+  const queryCode=normalizeSecurityCode(query);
+  const codeNames=new Set(queryCode?dictionaryCodeNames(queryCode).map(normalizeText):[]);
   const matchingEntities = [...index.entities.values()].filter((entity) => {
     if (!normalized) return true;
     return [entity.code ?? '', entity.displayName, ...entity.aliases]
-      .some((value) => normalizeText(value).includes(normalized));
+      .some((value) => normalizeText(value).includes(normalized) || codeNames.has(normalizeText(value)));
   });
 
-  return matchingEntities.map((security) => {
-    const opinions = dedupeOpinions(index.opinions.filter((opinion) => opinion.security.key === security.key))
+  const groupKeys = [...new Set(matchingEntities.map(s => s.organizationId ?? s.key))];
+  return groupKeys.map(groupKey => {
+    const listings = [...index.entities.values()].filter(s => (s.organizationId ?? s.key) === groupKey);
+    const companyId = listings[0]?.organizationId;
+    const organization = index.identityGraph?.organizations.find(o => o.organizationId === companyId);
+    const security = listings.length === 1 ? listings[0] : { ...listings[0], key: `organization:${groupKey}`, code: null, displayName: organization?.canonicalName ?? listings[0].displayName, aliases: [...new Set(listings.flatMap(s => s.aliases))] };
+    const memberKeys = new Set(listings.map(s => s.key));
+    const opinions = dedupeOpinions(index.opinions.filter((opinion) => memberKeys.has(opinion.security.key)))
       .sort(compareOpinionsDesc);
     return {
       security,
+      companyId, listings,
       firstMention: opinions.at(-1)?.reportDate ?? null,
       latestMention: opinions[0]?.reportDate ?? null,
-      latestRating: opinions.find((opinion) => opinion.rating)?.rating ?? null,
-      latestTargetPrice: opinions.find((opinion) => opinion.targetPrice)?.targetPrice ?? null,
+      latestRating: opinions[0]?.rating ?? null,
+      latestTargetPrice: opinions[0]?.targetPrice ?? null,
       institutions: [...new Set(opinions.map((opinion) => opinion.institution))].sort(),
       opinions,
       catalysts: opinions.filter((opinion) => opinion.types.includes('catalyst')),
@@ -503,6 +590,8 @@ export async function getReportById(id: string, snapshot?: IndexState) {
     markdown: report.markdown,
     institutions: report.institutions,
     mentions: index.mentions.filter((mention) => mention.reportId === id),
+    review: index.reviewStates?.[id] ?? { status: 'legacy_unreviewed' },
+    publicationId: index.version,
   };
 }
 
@@ -516,8 +605,10 @@ export async function searchReports(input: {
   paginated?: boolean;
   offset?: number;
   limit?: number;
+  publicationId?: string;
 }) {
   const index = await ensureIndex();
+  if (input.publicationId && input.publicationId !== index.version) throw new Error('PUBLICATION_CHANGED');
   const filteredReports = index.reports.filter((report) => {
     if (input.from && report.date < input.from) {
       return false;
@@ -542,24 +633,33 @@ export async function searchReports(input: {
     );
   }
 
+  const queryCode=normalizeSecurityCode(input.q);
+  if (!input.raw && input.mode !== 'tag' && !ratingQuery && queryCode) {
+    const search=createExactSearch(sortReportsDesc(filteredReports));
+    const related=filterSearchMode(dictionaryCodeNames(queryCode).flatMap(name=>search(name)),input.mode);
+    hits=[...new Map([...hits,...related].map(hit=>[`${hit.reportId}:${hit.lineNumber}:${hit.snippet}`,hit])).values()];
+  }
+
   if (input.institution) {
     const institution = normalizeText(resolveInstitution(input.institution).canonicalName);
     hits = hits.filter((hit) => normalizeText(resolveInstitution(hit.institution).canonicalName) === institution);
   }
+  const sourceHashes=new Map(filteredReports.map(r=>[r.id,createHash('sha256').update(r.markdown).digest('hex')]));
+  hits = hits.map(hit => ({ ...hit, sourceHash: sourceHashes.get(hit.reportId) }));
   const totalHits = hits.length;
   const offset = Number.isFinite(input.offset) ? Math.max(0, Math.floor(input.offset!)) : 0;
   const limit = Number.isFinite(input.limit) ? Math.min(500, Math.max(1, Math.floor(input.limit!))) : 500;
   hits = hits.slice(offset, offset + limit);
   const pagination = { totalHits, offset, limit, returnedHits: hits.length, hasMore: offset + hits.length < totalHits };
   // Existing raw clients keep the array contract; interactive clients opt into totals and paging.
-  if (input.raw) return input.paginated ? { query: input.q ?? '', hits, ...pagination } : hits;
+  if (input.raw) return input.paginated ? { query: input.q ?? '', hits, ...pagination, publicationId: index.version } : hits;
 
   const intent = classifySearchIntent(input.q ?? '', {
     securities: [...index.entities.values()],
     institutions: [...new Set(index.opinions.filter((item) => item.institutionVerified).map((item) => item.institution))],
   });
   const company = intent.securityKey
-    ? (await getCompanyProfiles(input.q ?? '')).find((item) => item.security.key === intent.securityKey) ?? null
+    ? (await getCompanyProfiles(input.q ?? '')).find((item) => item.security.key === intent.securityKey || item.listings?.some(s => s.key === intent.securityKey)) ?? null
     : null;
   return {
     query: input.q ?? '',
@@ -567,6 +667,7 @@ export async function searchReports(input: {
     ...pagination,
     groups: groupSearchHits(hits),
     company,
+    publicationId: index.version,
   };
 }
 
@@ -616,8 +717,8 @@ export async function getRadar(options: { from?: string; to?: string; limit?: nu
     .filter((mention) => mention.action?.includes('首次') || mention.excerpt.includes('首次覆盖') || mention.excerpt.includes('首予'))
     .sort(compareMentionsDesc)
     .slice(0, 60);
-  const signals = mentions
-    .flatMap((mention) => mention.signals)
+  const signals = (index.reviewSignals ?? mentions.flatMap((mention) => mention.signals))
+    .filter(signal => (!options.from || signal.date >= options.from) && (!options.to || signal.date <= options.to))
     .sort(compareSignalsDesc)
     .slice(0, 80);
   const themes = countThemes(index.reports);
@@ -852,8 +953,8 @@ function detectChanges(mentions: TargetMention[]): TargetChange[] {
     const key = `${targetKey(mention)}|${mention.institution}`;
     const previous = lastByKey.get(key);
     if (!previous) {
-      changes.push(toChange(mention, undefined, mention.action || '首次覆盖'));
-    } else if (previous.rating !== mention.rating || previous.targetPrice !== mention.targetPrice || mention.action) {
+      changes.push(toChange(mention, undefined, mention.action || '首次记录'));
+    } else if (previous.date !== mention.date && ((previous.rating && mention.rating && previous.rating !== mention.rating) || comparablePriceChanged(previous, mention) || mention.action && !/维持|重申/.test(mention.action))) {
       changes.push(toChange(mention, previous, inferChangeType(previous, mention)));
     }
     lastByKey.set(key, mention);
@@ -863,6 +964,7 @@ function detectChanges(mentions: TargetMention[]): TargetChange[] {
 
 function toChange(mention: TargetMention, previous: TargetMention | undefined, changeType: string): TargetChange {
   return {
+    sourceHash: mention.sourceHash,
     targetName: mention.targetName,
     institution: mention.institution,
     previousRating: previous?.rating,
@@ -880,7 +982,7 @@ function inferChangeType(previous: TargetMention, current: TargetMention): strin
   if (current.action) {
     return current.action;
   }
-  if (previous.targetPrice !== current.targetPrice) {
+  if (comparablePriceChanged(previous,current)) {
     return '目标价变化';
   }
   if (previous.rating !== current.rating) {
@@ -890,30 +992,35 @@ function inferChangeType(previous: TargetMention, current: TargetMention): strin
 }
 
 function buildInstitutionMatrix(mentions: TargetMention[]) {
-  const latest = new Map<string, TargetMention>();
+  const latest = new Map<string, TargetMention[]>();
   for (const mention of mentions) {
     const key = `${targetKey(mention)}|${mention.institution}`;
     const previous = latest.get(key);
-    if (!previous || previous.date <= mention.date) {
-      latest.set(key, mention);
-    }
+    if (!previous || previous[0].date < mention.date) latest.set(key, [mention]);
+    else if (previous[0].date === mention.date) previous.push(mention);
   }
 
   const grouped = new Map<string, TargetMention[]>();
-  for (const mention of latest.values()) {
-    const key = mention.targetName;
+  for (const mention of [...latest.values()].flat()) {
+    const key = `${mention.targetName}|${targetKey(mention)}`;
     grouped.set(key, [...(grouped.get(key) ?? []), mention]);
   }
 
   return [...grouped.entries()]
-    .map(([targetName, items]) => ({
-      targetName,
+    .map(([, items]) => ({
+      targetName: items[0].targetName,
+      securityCode: items[0].code ?? null,
       items: items.sort((left, right) => left.institution.localeCompare(right.institution)),
     }))
     .sort((left, right) => right.items.length - left.items.length);
 }
 
 function hasDivergence(items: TargetMention[]): boolean {
+  if (items.some(item => item.reviewStatementId)) {
+    const latest = items.map(i => i.date).sort().at(-1);
+    items = items.filter(i => i.date === latest && i.ratingScaleRef && i.targetPriceHorizon);
+    if (items.length < 2 || new Set(items.map(i => `${i.ratingScaleRef}|${i.targetPriceHorizon}|${targetKey(i)}`)).size !== 1) return false;
+  }
   const ratings = new Set(items.map((item) => item.rating).filter(Boolean));
   const prices = new Set(items.map((item) => item.targetPrice).filter(Boolean));
   return ratings.size > 1 || prices.size > 1;
@@ -1008,4 +1115,21 @@ function flatten(value: Record<string, unknown>) {
 function csvCell(value: unknown): string {
   const text = String(value ?? '');
   return /[,"\n]/.test(text) ? `"${text.replace(/"/g, '""')}"` : text;
+}
+
+function comparablePriceChanged(previous: TargetMention, current: TargetMention) {
+  if (!previous.targetPrice || !current.targetPrice) return false;
+  if (previous.reviewStatementId || current.reviewStatementId) {
+    if (!previous.targetPriceComparable || !current.targetPriceComparable) return false;
+    const before = JSON.parse(previous.targetPriceComparable) as Array<string | null>;
+    const after = JSON.parse(current.targetPriceComparable) as Array<string | null>;
+    if (JSON.stringify(before.slice(0,3)) !== JSON.stringify(after.slice(0,3))) return false;
+    const normalize = (values: Array<string | null>) => values.map(v => v && /^\d+(?:\.\d+)?$/.test(v) && v.includes('.') ? v.replace(/0+$/,'').replace(/\.$/,'') : v);
+    return JSON.stringify(normalize(before.slice(3))) !== JSON.stringify(normalize(after.slice(3)));
+  }
+  const currency = (text: string) => /港元|HKD|HK\$/i.test(text) ? 'HKD' : /美元|USD|US\$/i.test(text) ? 'USD' : /人民币|RMB|CNY|元/.test(text) ? 'CNY' : null;
+  const before = currency(previous.targetPrice), after = currency(current.targetPrice);
+  if (!before || before !== after) return false;
+  const normalized = (text: string) => text.normalize('NFKC').replace(/[,，\s]/g,'').replace(/\d+(?:\.\d+)?/g,n => n.includes('.') ? n.replace(/0+$/,'').replace(/\.$/,'') : n);
+  return normalized(previous.targetPrice) !== normalized(current.targetPrice);
 }

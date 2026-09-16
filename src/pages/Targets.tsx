@@ -71,19 +71,19 @@ function CompanyProfileView({ profile }: { profile: CompanyProfile }) {
     <>
       <section className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm sm:p-6">
         <div className="flex flex-col justify-between gap-5 md:flex-row md:items-start">
-          <div><div className="flex items-center gap-2 text-sm font-semibold text-blue-700"><Building2 className="h-4 w-4" />稳定公司档案</div><h2 className="mt-3 text-3xl font-semibold text-slate-950">{profile.security.displayName}</h2><div className="mt-2 text-sm text-slate-500">{profile.security.code ?? '未识别上市代码'}</div></div>
+          <div><div className="flex items-center gap-2 text-sm font-semibold text-blue-700"><Building2 className="h-4 w-4" />稳定公司档案</div><h2 className="mt-3 text-3xl font-semibold text-slate-950">{profile.security.displayName}</h2><div className="mt-2 text-sm text-slate-500">{profile.listings?.length ? profile.listings.map(item => item.code ?? '公司级观点').join(' · ') : profile.security.code ?? '公司级观点'}</div></div>
           <div className="flex flex-wrap gap-2">{profile.security.aliases.slice(0, 8).map((alias) => <Badge key={alias} tone="slate">{alias}</Badge>)}</div>
         </div>
       </section>
       <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-        <StatCard label="最新评级" value={profile.latestRating ?? '—'} hint={`更新于 ${profile.latestMention ?? '-'}`} />
-        <StatCard label="最新目标价" value={profile.latestTargetPrice ?? '—'} hint="保留报告原始币种与单位" />
+        <StatCard label="最近一条观点的评级" value={profile.latestRating ?? '—'} hint={`更新于 ${profile.latestMention ?? '-'}`} />
+        <StatCard label="同条观点的目标价" value={profile.latestTargetPrice ?? '—'} hint={`来源：${profile.opinions[0]?.institution ?? '—'} · 未提供时留空`} />
         <StatCard label="覆盖机构" value={profile.institutions.length} hint={profile.institutions.slice(0, 5).join('、')} />
         <StatCard label="历史观点" value={profile.opinions.length} hint={`${profile.firstMention ?? '-'} 至 ${profile.latestMention ?? '-'}`} />
       </div>
       <div className="grid gap-6 xl:grid-cols-[1.1fr_0.9fr]">
         <Panel title="观点时间线" eyebrow="Opinion history"><div className="space-y-3">{profile.opinions.map((opinion) => <OpinionHistory key={opinion.id} opinion={opinion} />)}</div></Panel>
-        <Panel title="机构最新观点" eyebrow="Institution matrix"><div className="space-y-3">{latestByInstitution(profile.opinions).map((opinion) => <OpinionHistory key={opinion.id} opinion={opinion} compact />)}</div></Panel>
+        <Panel title="各机构、各证券的最新观点" eyebrow="Institution matrix"><div className="space-y-3">{latestByInstitution(profile.opinions).map((opinion) => <OpinionHistory key={opinion.id} opinion={opinion} compact />)}</div></Panel>
       </div>
       <div className="grid gap-6 xl:grid-cols-2">
         <Panel title="催化剂" eyebrow="Catalysts">{profile.catalysts.length ? <div className="space-y-3">{profile.catalysts.map((item) => <OpinionHistory key={item.id} opinion={item} compact />)}</div> : <EmptyState title="暂无明确催化剂" />}</Panel>
@@ -96,13 +96,16 @@ function CompanyProfileView({ profile }: { profile: CompanyProfile }) {
 function OpinionHistory({ opinion, compact = false }: { opinion: OpinionRecord; compact?: boolean }) {
   const source = opinion.evidence[0];
   return (
-    <Link to={buildReportLink({ reportId: opinion.reportId, lineNumber: source?.lineNumber, highlightTerms: [opinion.security.displayName] })} className="block rounded-2xl border border-slate-200 p-4 transition hover:border-blue-300 hover:shadow-sm">
-      <div className="flex flex-wrap gap-2"><Badge tone="amber">{opinion.reportDate}</Badge><Badge tone="blue">{opinion.institution}</Badge>{opinion.rating ? <Badge tone={opinion.types.includes('positive') ? 'green' : 'slate'}>{opinion.rating}</Badge> : null}{opinion.targetPrice ? <Badge tone="slate">{opinion.targetPrice}</Badge> : null}</div>
+    <Link to={buildReportLink({ reportId: opinion.reportId, sourceHash: opinion.sourceHash, lineNumber: source?.lineNumber, highlightTerms: [opinion.sourceName ?? '', opinion.security.displayName] })} className="block rounded-2xl border border-slate-200 p-4 transition hover:border-blue-300 hover:shadow-sm">
+      <div className="flex flex-wrap gap-2"><Badge tone="amber">{opinion.reportDate}</Badge><Badge tone="blue">{opinion.institution}</Badge>{opinion.security.code ? <Badge tone="slate">{opinion.security.code}</Badge> : null}{opinion.rating ? <Badge tone={opinion.types.includes('positive') ? 'green' : 'slate'}>{opinion.rating}</Badge> : null}{opinion.targetPrice ? <Badge tone="slate">{opinion.targetPrice}</Badge> : null}</div>
       {!compact ? <p className="mt-3 line-clamp-3 text-sm leading-6 text-slate-600">{source?.excerpt}</p> : null}
     </Link>
   );
 }
 
 function latestByInstitution(opinions: OpinionRecord[]) {
-  return [...new Map(opinions.map((opinion) => [opinion.institution, opinion])).values()];
+  const latest = new Map<string, string>();
+  const group = (o: OpinionRecord) => `${o.institution}|${o.security.securityId ?? o.security.key}`;
+  for (const o of opinions) if (!latest.has(group(o)) || latest.get(group(o))! < o.reportDate) latest.set(group(o), o.reportDate);
+  return opinions.filter(o => o.reportDate === latest.get(group(o)));
 }

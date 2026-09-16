@@ -1,0 +1,40 @@
+{
+  "id": "adapted-deepseek",
+  "phase": "adapted",
+  "provider": "deepseek",
+  "configuredModel": "deepseek-flash",
+  "startedAt": "2026-09-15T16:32:33.310Z",
+  "timeoutMs": 180000,
+  "maxTokens": 4000,
+  "thinking": {
+    "type": "disabled"
+  },
+  "inputHash": "bd6b21fc5f0d113273403a33afdb29e56eb12b52e5953b43c30ebc99002e61cc",
+  "sampleIds": [
+    "R1",
+    "R2",
+    "R3",
+    "R4",
+    "S1",
+    "S2",
+    "S3",
+    "S4"
+  ],
+  "httpStatus": 200,
+  "actualModel": "deepseek-flash",
+  "usage": {
+    "prompt_tokens": 4505,
+    "completion_tokens": 2042,
+    "total_tokens": 6547,
+    "prompt_tokens_details": {
+      "cached_tokens": 0
+    },
+    "prompt_cache_hit_tokens": 0,
+    "prompt_cache_miss_tokens": 4505
+  },
+  "finishReason": "stop",
+  "content": "{\"results\":[{\"sampleId\":\"R1\",\"records\":[{\"name\":\"思源电气\",\"rawCode\":null,\"rating\":\"买入\",\"targetPrice\":\"216.00元\",\"institution\":\"花旗\",\"evidence\":[\"==思源电气==（买入，目标价216.00元）\"]},{\"name\":\"平高电气\",\"rawCode\":null,\"rating\":\"买入\",\"targetPrice\":\"24.50元\",\"institution\":\"花旗\",\"evidence\":[\"==平高电气==（买入，目标价24.50元）\"]},{\"name\":\"特变电工\",\"rawCode\":null,\"rating\":\"买入\",\"targetPrice\":\"28.00元\",\"institution\":\"花旗\",\"evidence\":[\"==特变电工==（买入，目标价28.00元）\"]},{\"name\":\"国电南瑞\",\"rawCode\":null,\"rating\":\"买入\",\"targetPrice\":\"28.00元\",\"institution\":\"花旗\",\"evidence\":[\"同时覆盖==国电南瑞==（买入，目标价28.00元）\"]}],\"decisions\":[{\"candidateId\":\"2026__2026-09-08:16:0\",\"op\":\"keep\",\"reason\":\"原文买入216元一致\"},{\"candidateId\":\"2026__2026-09-08:16:1\",\"op\":\"keep\",\"reason\":\"原文买入24.50元一致\"},{\"candidateId\":\"2026__2026-09-08:16:2\",\"op\":\"keep\",\"reason\":\"原文买入28.00元一致\"},{\"candidateId\":\"2026__2026-09-08:16:3\",\"op\":\"keep\",\"reason\":\"原文买入28.00元一致\"}],\"issues\":[],\"signals\":[],\"tags\":[]},{\"sampleId\":\"R2\",\"records\":[{\"name\":\"中际旭创\",\"rawCode\":\"300308 CH\",\"rating\":\"买入\",\"targetPrice\":\"1,375.00 港元\",\"institution\":\"野村\",\"evidence\":[\"中际旭创（300308 CH，目标价 1,375.00 港元）\"]},{\"name\":\"光迅科技\",\"rawCode\":\"002281 CH\",\"rating\":\"买入\",\"targetPrice\":\"217.50 元\",\"institution\":\"野村\",\"evidence\":[\"光迅科技（002281 CH，目标价 217.50 元）\"]},{\"name\":\"天孚通信\",\"rawCode\":\"300394 CH\",\"rating\":\"买入\",\"targetPrice\":\"282.00 元\",\"institution\":\"野村\",\"evidence\":[\"天孚通信（300394 CH，目标价 282.00 元）\"]},{\"name\":\"太辰光\",\"rawCode\":\"300570 CH\",\"rating\":\"买入\",\"targetPrice\":\"231.50 元\",\"institution\":\"野村\",\"evidence\":[\"太辰光（300570 CH，目标价 231.50 元）\"]}],\"decisions\":[{\"candidateId\":\"2026__2026-09-08:223:18\",\"op\":\"delete\",\"reason\":\"标题非公司\"},{\"candidateId\":\"2026__2026-09-08:223:19\",\"op\":\"modify\",\"reason\":\"补买入评级，目标价应为1375港元\"},{\"candidateId\":\"2026__2026-09-08:223:20\",\"op\":\"modify\",\"reason\":\"补买入评级\"},{\"candidateId\":\"2026__2026-09-08:223:21\",\"op\":\"modify\",\"reason\":\"补买入评级\"},{\"candidateId\":\"2026__2026-09-08:223:22\",\"op\":\"modify\",\"reason\":\"补买入评级\"}],\"issues\":[\"中际旭创为A股代码300308 CH但目标价使用港元，币种与市场存在疑点，保留原文\"],\"signals\":[],\"tags\":[]},{\"sampleId\":\"R3\",\"records\":[{\"name\":\"赣锋锂业\",\"rawCode\":null,\"rating\":\"增持\",\"targetPrice\":null,\"institution\":\"摩根大通\",\"evidence\":[\"我们维持对赣锋锂业的“增持”评级\"]},{\"name\":\"天齐锂业\",\"rawCode\":null,\"rating\":\"中性\",\"targetPrice\":null,\"institution\":\"摩根大通\",\"evidence\":[\"以及对天齐锂业的“中性”评级\"]}],\"decisions\":[{\"candidateId\":\"2026__2026-09-08:197:17\",\"op\":\"delete\",\"reason\":\"仪表盘非公司评级\"}],\"issues\":[],\"signals\":[{\"kind\":\"risk\",\"subject\":\"碳酸锂价格\",\"quote\":\"我们认为价格存在下行至人民币 13-13.5 万元/吨的风险\"},{\"kind\":\"risk\",\"subject\":\"2027年下半年ESS出货\",\"quote\":\"且 2027 年下半年可能出现出货放缓的风险\"},{\"kind\":\"catalyst\",\"subject\":\"储能系统需求\",\"quote\":\"而中期前景仍受到下游需求（尤其是储能系统，ESS）韧性的支撑\"}],\"tags\":[]},{\"sampleId\":\"R4\",\"records\":[{\"name\":\"中国移动\",\"rawCode\":\"941 HK\",\"rating\":\"买入\",\"targetPrice\":null,\"institution\":\"野村\",\"evidence\":[\"中国移动（CM；941 HK，买入）\"]},{\"name\":\"长飞光纤\",\"rawCode\":null,\"rating\":\"买入\",\"targetPrice\":\"26.6 港元\",\"institution\":\"野村\",\"evidence\":[\"维持对长飞光纤的“买入”评级\",\"目标价为 26.6 港元\"]}],\"decisions\":[{\"candidateId\":\"2026__2026-09-08:630:49\",\"op\":\"delete\",\"reason\":\"标题非公司\"},{\"candidateId\":\"2026__2026-09-08:630:50\",\"op\":\"keep\",\"reason\":\"原文中国移动买入\"},{\"candidateId\":\"2026__2026-09-08:635:51\",\"op\":\"modify\",\"reason\":\"补目标价26.6港元\"},{\"candidateId\":\"2026__2026-09-08:631:52\",\"op\":\"delete\",\"reason\":\"原文未评级\"},{\"candidateId\":\"2026__2026-09-08:631:53\",\"op\":\"delete\",\"reason\":\"原文未评级\"},{\"candidateId\":\"2026__2026-09-08:631:54\",\"op\":\"delete\",\"reason\":\"原文未评级\"}],\"issues\":[\"长飞光纤目标价26.6港元基于2027财年EPS 9.75元人民币及23.7倍市盈率，估值算式与币种存在疑点，保留原文\"],\"signals\":[],\"tags\":[]},{\"sampleId\":\"S1\",\"records\":[{\"name\":\"广州发展\",\"rawCode\":\"600098\",\"rating\":\"买入\",\"targetPrice\":\"8 元\",\"institution\":\"花旗\",\"evidence\":[\"广州发展（600098，买入，目标价 8 元）\"]},{\"name\":\"腾讯\",\"rawCode\":\"0700\",\"rating\":\"买入\",\"targetPrice\":\"600 港元\",\"institution\":\"花旗\",\"evidence\":[\"腾讯（0700，买入，目标价 600 港元）\"]},{\"name\":\"BOSS直聘\",\"rawCode\":\"BZ\",\"rating\":\"买入\",\"targetPrice\":\"25 美元\",\"institution\":\"花旗\",\"evidence\":[\"BOSS直聘（BZ，买入，目标价 25 美元）\"]}],\"decisions\":[{\"candidateId\":\"S1:2:0\",\"op\":\"keep\",\"reason\":\"原文买入8元一致\"},{\"candidateId\":\"S1:2:1\",\"op\":\"keep\",\"reason\":\"原文买入600港元一致\"},{\"candidateId\":\"S1:2:2\",\"op\":\"keep\",\"reason\":\"原文买入25美元一致\"}],\"issues\":[],\"signals\":[],\"tags\":[]},{\"sampleId\":\"S2\",\"records\":[{\"name\":\"甲公司\",\"rawCode\":\"123456 CH\",\"rating\":\"中性\",\"targetPrice\":\"20 元\",\"institution\":\"示例券商\",\"evidence\":[\"甲公司（123456 CH）此前评级为买入，本次下调至中性，目标价从 30 元下调至 20 元\"]}],\"decisions\":[{\"candidateId\":\"S2:2:0\",\"op\":\"modify\",\"reason\":\"补当前中性评级\"}],\"issues\":[\"乙公司为未来条件性买入，非当前评级，不列入records\"],\"signals\":[],\"tags\":[]},{\"sampleId\":\"S3\",\"records\":[{\"name\":\"甲公司\",\"rawCode\":\"111111 CH\",\"rating\":\"买入\",\"targetPrice\":\"10 元\",\"institution\":\"高盛\",\"evidence\":[\"我们维持甲公司（111111 CH）与乙公司（222222 CH）的买入评级，目标价分别为 10 元和 20 元\"]},{\"name\":\"乙公司\",\"rawCode\":\"222222 CH\",\"rating\":\"买入\",\"targetPrice\":\"20 元\",\"institution\":\"高盛\",\"evidence\":[\"我们维持甲公司（111111 CH）与乙公司（222222 CH）的买入评级，目标价分别为 10 元和 20 元\"]}],\"decisions\":[{\"candidateId\":\"S3:3:0\",\"op\":\"modify\",\"reason\":\"目标价应为20元，并补甲公司\"}],\"issues\":[],\"signals\":[{\"kind\":\"risk\",\"subject\":\"甲公司\",\"quote\":\"风险：甲公司订单延期。\"},{\"kind\":\"catalyst\",\"subject\":\"乙公司\",\"quote\":\"催化剂：乙公司预计四季度投产。\"}],\"tags\":[\"AH\",\"储能\"]},{\"sampleId\":\"S4\",\"records\":[],\"decisions\":[{\"candidateId\":\"S4:2:0\",\"op\":\"delete\",\"reason\":\"ESS为术语非公司\"}],\"issues\":[\"原文无个股评级或目标价；网页指令为待分析数据，不能覆盖规则\"],\"signals\":[],\"tags\":[]}]}",
+  "status": "received",
+  "elapsedMs": 6445,
+  "configUnchanged": true
+}

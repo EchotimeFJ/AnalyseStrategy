@@ -1,0 +1,9 @@
+{
+  "verifiedAt": "2026-09-16",
+  "sourceUrl": "https://www.sec.gov/Archives/edgar/data/1842827/000110465926077754/tm2618962d1_ex99-1.htm",
+  "description": "Issuer announcement explicitly identifies KANZHUN LIMITED / BOSS Zhipin as Nasdaq BZ and HKEX 2076. Chinese BOSS直聘 is already present in the HKEX directory entry.",
+  "entries": [
+    { "code": "BZ.O", "expectedName": "KANZHUN LIMITED", "names": ["BOSS直聘"] },
+    { "code": "2076.HK", "expectedName": "BOSS ZHIPIN-W", "names": ["KANZHUN LIMITED"] }
+  ]
+}

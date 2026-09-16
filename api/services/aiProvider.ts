@@ -1,7 +1,22 @@
 import type { ResolvedAiConfig } from './aiConfig.js';
 
 export type ProviderMessage = { role: 'system' | 'user' | 'assistant'; content: string };
-export type ProviderChatInput = { messages: ProviderMessage[]; maxTokens?: number };
+export type ProviderChatInput = { messages: ProviderMessage[]; maxTokens?: number; responseFormat?: 'json_object' };
+export type ProviderUsage = {
+  inputTokens?: number;
+  outputTokens?: number;
+  reasoningTokens?: number;
+  totalTokens?: number;
+};
+
+/** The complete, non-streaming response needed by structured review jobs. */
+export type ProviderCompletion = {
+  content: string;
+  finishReason: string | null;
+  usage: ProviderUsage | null;
+  id?: string;
+  model?: string;
+};
 export type AiProviderId = 'openai' | 'deepseek' | 'mimo' | 'openrouter' | 'custom';
 export type AiProviderPreset = {
   id: AiProviderId;
@@ -52,6 +67,8 @@ export const AI_PROVIDER_PRESETS: AiProviderPreset[] = [
 export interface AiProvider {
   test(config: ResolvedAiConfig, signal?: AbortSignal): Promise<void>;
   stream(input: ProviderChatInput, config: ResolvedAiConfig, signal: AbortSignal): AsyncIterable<string>;
+  /** Optional so existing test doubles and stream-only providers remain valid. */
+  complete?(input: ProviderChatInput, config: ResolvedAiConfig, signal?: AbortSignal): Promise<ProviderCompletion>;
 }
 
 export function getAiProviderPreset(value: string | undefined): AiProviderPreset {
@@ -91,11 +108,32 @@ export function createOpenAiCompatibleProvider(fetchImpl: typeof fetch = fetch):
       stream,
       temperature: providerId === 'mimo' ? 1 : 0.2,
     };
+    const reviewThinking = !stream && (config as ResolvedAiConfig & { reviewThinking?: string }).reviewThinking;
+    if (!stream && reviewThinking !== undefined && reviewThinking !== 'disabled' && reviewThinking !== 'low') {
+      throw new Error('AI_CONFIG_INVALID:不支持的复核推理模式');
+    }
+    if (!stream && providerId === 'mimo' && reviewThinking === 'low') {
+      // MiMo's compatible endpoint does not expose the same reasoning switch.
+      // Fail explicitly instead of silently ignoring the selected setting.
+      throw new Error('AI_CONFIG_INVALID:当前MiMo适配暂不支持low，请选择disabled');
+    }
+    if (!stream && input.responseFormat) body.response_format = { type: input.responseFormat };
     if (providerId === 'mimo') {
+      if (!stream) body.thinking = { type: 'disabled' };
       body.top_p = 0.95;
       body.max_completion_tokens = input.maxTokens ?? 2400;
     } else {
       body.max_tokens = input.maxTokens ?? 2400;
+    }
+    // DeepSeek enables reasoning by default. Structured extraction needs the
+    // visible JSON budget, so apply the selected mode to non-streaming review
+    // requests. Chat streaming keeps its existing provider behavior.
+    if (!stream && providerId === 'deepseek') {
+      body.thinking = reviewThinking === 'low' ? { type: 'enabled' } : { type: 'disabled' };
+      if (reviewThinking === 'low') body.reasoning_effort = 'low';
+    }
+    if (!stream && providerId === 'openrouter' && reviewThinking) {
+      body.reasoning = { effort: reviewThinking === 'low' ? 'low' : 'none', exclude: true };
     }
     if (stream && providerId === 'openrouter') {
       body.reasoning = { effort: 'low', exclude: true };
@@ -108,7 +146,7 @@ export function createOpenAiCompatibleProvider(fetchImpl: typeof fetch = fetch):
       signal,
     });
     if (!response.ok) {
-      const message = (await response.text()).slice(0, 240).replace(/(?:sk-[\w-]+)/g, '[密钥已隐藏]');
+      const message = sanitizeProviderMessage(redactConfiguredKey(await response.text(), config.apiKey)).slice(0, 240);
       throw new Error(`AI_PROVIDER_ERROR:${response.status}:${message || '供应商请求失败'}`);
     }
     return response;
@@ -126,6 +164,46 @@ export function createOpenAiCompatibleProvider(fetchImpl: typeof fetch = fetch):
       } finally {
         clearTimeout(timeout);
       }
+    },
+    async complete(input, config, signal) {
+      const response = await request(input, config, signal ?? new AbortController().signal, false);
+      let payload: {
+        id?: string;
+        model?: string;
+        error?: { code?: string | number; message?: string };
+        choices?: Array<{
+          message?: { content?: unknown };
+          finish_reason?: string | null;
+        }>;
+        usage?: {
+          prompt_tokens?: number;
+          completion_tokens?: number;
+          total_tokens?: number;
+          prompt_tokens_details?: { cached_tokens?: number };
+          completion_tokens_details?: { reasoning_tokens?: number };
+        };
+      };
+      try {
+        payload = await response.json() as typeof payload;
+      } catch (error: unknown) {
+        if (error instanceof SyntaxError) throw new Error('AI_PROTOCOL_ERROR');
+        throw error;
+      }
+      if (payload.error) {
+        const providerMessage = sanitizeProviderMessage(redactConfiguredKey(payload.error.message ?? '供应商请求失败', config.apiKey));
+        throw new Error(`AI_PROVIDER_ERROR:${payload.error.code ?? 'completion'}:${providerMessage}`);
+      }
+      const choice = payload.choices?.[0];
+      if (!choice?.message) throw new Error('AI_PROTOCOL_ERROR');
+      const content = completionContent(choice.message.content);
+      const usage = payload.usage ? normalizeUsage(payload.usage) : null;
+      return {
+        content,
+        finishReason: choice.finish_reason ?? null,
+        usage,
+        id: payload.id,
+        model: payload.model,
+      };
     },
     async *stream(input, config, signal) {
       const firstBudget = input.maxTokens ?? 2400;
@@ -156,7 +234,7 @@ export function createOpenAiCompatibleProvider(fetchImpl: typeof fetch = fetch):
               continue;
             }
             if (payload.error) {
-              const providerMessage = sanitizeProviderMessage(payload.error.message ?? '供应商流式请求失败');
+              const providerMessage = sanitizeProviderMessage(redactConfiguredKey(payload.error.message ?? '供应商流式请求失败', config.apiKey));
               throw new Error(`AI_PROVIDER_ERROR:${payload.error.code ?? 'stream'}:${providerMessage}`);
             }
             const choice = payload.choices?.[0];
@@ -177,6 +255,40 @@ export function createOpenAiCompatibleProvider(fetchImpl: typeof fetch = fetch):
   };
 }
 
+function completionContent(value: unknown): string {
+  if (typeof value === 'string') return value;
+  // A few OpenAI-compatible endpoints return content parts instead of a
+  // single string.  Preserve only visible text parts and reject everything
+  // else as an empty completion for the caller to handle with finishReason.
+  if (Array.isArray(value)) {
+    return value.flatMap((part) => {
+      if (typeof part === 'string') return [part];
+      if (!part || typeof part !== 'object') return [];
+      const text = (part as { text?: unknown }).text;
+      return typeof text === 'string' ? [text] : [];
+    }).join('');
+  }
+  return '';
+}
+
+function normalizeUsage(value: {
+  prompt_tokens?: number;
+  completion_tokens?: number;
+  total_tokens?: number;
+  completion_tokens_details?: { reasoning_tokens?: number };
+}): ProviderUsage {
+  return {
+    inputTokens: finiteTokenCount(value.prompt_tokens),
+    outputTokens: finiteTokenCount(value.completion_tokens),
+    totalTokens: finiteTokenCount(value.total_tokens),
+    reasoningTokens: finiteTokenCount(value.completion_tokens_details?.reasoning_tokens),
+  };
+}
+
+function finiteTokenCount(value: unknown): number | undefined {
+  return typeof value === 'number' && Number.isFinite(value) && value >= 0 ? Math.floor(value) : undefined;
+}
+
 function sanitizeProviderMessage(value: string) {
   return value.slice(0, 240).replace(/(?:sk-[\w-]+)/g, '[密钥已隐藏]');
 }
@@ -185,3 +297,5 @@ function chatUrl(baseUrl: string) {
   const normalized = baseUrl.replace(/\/$/, '');
   return normalized.endsWith('/chat/completions') ? normalized : `${normalized}/chat/completions`;
 }
+
+function redactConfiguredKey(text: string, key: string) { return key ? text.split(key).join('[密钥已隐藏]') : text; }

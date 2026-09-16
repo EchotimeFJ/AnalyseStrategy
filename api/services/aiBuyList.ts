@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto';
 import type { OpinionRecord } from '../domain/research.js';
 import { normalizeText, type ReportDocument } from './reportParser.js';
 import type { ResearchIntent } from './researchRetrieval.js';
@@ -44,7 +45,7 @@ export function buildBuyList(reports: ReportDocument[], opinions: OpinionRecord[
   }).sort((a, b) => b.opinion.reportDate.localeCompare(a.opinion.reportDate) || a.lineNumber - b.lineNumber);
   const sources = rows.map(({ opinion, excerpt, lineNumber }, index) => ({
     id: `buy:${opinion.reportId}:${lineNumber}:${index}`,
-    reportId: opinion.reportId, date: opinion.reportDate,
+    reportId: opinion.reportId, date: opinion.reportDate, sourceHash: opinion.sourceHash,
     institution: opinion.institution, securityName: opinion.security.displayName,
     lineNumber, excerpt,
   }));
@@ -71,7 +72,7 @@ export function buildBuyList(reports: ReportDocument[], opinions: OpinionRecord[
   if (pending.length) {
     lines.push('', `另有 ${pending.length} 处买入相关原文尚需核对，保留在这里供逐项查看：`, '');
     for (const { report, item } of pending) {
-      sources.push({ id: `review:${report.id}:${item.lineNumber}:${item.startColumn}`, reportId: report.id, date: report.date,
+      sources.push({ id: `review:${report.id}:${item.lineNumber}:${item.startColumn}`, reportId: report.id, date: report.date, sourceHash: createHash('sha256').update(report.markdown).digest('hex'),
         institution: scope.institution ?? '', securityName: '待核对原文', lineNumber: item.lineNumber, excerpt: item.excerpt });
       lines.push(`- ${report.date} 第 ${item.lineNumber} 行：${cell(item.excerpt)} [${sources.length}]`);
     }

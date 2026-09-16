@@ -28,6 +28,8 @@ const INSTITUTION_ALIASES: Record<string, string> = {
   中信建投: '中信建投',
   高盛: '高盛',
   麦格理: '麦格理',
+  野村: '野村',
+  野村证券: '野村',
 };
 
 const INVALID_EXACT = new Set([
@@ -36,6 +38,8 @@ const INVALID_EXACT = new Set([
   'A股',
   'H股',
   '未覆盖',
+  '未评级',
+  '未上市',
   '买入',
   '增持',
   '中性',
@@ -49,14 +53,21 @@ const INVALID_EXACT = new Set([
 ]);
 
 const CODE_PATTERN = /^([A-Z]{1,8}|\d{1,6})([.\s-]?)(HK|SS|SH|SZ|BJ|US|TW|KS|KQ|JP|L|O|N|SI|CH|C1|C2)$/i;
+const AMBIGUOUS_BARE_IDENTIFIERS = new Set(['CM', 'ESS', 'YOFC']);
 
 export function normalizeSecurityCode(input: string | null | undefined): string | null {
   if (!input) return null;
   const normalized = input.normalize('NFKC').trim().replace(/\s+/g, ' ');
+  if (AMBIGUOUS_BARE_IDENTIFIERS.has(normalized.toUpperCase())) return null;
   const match = normalized.match(CODE_PATTERN);
   if (!match) return lookupBareCode(normalized);
   if (/^[A-Z]/i.test(match[1]) && !match[2]) return lookupBareCode(normalized);
   const suffix = match[3].toUpperCase();
+  if (suffix === 'CH' && /^\d{6}$/.test(match[1])) {
+    const known = lookupBareCode(match[1]);
+    if (known && /\.(?:SS|SZ|BJ)$/.test(known)) return known;
+    if (/^(?:4|8|92)/.test(match[1])) return `${match[1]}.BJ`;
+  }
   const market = suffix === 'SH' || suffix === 'C1' ? 'SS' : suffix === 'C2' ? 'SZ' : suffix === 'CH' ? (match[1].startsWith('6') ? 'SS' : 'SZ') : suffix;
   const symbol = market === 'HK' && /^\d+$/.test(match[1]) ? String(Number(match[1])).padStart(4, '0') : match[1].toUpperCase();
   return `${symbol}.${market}`;

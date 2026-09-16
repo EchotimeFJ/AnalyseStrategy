@@ -45,6 +45,7 @@ export type InstitutionBlock = {
 };
 
 export type SignalItem = {
+  sourceHash?: string;
   reportId: string;
   date: string;
   institution: string;
@@ -56,6 +57,7 @@ export type SignalItem = {
 };
 
 export type TargetMention = {
+  sourceHash?: string;
   reportId: string;
   date: string;
   institution: string;
@@ -72,6 +74,7 @@ export type TargetMention = {
 };
 
 export type SearchHit = {
+  sourceHash?: string;
   reportId: string;
   date: string;
   institution: string;
@@ -88,6 +91,7 @@ export type SearchIntent = {
 };
 
 export type SearchResultGroup = {
+  sourceHash?: string;
   reportId: string;
   date: string;
   institutions: string[];
@@ -122,6 +126,7 @@ export type GroupedSearchResponse = SearchPagination & {
 };
 
 export type TargetChange = {
+  sourceHash?: string;
   targetName: string;
   institution: string;
   previousRating?: string;
@@ -153,10 +158,32 @@ export type SummaryData = {
   radar: RadarData;
 };
 
+export type ReportReviewStatusName =
+  | 'queued'
+  | 'running'
+  | 'retry_wait'
+  | 'budget_paused'
+  | 'config_paused'
+  | 'succeeded'
+  | 'partial'
+  | 'failed'
+  | 'pending'
+  | 'legacy_unreviewed';
+
+export type ReportReviewStatus = {
+  status: ReportReviewStatusName;
+  sourceHash?: string;
+  publishedSourceHash?: string;
+  model?: string;
+  issueCount?: number;
+};
+
 export type ReportDetail = ReportSummary & {
   markdown: string;
   institutions: InstitutionBlock[];
   mentions: TargetMention[];
+  review?: ReportReviewStatus;
+  publicationId?: string;
 };
 
 export type RadarData = {
@@ -233,21 +260,19 @@ export type IndexStatus = {
 export type AppVersion = { version: string; commit: string; buildTime: string };
 
 export type StrategyUpdateResult = {
-  pull: {
-    success: boolean;
-    strategyDir: string;
-    stdout: string;
-    stderr: string;
-    startedAt: string;
-    finishedAt: string;
-  };
   index: IndexStatus;
+  publishedAt: string | null;
+  checkedAt: string | null;
+  state: 'ready' | 'pending' | 'delayed';
+  reportChanges?: ReportChangeSet;
+  indexVersion?: string;
 };
 
 export type ConfidenceLevel = 'high' | 'medium' | 'low';
 export type OpinionType = 'positive' | 'rating-change' | 'target-price-change' | 'catalyst' | 'risk';
 
 export type SourceEvidence = {
+  sourceHash?: string;
   reportId: string;
   filePath: string;
   lineNumber: number;
@@ -260,6 +285,9 @@ export type SourceEvidence = {
 };
 
 export type SecurityEntity = {
+  organizationId?: string;
+  securityId?: string;
+  listingId?: string;
   key: string;
   code: string | null;
   displayName: string;
@@ -268,6 +296,8 @@ export type SecurityEntity = {
 };
 
 export type OpinionRecord = {
+  rawCode?: string | null;
+  sourceHash?: string;
   id: string;
   reportId: string;
   reportDate: string;
@@ -288,6 +318,10 @@ export type OpinionRecord = {
 };
 
 export type ReportOverview = {
+  companyCount?: number;
+  signals?: Array<{id:string;kind:'risk'|'catalyst';subject:string;subjectScope:string;summary:string;lineNumber:number;sourceHash:string}>;
+  summaries?: Array<{id:string;title:string;summary:string;lineNumber:number;sourceHash:string}>;
+
   reportId: string;
   date: string;
   title: string;
@@ -306,11 +340,14 @@ export type ReportOverview = {
     review: BuyReference[];
     other: BuyReference[];
   };
+  review?: ReportReviewStatus;
+  publicationId?: string;
 };
 
 export type BuyReference = { lineNumber: number; startColumn: number; excerpt: string; reason: string };
 
 export type TodayOverview = {
+  companyCount?: number;
   sourceDir: string;
   indexedAt?: string;
   indexVersion?: string;
@@ -325,6 +362,8 @@ export type TodayOverview = {
 };
 
 export type CompanyProfile = {
+  companyId?: string;
+  listings?: SecurityEntity[];
   security: SecurityEntity;
   firstMention: string | null;
   latestMention: string | null;
@@ -348,6 +387,9 @@ export type AiStatus = {
   timeoutMs: number;
   dailyTokenBudget: number;
   maxConcurrency: number;
+  reviewTimeoutMs?: number;
+  reviewMaxTokens?: number;
+  reviewThinking?: AiReviewThinking;
   canPersist: boolean;
   adminProtected: boolean;
   providerPresets: AiProviderPreset[];
@@ -355,13 +397,37 @@ export type AiStatus = {
   usage: { estimatedTokens: number; active: number };
 };
 
+export type AiReviewThinking = 'disabled' | 'low';
+
 export type AiSavedProfile = {
   id: string;
   providerId: AiStatus['providerId'];
   providerName: string;
   baseUrl: string;
   model: string;
+  reviewTimeoutMs?: number;
+  reviewMaxTokens?: number;
+  reviewThinking?: AiReviewThinking;
   apiKeyMask: string;
+};
+
+export type ReviewStatus = {
+  enabled: boolean;
+  automatedProvider?: 'deepseek';
+  total: number;
+  queued: number;
+  running: number;
+  succeeded: number;
+  partial: number;
+  failed: number;
+  paused: number;
+  legacy: number;
+  lastError?: string;
+  model?: string;
+};
+
+export type ReviewRetryInput = {
+  reportId?: string;
 };
 
 export type AiProviderPreset = {
@@ -373,6 +439,7 @@ export type AiProviderPreset = {
 };
 
 export type AiSource = {
+  sourceHash?: string;
   id: string;
   reportId: string;
   date: string;

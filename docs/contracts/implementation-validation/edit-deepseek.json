@@ -1,0 +1,157 @@
+{
+  "provider": "deepseek",
+  "model": "deepseek-flash",
+  "source": "synthetic name/price/title/catalyst fault injection",
+  "readiness": "failed",
+  "complete": false,
+  "validationState": "rejected",
+  "issues": [
+    {
+      "issueId": "issue:development-edit-probe:1",
+      "recordRef": "statement:development-edit-probe:3:0",
+      "fieldPath": "payload.targetPrice.value.amount",
+      "category": "price_conflict",
+      "severity": "error",
+      "status": "open",
+      "description": "候选目标价为60元，原文为28元，已修正。",
+      "evidenceIDs": [
+        "evidence:development-edit-probe:3:04121d02e1b1"
+      ]
+    },
+    {
+      "issueId": "issue:development-edit-probe:2",
+      "recordRef": "mention:development-edit-probe:3:0",
+      "fieldPath": "payload.rawName",
+      "category": "subject_role",
+      "severity": "warning",
+      "status": "open",
+      "description": "候选名称含动词，已修正为国电南瑞。",
+      "evidenceIDs": [
+        "evidence:development-edit-probe:3:04121d02e1b1"
+      ]
+    },
+    {
+      "issueId": "issue:157e00009f1d92a4",
+      "recordRef": "article:development-edit-probe:1-5",
+      "fieldPath": "operation.payload",
+      "category": "unsupported_value",
+      "severity": "error",
+      "status": "open",
+      "description": "不支持的字段：operation.payload",
+      "evidenceIDs": []
+    },
+    {
+      "issueId": "issue:fceaabda896b8c56",
+      "recordRef": "article:development-edit-probe:1-5",
+      "fieldPath": "operation.fieldGuards",
+      "category": "unsupported_value",
+      "severity": "error",
+      "status": "open",
+      "description": "不支持的字段：operation.fieldGuards",
+      "evidenceIDs": []
+    },
+    {
+      "issueId": "issue:168d2e0a24337b0a",
+      "recordRef": "article:development-edit-probe:1-5",
+      "fieldPath": "fieldChanges",
+      "category": "incomplete_output",
+      "severity": "error",
+      "status": "open",
+      "description": "modify 必须携带 fieldChanges：article:development-edit-probe:1-5",
+      "evidenceIDs": []
+    },
+    {
+      "issueId": "issue:f678baf326ef1cc1",
+      "recordRef": "mention:development-edit-probe:3:0",
+      "fieldPath": "operation.payload",
+      "category": "unsupported_value",
+      "severity": "error",
+      "status": "open",
+      "description": "不支持的字段：operation.payload",
+      "evidenceIDs": []
+    },
+    {
+      "issueId": "issue:0f628a1cd7b751d0",
+      "recordRef": "mention:development-edit-probe:3:0",
+      "fieldPath": "operation.fieldGuards",
+      "category": "unsupported_value",
+      "severity": "error",
+      "status": "open",
+      "description": "不支持的字段：operation.fieldGuards",
+      "evidenceIDs": []
+    },
+    {
+      "issueId": "issue:525a1d4403465c53",
+      "recordRef": "mention:development-edit-probe:3:0",
+      "fieldPath": "fieldChanges",
+      "category": "incomplete_output",
+      "severity": "error",
+      "status": "open",
+      "description": "modify 必须携带 fieldChanges：mention:development-edit-probe:3:0",
+      "evidenceIDs": []
+    },
+    {
+      "issueId": "issue:8a3a72dfd1abbfd3",
+      "recordRef": "statement:development-edit-probe:3:0",
+      "fieldPath": "operation.payload",
+      "category": "unsupported_value",
+      "severity": "error",
+      "status": "open",
+      "description": "不支持的字段：operation.payload",
+      "evidenceIDs": []
+    },
+    {
+      "issueId": "issue:14f0a0bde3ea66fe",
+      "recordRef": "statement:development-edit-probe:3:0",
+      "fieldPath": "operation.fieldGuards",
+      "category": "unsupported_value",
+      "severity": "error",
+      "status": "open",
+      "description": "不支持的字段：operation.fieldGuards",
+      "evidenceIDs": []
+    },
+    {
+      "issueId": "issue:82bd1535e65c8104",
+      "recordRef": "statement:development-edit-probe:3:0",
+      "fieldPath": "fieldChanges",
+      "category": "incomplete_output",
+      "severity": "error",
+      "status": "open",
+      "description": "modify 必须携带 fieldChanges：statement:development-edit-probe:3:0",
+      "evidenceIDs": []
+    },
+    {
+      "issueId": "issue:eda79726f38b5597",
+      "recordRef": null,
+      "fieldPath": "candidateId",
+      "category": "incomplete_output",
+      "severity": "error",
+      "status": "open",
+      "description": "candidateId 缺失或重复：空",
+      "evidenceIDs": []
+    },
+    {
+      "issueId": "issue:6ed899ee796b6ef9",
+      "recordRef": "article:development-edit-probe:1-5",
+      "fieldPath": "payload.mainMentionRefs",
+      "category": "subject_role",
+      "severity": "error",
+      "status": "open",
+      "description": "article.mainMentionRefs 关系无效：mention:fixture-fake",
+      "evidenceIDs": []
+    },
+    {
+      "issueId": "issue:59b9f6b0c4ee4b32",
+      "recordRef": null,
+      "fieldPath": "operations",
+      "category": "incomplete_output",
+      "severity": "error",
+      "status": "open",
+      "description": "复核没有返回任何候选处置",
+      "evidenceIDs": []
+    }
+  ],
+  "elapsedMs": 14340,
+  "configUnchanged": true,
+  "actualTokens": 15705
+}

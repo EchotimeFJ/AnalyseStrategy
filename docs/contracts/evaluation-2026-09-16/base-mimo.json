@@ -1,0 +1,25 @@
+{
+  "id": "base-mimo",
+  "phase": "base",
+  "provider": "mimo",
+  "configuredModel": "mimo-v2.5-pro",
+  "startedAt": "2026-09-15T16:25:30.009Z",
+  "timeoutMs": 45000,
+  "maxTokens": 6000,
+  "inputHash": "f14222fffacd9e5ee0ad1e4389f6a86c7ab9d0ee6f64c8b11720aa9599a24dcf",
+  "sampleIds": [
+    "R1",
+    "R2",
+    "R3",
+    "R4",
+    "S1",
+    "S2",
+    "S3",
+    "S4"
+  ],
+  "httpStatus": 200,
+  "status": "timeout",
+  "errorType": "TimeoutError",
+  "elapsedMs": 45005,
+  "configUnchanged": true
+}

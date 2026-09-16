@@ -7,7 +7,7 @@ export function MentionCard({ mention }: { mention: TargetMention }) {
   return (
     <Link
       to={buildReportLink({
-        reportId: mention.reportId,
+        reportId: mention.reportId, sourceHash: mention.sourceHash,
         lineNumber: mention.lineNumber,
         highlightTerms: targetMentionHighlightTerms(mention),
       })}
@@ -30,7 +30,7 @@ export function SignalCard({ item }: { item: SignalItem }) {
   return (
     <Link
       to={buildReportLink({
-        reportId: item.reportId,
+        reportId: item.reportId, sourceHash: item.sourceHash,
         lineNumber: item.lineNumber,
         highlightTerms: signalHighlightTerms(item),
       })}
@@ -51,7 +51,7 @@ export function ChangeRow({ change }: { change: TargetChange }) {
   return (
     <Link
       to={buildReportLink({
-        reportId: change.reportId,
+        reportId: change.reportId, sourceHash: change.sourceHash,
         lineNumber: change.lineNumber,
         highlightTerms: [change.targetName],
       })}
