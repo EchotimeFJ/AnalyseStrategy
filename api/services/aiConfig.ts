@@ -18,6 +18,7 @@ export type AiConfigInput = {
   model: string;
   apiKey?: string;
   timeoutMs?: number;
+  /** Legacy compatibility field; provider-side keys enforce spending. */
   dailyTokenBudget?: number;
   maxConcurrency?: number;
   reviewTimeoutMs?: number;

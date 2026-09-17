@@ -44,10 +44,17 @@ export function createReviewWorker<T>(options: {
   async function recover() {
     await options.store.transaction(state => {
       let changed = false;
-      for (const job of Object.values(state.jobs)) if (job.status === 'running') {
-        changed = true;
-        // Interrupted requests may already have been billed. Reservation remains.
-        job.status = 'retry_wait'; job.nextAttemptAt = now().toISOString(); job.errorCode = 'REVIEW_INTERRUPTED';
+      for (const job of Object.values(state.jobs)) {
+        if (job.status === 'running') {
+          changed = true;
+          // Interrupted requests may already have been billed. Reservation remains.
+          job.status = 'retry_wait'; job.nextAttemptAt = now().toISOString(); job.errorCode = 'REVIEW_INTERRUPTED';
+        } else if (job.status === 'budget_paused') {
+          // Daily application-side budgeting is disabled. Requeue historical
+          // pauses immediately; provider keys remain the spending boundary.
+          changed = true;
+          job.status = 'queued'; delete job.nextAttemptAt; delete job.errorCode;
+        }
       }
       return changed;
     }).then(async changed => { if(changed && options.publishOnError !== false) await options.publish().catch(() => undefined); });
@@ -119,12 +126,8 @@ export function createReviewWorker<T>(options: {
           if (code === 'REVIEW_SUPERSEDED') { j.status = 'superseded'; }
           else if (code === 'AI_DAILY_BUDGET') {
             j.attempts = Math.max(0, j.attempts - 1);
-            j.status = 'budget_paused';
-            const date = now();
-            const next = new Date(date.getTime() + 86_400_000);
-            // Retry after Shanghai midnight, not after an arbitrary 24h delay.
-            const local = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Shanghai', year: 'numeric', month: '2-digit', day: '2-digit' }).format(next);
-            j.nextAttemptAt = new Date(`${local}T00:00:05+08:00`).toISOString();
+            j.status = 'retry_wait';
+            j.nextAttemptAt = new Date(now().getTime() + 60_000).toISOString();
           } else if (['AI_PROVIDER_401', 'AI_PROVIDER_403', 'AI_PROVIDER_400', 'AI_PROVIDER_404', 'AI_PROVIDER_422', 'AI_NOT_CONFIGURED'].includes(code)) {
             j.status = 'config_paused'; j.nextAttemptAt = new Date(now().getTime() + 86_400_000).toISOString();
           } else if (/^REVIEW_(?:PATCH|EVIDENCE|VALIDATION|INVALID|COVERAGE|REFERENCE)/.test(code)) {

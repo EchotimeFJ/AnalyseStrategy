@@ -27,10 +27,13 @@ export function createAiUsage(file = path.resolve('data/runtime/ai-usage.json'),
     void job.finally(() => { if (queues.get(file) === job) queues.delete(file); }).catch(() => undefined);
     return job;
   }
-  function reserve(tokens: number, limit: number, kind: 'chat' | 'review' = 'chat') {
+  function reserve(tokens: number, _limit: number, kind: 'chat' | 'review' = 'chat') {
     return serialize(async () => {
       const usage = await read();
-      if (!Number.isSafeInteger(tokens) || tokens < 1 || usage.estimatedTokens + tokens > limit) throw new Error('AI_DAILY_BUDGET:今日 AI 额度已用完');
+      if (!Number.isSafeInteger(tokens) || tokens < 1) throw new Error('AI_USAGE_INVALID');
+      // The application records estimated/measured usage for observability,
+      // but never rejects a request because of a local daily budget. Provider
+      // keys and provider-side quotas are the authoritative spending control.
       const reservation = { id: randomUUID(), tokens, kind };
       // Unknown/failed requests retain their reservation. A provider-reported
       // total can settle this exact reservation without resetting other spend.

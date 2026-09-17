@@ -30,10 +30,10 @@ try {
   const release=aiResourceGroup(usageFile).acquire('chat',2);
   await worker.wake();assert.equal(calls,2,'background reserves capacity for conversation');release();
   cfg.dailyTokenBudget=100;await worker.wake();
-  let latest=(await store.read());assert.equal(latest.jobs[latest.sources.a.jobId].status,'budget_paused');
-  assert.equal(latest.jobs[latest.sources.a.jobId].resultRef,undefined,'budget rejection must not produce facts');
-  assert.equal(published,3,'publish the paused status only');
-  cfg.dailyTokenBudget=10000;await store.retry('a');await worker.wake();assert.equal(published,4);
+  let latest=(await store.read());assert.notEqual(latest.jobs[latest.sources.a.jobId].status,'budget_paused');
+  assert.ok(latest.jobs[latest.sources.a.jobId].resultRef,'provider request is not blocked by local budget');
+  assert.equal(published,3,'publish the completed third review');
+  cfg.dailyTokenBudget=10000;await store.retry('a');await worker.wake();assert.equal(published,3);
   // Recovered in-flight jobs retain reservations and pinned model metadata.
   await store.sync([report('interrupted')]);await store.transaction(s=>{s.jobs[s.sources.a.jobId].status='running';});
   await worker.recover();latest=await store.read();assert.equal(latest.jobs[latest.sources.a.jobId].status,'retry_wait');

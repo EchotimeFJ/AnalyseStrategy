@@ -31,7 +31,9 @@ try {
   const restarted = createAiService({ configStore: store, provider, usageFile, getIndex: async () => index });
   assert.equal((await restarted.status()).usage.estimatedTokens, usage, 'restart must retain consumed allowance');
   config.dailyTokenBudget = usage;
-  await assert.rejects(restarted.prepareChat({ question: '测试公司的目标价？', scope: {}, ip: 'three' }), /AI_DAILY_BUDGET/);
+  const unlimited = await restarted.prepareChat({ question: '测试公司的目标价？', scope: {}, ip: 'three' });
+  for await (const text of unlimited.stream) assert.equal(text, '回答');
+  assert.ok((await restarted.status()).usage.estimatedTokens > usage, 'local daily budget no longer blocks requests');
 
   // A paid upstream request must count even if it ends with an error.
   config.dailyTokenBudget = 100_000;
