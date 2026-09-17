@@ -2,6 +2,7 @@ import fs from 'node:fs/promises';
 import type { ReviewedReport } from '../domain/review.js';
 import { isPublishableReview, loadReviewProjection, type ReportReviewState, type ReviewFactRef } from './reviewProjection.js';
 import { reviewEnabled, reviewStore } from './reviewRuntime.js';
+import { contentHash } from './reviewStore.js';
 import path from 'node:path';
 import { randomUUID, createHash } from 'node:crypto';
 import {
@@ -388,8 +389,62 @@ async function buildIncrementalReviewIndex(manifest: SourceManifest): Promise<In
     }
   }
   if (errors.length) throw new Error(`Report rebuild failed: ${errors.length} unreadable reports`);
-  const synced = await reviewStore(manifest.sourceDir).sync(reports);
-  return buildReviewedIndex(manifest, synced.map(item => item.report), errors);
+  const store = reviewStore(manifest.sourceDir);
+  const synced = await store.sync(reports);
+  const currentReports = synced.map(item => item.report);
+  const storeState = await store.read();
+  const previousSourceById = new Map(previous.map(report => [report.id, report]));
+  const previousPublishedById = new Map(state.reports.map(report => [report.id, report]));
+  const affected = new Set<string>();
+  for (const report of currentReports) {
+    const old = previousSourceById.get(report.id);
+    if (!old || contentHash(old.markdown) !== contentHash(report.markdown)) affected.add(report.id);
+  }
+  for (const report of previous) if (!currentReports.some(current => current.id === report.id)) affected.add(report.id);
+  const previousRefs = state.reviewFactRefs ?? {};
+  for (const report of currentReports) {
+    const source = storeState.sources[report.id];
+    const job = source && storeState.jobs[source.jobId];
+    if ((previousRefs[report.id]?.resultRef ?? null) !== (job?.resultRef ?? null)) affected.add(report.id);
+  }
+  const affectedReports = currentReports.filter(report => affected.has(report.id));
+  const reviewed = affectedReports.length ? await loadReviewProjection(affectedReports, manifest.sourceDir) : null;
+  const reviewedReports = new Map((reviewed?.reports ?? []).map(report => [report.id, report]));
+  const nextReports = currentReports.map(report => reviewedReports.get(report.id) ?? previousPublishedById.get(report.id) ?? report)
+    .sort((left, right) => left.date.localeCompare(right.date));
+  const currentIds = new Set(currentReports.map(report => report.id));
+  const oldOpinions = state.opinions.filter(opinion => currentIds.has(opinion.reportId) && !affected.has(opinion.reportId));
+  const opinions = [...oldOpinions, ...(reviewed?.opinions ?? [])];
+  const mentions = [...state.mentions.filter(mention => currentIds.has(mention.reportId) && !affected.has(mention.reportId)), ...(reviewed?.mentions ?? [])];
+  const signals = [...(state.reviewSignals ?? []).filter(signal => currentIds.has(signal.reportId) && !affected.has(signal.reportId)), ...(reviewed?.signals ?? [])];
+  const entities = new Map(opinions.map(opinion => [opinion.security.key, opinion.security]));
+  const reviewStates: Record<string, ReportReviewState> = {};
+  for (const report of currentReports) {
+    const source = storeState.sources[report.id];
+    const job = source && storeState.jobs[source.jobId];
+    const old = state.reviewStates?.[report.id];
+    reviewStates[report.id] = { status: job?.status ?? old?.status ?? 'pending', sourceHash: contentHash(report.markdown), model: job?.pin?.model ?? old?.model, issueCount: old?.issueCount ?? 0 };
+  }
+  Object.assign(reviewStates, reviewed?.states ?? {});
+  const reviewFactRefs = Object.fromEntries(Object.entries(previousRefs).filter(([id]) => currentIds.has(id)));
+  const reviewOverviewSignals = Object.fromEntries(Object.entries(state.reviewOverviewSignals ?? {}).filter(([id]) => currentIds.has(id) && !affected.has(id)));
+  const reviewSummaries = Object.fromEntries(Object.entries(state.reviewSummaries ?? {}).filter(([id]) => currentIds.has(id) && !affected.has(id)));
+  for (const [id, value] of Object.entries(reviewed?.factRefs ?? {})) reviewFactRefs[id] = value;
+  for (const [id, value] of Object.entries(reviewed?.overviewSignals ?? {})) reviewOverviewSignals[id] = value;
+  for (const [id, value] of Object.entries(reviewed?.overviewSummaries ?? {})) reviewSummaries[id] = value;
+  const identityMapping = { ...(state.identityMapping ?? {}), ...(reviewed?.identityMapping ?? {}) };
+  const identityGraph = reviewed?.identityGraph ?? state.identityGraph;
+  const next: IndexState = {
+    sourceDir: manifest.sourceDir, sourceReports: currentReports, reports: nextReports,
+    mentions, opinions, entities, qualityIssues: buildQualityIssues(nextReports, opinions),
+    version: `${new Date().toISOString()}-${randomUUID()}`, indexedAt: new Date().toISOString(), errors,
+    sourceFingerprint: manifest.fingerprint, cache: { origin: 'rebuilt', persisted: false },
+    reviewStates, reviewFacts: [], reviewFactRefs, reviewOverviewSignals, reviewSummaries,
+    reviewSignals: signals, identityGraph, identityMapping,
+  };
+  next.reviewFingerprint = contentHash(JSON.stringify([reviewStates, identityMapping, reviewFactRefs, reviewOverviewSignals, reviewSummaries]));
+  next.views = buildIndexViews(next);
+  return next;
 }
 
 async function buildReviewedIndex(manifest: SourceManifest, reports: ReportDocument[], errors: IndexState['errors']): Promise<IndexState> {
