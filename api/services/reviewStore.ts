@@ -95,6 +95,19 @@ export function createReviewStore(directory: string) {
         const file = objectPath('sources', sourceRef);
         try { await fs.access(file); } catch { await writeAtomicJson(file, report); }
         if (!state.jobs[jobId]) state.jobs[jobId] = { id: jobId, reportId: id, sourceHash: hash, pipelineVersion: REVIEW_PIPELINE_VERSION, status: 'queued', attempts: 0, createdAt: now, updatedAt: now };
+        // A rules/worker version change should not discard a valid result for
+        // the same immutable source. Preserve it and only requeue reports that
+        // have no published result yet.
+        const previousResult = Object.values(state.jobs)
+          .filter(candidate => candidate.id !== jobId && candidate.reportId === id && candidate.sourceHash === hash && candidate.resultRef && ['succeeded', 'partial'].includes(candidate.status))
+          .sort((left, right) => right.updatedAt.localeCompare(left.updatedAt))[0];
+        if (previousResult && !state.jobs[jobId].resultRef) {
+          state.jobs[jobId].status = previousResult.status;
+          state.jobs[jobId].resultRef = previousResult.resultRef;
+          state.jobs[jobId].pin = previousResult.pin;
+          state.jobs[jobId].attempts = previousResult.attempts;
+          state.jobs[jobId].errorCode = previousResult.errorCode;
+        }
         if (state.jobs[jobId].status === 'withdrawn' || state.jobs[jobId].status === 'superseded') state.jobs[jobId].status = state.jobs[jobId].resultRef ? 'succeeded' : 'queued';
         state.sources[id] = source;
         output.push({ report, source });
