@@ -1,6 +1,7 @@
 import type { ReactNode } from 'react';
 import { NavLink, useLocation } from 'react-router-dom';
 import {
+  Bot,
   Binoculars,
   BookOpenText,
   DatabaseZap,
@@ -20,6 +21,7 @@ const icons: Record<RouteId, typeof Home> = {
   reports: BookOpenText,
   search: Search,
   company: Binoculars,
+  assistant: Bot,
   watchlist: Star,
   data: DatabaseZap,
 };
