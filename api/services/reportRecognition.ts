@@ -21,6 +21,26 @@ const GENERIC = /^(?:评级|投资评级|Rating|买入|增持|超配|中性|卖�
 const ACRONYMS = new Set(['AI', 'AH', 'EPS', 'EBIT', 'EBITDA', 'DCF', 'ROE', 'ROI', 'ASP', 'CEO', 'CFO', 'GPU', 'CPU', 'CAPEX', 'FCF', 'AIDC', 'IDC', 'OS', 'PFS', 'HR', 'DIO', 'TP', 'PT', 'HK', 'US', 'SS', 'SZ', 'RMB', 'BUY', 'HOLD', 'SELL', 'OW', 'UW', 'GPM', 'OPM', 'NPM', 'GMV', 'CAGR', 'TAM', 'WACC', 'SOTP', 'YTD', 'YOY', 'MOM', 'QOQ', 'CPI', 'PPI']);
 const UNSAFE_BARE_ALIASES = new Set(['CM', 'ESS', 'YOFC']);
 
+// Only explicit coordinated rating clauses introduce name-only candidates.
+// The dictionary resolves each member independently; list punctuation does
+// not imply a shared price, and historical/negative clauses are excluded.
+function coordinatedRatings(text: string) {
+  const patterns = [
+    new RegExp(`(?:我们)?对([^。；;：:\\n]{2,150}?)\\s*(?:维持|重申|给予|持有|持|保持)\\s*["']?(${RATING})["']?\\s*评级`, 'gi'),
+    new RegExp(`(?:重申|维持)["']?(${RATING})["']?评级[,，]\\s*首选([^。；;：:\\n]{2,100})`, 'gi'),
+  ];
+  return patterns.flatMap((pattern, index) => [...text.matchAll(pattern)].flatMap(match => {
+    if (/(?:不再|并非|不是|未|曾经|此前)\s*$/.test(text.slice(0, match.index))) return [];
+    const names = match[index === 0 ? 1 : 2];
+    const label = match[index === 0 ? 2 : 1];
+    const start = match.index! + match[0].indexOf(names);
+    const position = match.index! + match[0].indexOf(label);
+    const members = names.replace(/\([^)]*\)/g, '').split(/[/／、及与和]/).map(name => name.trim());
+    if (members.length < 2 || !members.every(name => dictionaryName(name)?.name === name)) return [];
+    return [{ names, start, end: start + names.length, position }];
+  }));
+}
+
 // These phrases describe an article, list, or section. They are not security
 // names even when a following parenthesis contains a rating or a code.
 function isPseudoEntityName(value: string) {
@@ -44,6 +64,7 @@ function nameOf(value: string) {
 }
 function validName(value: string) {
   return value.length >= 2 && value.length <= 48 && !GENERIC.test(value) &&
+    !/^(?:【|\[)?(?:入库卡片|报告摘要|报告信息|公司估值\/风险)(?:】|\])?$/.test(value) &&
     !isPseudoEntityName(value) &&
     !/^(?:(?:推荐|投资|核心|覆盖|精选)?标的|股票|个股|的(?:买入|增持|持有|卖出))$/.test(value) &&
     !/行业|指数|风险回报|风险收益|市场展望|计价|预计|预测|以下简称|人民币|美元|港元|目标价|评级|毛利率|净利率|营业利润率|复合年增长率|每股收益|(?:上调|下调|调升|调降|低配|标配|高配|超配)/.test(value) && !ACRONYMS.has(value.toUpperCase()) && !isInvalidEntityName(value);
@@ -161,7 +182,7 @@ function candidatesFor(lines: Line[]) {
       const innerStart = start + match[0].indexOf('(') + 1;
       const prefix = line.text.slice(0, start).trim();
       const prefixedRating = new RegExp(`^[【\\[]${RATING}[】\\]]$`, 'i').test(prefix);
-      const atHeading = !prefix || /^[#>*•\d.\s-]+$/.test(prefix) || explicitName || prefixedRating;
+      const atHeading = !prefix || /^[#>*•\d.\s-]+$/.test(prefix) || /^(?:标题|标的)\s*[:：]$/.test(prefix) || explicitName || prefixedRating;
       const tail = line.text.slice(start + match[0].length).trim();
       const heading = atHeading && (listed.length > 0 || explicitName || companyProfile || hasField || prefixedRating || line.number === firstContentLine || /^[:：]?$/.test(tail));
       const aliases = inside.split(/[/,，;；]/).map((part) => part.trim()).filter((part) =>
@@ -223,6 +244,18 @@ function candidatesFor(lines: Line[]) {
         innerStart: -1, innerEnd: -1, separateFields: false, heading: false, explicitName: false });
     }
   }
+  for (const line of lines) for (const group of coordinatedRatings(line.text)) {
+    for (const member of group.names.matchAll(/[^/／、及与和]+/g)) {
+      const text = member[0].replace(/\([^)]*\)/g, '').trim();
+      const known = dictionaryName(text);
+      if (!known || known.name !== text || !validName(known.name)) continue;
+      if (found.some(candidate => candidate.line === line.number && candidate.name === known.name)) continue;
+      const code = known.codes.length === 1 ? known.codes[0] : undefined;
+      const start = group.start + member.index! + member[0].indexOf(text);
+      found.push({name: known.name, aliases: [], code, market: market(code), line: line.number,
+        start, end: start + text.length, innerStart: -1, innerEnd: -1, separateFields: false, heading: false, explicitName: true});
+    }
+  }
   const byName = new Map<string, Set<string>>();
   for (const candidate of found) if (candidate.code) {
     const key = candidate.name.toLowerCase();
@@ -264,6 +297,8 @@ function sharedRatingRange(line: Line, position: number, candidates: Candidate[]
 
 function owners(line: Line, position: number, candidates: Candidate[], headings: Candidate[]) {
   const sameLine = candidates.filter((candidate) => candidate.line === line.number);
+  const coordinated = coordinatedRatings(line.text).find(group => group.position === position);
+  if (coordinated) return sameLine.filter(candidate => candidate.end > coordinated.start && candidate.start < coordinated.end && coordinated.names.includes(candidate.name));
   const shared = sharedRatingRange(line, position, sameLine);
   if (shared?.length) return shared;
   const prefixRating = /^[#>*•\s【[-]*$/.test(line.text.slice(0, position));
@@ -359,7 +394,7 @@ function ratingValues(line: Line) {
     const inline = /[(,，;；]\s*["']?$/.test(before) && /^["']?\s*[,，;；)/]/.test(after);
     const bracketed = /[【[]\s*$/.test(before) && /^\s*[】\]]/.test(after);
     if (!standalone && !labeled && !acted && !inline && !bracketed) continue;
-    const action = /首予|首次给予/.test(before) ? '首予' : /重申/.test(before) ? '重申' : /维持/.test(before) ? '维持' : /下调至/.test(before) ? '下调' : /上调至/.test(before) ? '上调' : undefined;
+    const action = /首予|首次给予|首次覆盖|首发覆盖/.test(before) ? '首予' : /重申/.test(before) ? '重申' : /维持/.test(before) ? '维持' : /下调至/.test(before) ? '下调' : /上调至/.test(before) ? '上调' : undefined;
     results.push({ value: normalizedRating(match[0]), rawValue: match[0], position, tokenLength: match[0].length, line: line.number, excerpt: excerpt(line, position), action, score: standalone ? 3 : inline ? 4 : 5 });
   }
   // Ratings directly following a dictionary-backed name are valid even when
@@ -371,7 +406,7 @@ function ratingValues(line: Line) {
     const before = line.text.slice(Math.max(0, position - 100), position);
     if (/(?:此前|原为|原先|原评级|曾经|不再|并非|不是)[^。；]{0,12}$/.test(before)) continue;
     if (!namedEntityBefore(line.text, position)) continue;
-    const action = /首予|首次给予/.test(before) ? '首予' : /重申/.test(before) ? '重申' : /维持/.test(before) ? '维持' : /下调至/.test(before) ? '下调' : /上调至/.test(before) ? '上调' : undefined;
+    const action = /首予|首次给予|首次覆盖|首发覆盖/.test(before) ? '首予' : /重申/.test(before) ? '重申' : /维持/.test(before) ? '维持' : /下调至/.test(before) ? '下调' : /上调至/.test(before) ? '上调' : undefined;
     results.push({ value: normalizedRating(match[0]), rawValue: match[0], position, tokenLength: match[0].length,
       line: line.number, excerpt: excerpt(line, position), action, score: 5 });
   }

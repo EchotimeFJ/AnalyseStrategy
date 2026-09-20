@@ -1,6 +1,7 @@
 import type { ReportReviewStatus, ReportReviewStatusName } from '@/types';
 
 const REVIEW_STATUS_LABELS: Record<ReportReviewStatusName, string> = {
+  program: '程序分析',
   queued: '排队中',
   running: '处理中',
   retry_wait: '等待重试',

@@ -22,7 +22,6 @@ export function createDataUpdater(options: { statusFile?: string; now?: () => Da
   let running: Promise<PublicationStatus> | undefined;
   let timer: ReturnType<typeof setInterval> | undefined;
   let delayed = false;
-  let afterUpdate: (() => void) | undefined;
 
   async function currentPublication() {
     const record = await readPublication(file);
@@ -57,12 +56,13 @@ export function createDataUpdater(options: { statusFile?: string; now?: () => Da
       const manifest = await readSourceManifest(getReportDir());
       const app = getAppVersion();
       const appRevision = `${app.version}:${app.commit}`;
-      // An hourly poll with an unchanged source must not rebuild the entire
-      // review graph.  Code-version changes are handled by an explicit forced
-      // reindex during deployment; the source/review fingerprint remains the
-      // freshness gate for routine polling.
-      let reuseSnapshot = Boolean(!force && baseline && previous && manifest.fingerprint === baseline.sourceFingerprint);
-      let index = reuseSnapshot ? baseline! : await prepareIndexForPublication();
+      // Unchanged sources reuse the current program index. Deployments force
+      // a rebuild when extraction rules change.
+      const useBaseline = !force && baseline?.analysisMode === 'program' && manifest.fingerprint === baseline.sourceFingerprint;
+      // A migrated in-memory index is not the old publication's disk snapshot.
+      // Only reuse that file after its publication fingerprint also matches.
+      let reuseSnapshot = false;
+      let index = useBaseline ? baseline! : await prepareIndexForPublication();
       const hash = createHash('sha256');
       for (const report of index.reports) hash.update(JSON.stringify([report.id, report.markdown]));
       if (index.reviewFingerprint) hash.update(index.reviewFingerprint);
@@ -75,7 +75,7 @@ export function createDataUpdater(options: { statusFile?: string; now?: () => Da
         publishedAt: previous?.fingerprint === fingerprint ? previous.publishedAt : now().toISOString(),
         checkedAt: now().toISOString(), revision, fingerprint, appRevision,
         reportChanges,
-        reviewRevisions: [...new Map([...(previous?.reviewRevisions ?? []), ...index.reports.filter(r => index.reviewStates?.[r.id]).map(r => ({ reportId: r.id, sourceHash: createHash('sha256').update(r.markdown).digest('hex') }))].map(r => [`${r.reportId}:${r.sourceHash}`, r])).values()],
+        reviewRevisions: [...new Map([...(previous?.reviewRevisions ?? []), ...index.reports.map(r => ({ reportId: r.id, sourceHash: createHash('sha256').update(r.markdown).digest('hex') }))].map(r => [`${r.reportId}:${r.sourceHash}`, r])).values()],
       };
       await commitPublication(file, index, details, previous, reuseSnapshot);
       activatePublishedIndex(index);
@@ -91,11 +91,9 @@ export function createDataUpdater(options: { statusFile?: string; now?: () => Da
 
   function update(): Promise<PublicationStatus> {
     if (running) return running;
-    running = run(true, false).then(result => { notifyUpdate(); return result; }).finally(() => { running = undefined; });
+    running = run(true, false).finally(() => { running = undefined; });
     return running;
   }
-
-  function notifyUpdate() { if (afterUpdate) setImmediate(() => { try { afterUpdate?.(); } catch { /* Worker reports its own failure. */ } }); }
 
   function start() {
     if (timer) return;
@@ -111,7 +109,7 @@ export function createDataUpdater(options: { statusFile?: string; now?: () => Da
     await running?.catch(() => undefined);
   }
 
-  return { update, reindex: () => run(false, true).then(result => { notifyUpdate(); return result; }), status, start, stop, setAfterUpdate: (callback: () => void) => { afterUpdate = callback; } };
+  return { update, reindex: () => run(false, true), status, start, stop };
 }
 
 function emptyIndex(sourceDir: string): IndexState {

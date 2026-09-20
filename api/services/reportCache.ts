@@ -87,6 +87,7 @@ export async function writeReportSnapshot(index: IndexState, options: { file?: s
   // Only report state is serialized. No environment, AI configuration or user settings.
   const packed = packSnapshotStrings({
     sourceDir: index.sourceDir, sourceFingerprint: index.sourceFingerprint,
+    ...(index.analysisMode ? { analysisMode: index.analysisMode } : {}),
     version: index.version, indexedAt: index.indexedAt,
     reports: index.reports.map((report): DiskReport => ({
       id: report.id, date: report.date, year: report.year, title: report.title,

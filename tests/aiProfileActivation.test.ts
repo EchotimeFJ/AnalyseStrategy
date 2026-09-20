@@ -22,18 +22,19 @@ const address = server.address();
 assert.ok(address && typeof address === 'object');
 const url = `http://127.0.0.1:${address.port}/api/ai/active-profile`;
 try {
-  for (let i = 0; i < 7; i++) {
+  for (let i = 0; i < 2; i++) {
     const profile = profiles[i % 2];
     const response = await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-AI-Admin-Token': 'activation-test' }, body: JSON.stringify({ profileId: profile.id }) });
-    assert.equal(response.status, 200, 'successful selections do not consume the configuration-write quota');
+    assert.equal(response.status, 410, 'retired model endpoint cannot invoke or switch models');
     const payload = await response.json();
-    assert.equal(payload.data.activeProfileId, profile.id);
+    assert.equal(payload.error.code, 'AI_RETIRED');
     assert.ok(!JSON.stringify(payload).includes('deep-test'));
-    assert.equal((await aiConfigStore.resolve())?.apiKey, i % 2 ? 'mimo-test' : 'deep-test');
+    assert.equal((await aiConfigStore.resolve())?.apiKey, 'deep-test');
   }
   assert.deepEqual(JSON.parse(await fs.readFile(keyFile, 'utf8')).profiles.map((p: { apiKeyEncrypted: unknown }) => p.apiKeyEncrypted), before.map((p: { apiKeyEncrypted: unknown }) => p.apiKeyEncrypted));
-  for (let i = 0; i < 5; i++) assert.equal((await fetch(url, { method: 'POST' })).status, 403);
-  assert.equal((await fetch(url, { method: 'POST' })).status, 429, 'failed administrator attempts remain limited');
+  const chat = await fetch(url.replace('active-profile', 'chat'), {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({question:'测试'})});
+  assert.equal(chat.status,410,'old clients cannot trigger model calls');
+  assert.equal((await fetch(url,{method:'POST'})).status,403);
 } finally {
   await new Promise<void>(resolve => server.close(() => resolve()));
   process.chdir(original); await fs.rm(root, { recursive: true, force: true });

@@ -16,18 +16,13 @@ const address = server.address();
 assert.ok(address && typeof address === 'object');
 const base = `http://127.0.0.1:${address.port}/api`;
 try {
-  assert.equal((await fetch(base + '/ai/config')).status, 403);
-  const adminConfig = await fetch(base + '/ai/config', { headers: { 'X-AI-Admin-Token': 'test-admin-only' } });
-  assert.equal(adminConfig.status, 200);
-  assert.equal(adminConfig.headers.get('cache-control'), 'no-store');
-  const adminData = (await adminConfig.json()).data;
-  assert.ok(Array.isArray(adminData.providerPresets));
-  assert.ok(!('apiKey' in adminData));
-  const publicData = (await (await fetch(base + '/ai/status')).json()).data;
-  assert.ok(!('baseUrl' in publicData));
-  assert.ok(!('providerPresets' in publicData));
-  assert.ok(!('profiles' in publicData));
-  assert.ok(!('activeProfileId' in publicData));
+  for (const route of ['/ai/config', '/ai/status']) {
+    const retired = await fetch(base + route);
+    assert.equal(retired.status,410);
+    const payload = await retired.json();
+    assert.equal(payload.error.code,'AI_RETIRED');
+    assert.ok(!JSON.stringify(payload).includes('apiKey'));
+  }
   // Removing server authorization must never let an anonymous request mutate shared state.
   for (const [method, route] of [['POST', '/reindex'], ['POST', '/update-strategy'], ['POST', '/watchlist'], ['DELETE', '/watchlist/x'], ['POST', '/aliases'], ['PUT', '/ai/config'], ['POST', '/ai/config/test'], ['POST', '/ai/active-profile']]) {
     const response = await fetch(base + route, { method, headers: { 'Content-Type': 'application/json' }, body: '{}' });

@@ -13,7 +13,6 @@ import cors from 'cors'
 import helmet from 'helmet'
 import { publicJsonReplacer, requireAdmin, requestLimit, validateQuery } from './security.js'
 import researchRoutes from './routes/research.js'
-import aiRoutes from './routes/ai.js'
 import reviewRoutes from './routes/review.js'
 
 const app: express.Application = express()
@@ -47,7 +46,7 @@ app.use(express.json({ limit: '64kb', strict: true }))
  * API Routes
  */
 app.use('/api', researchRoutes)
-app.use('/api/ai', aiRoutes)
+app.use('/api/ai', (_req, res) => { res.status(410).json({ success: false, error: { code: 'AI_RETIRED', message: '研究助手已停用，请使用报告检索和公司研究。' } }) })
 app.use('/api/review', reviewRoutes)
 
 /**

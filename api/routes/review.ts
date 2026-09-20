@@ -1,35 +1,27 @@
 import { Router } from 'express';
-import { reviewStatus, reviewStore, reviewEnabled } from '../services/reviewRuntime.js';
+import { reviewStore } from '../services/reviewRuntime.js';
 import { requireAdmin } from '../security.js';
 import { sendCachedReport } from '../services/reportHttpCache.js';
-import { ensureIndex, getReportDraft, getReviewedReportFact } from '../services/reportIndex.js';
+import { ensureIndex, getReportDraft, getReportOverview } from '../services/reportIndex.js';
 import { readPublication } from '../services/publicationStore.js';
 import { contentHash } from '../services/reviewStore.js';
 
 const router = Router();
-let wake: (() => void) | undefined;
-export function registerReviewWake(callback: () => void) { wake = callback; }
-router.get('/status', async (_req,res,next) => {
-  try { res.setHeader('Cache-Control','no-store'); res.json({success:true,data:await reviewStatus()}); } catch(error){next(error);}
+// Compatibility endpoint for older clients; no review worker is registered.
+router.get('/status', (_req, res) => {
+  res.json({success:true,data:{enabled:false,mode:'program',total:0,queued:0,running:0,succeeded:0,partial:0,failed:0,paused:0,legacy:0}});
 });
-router.post('/retry', requireAdmin, async(req,res,next)=>{
-  try {
-    if (!reviewEnabled() || !wake) {res.status(503).json({success:false,error:{code:'REVIEW_NOT_RUNNING',message:'自动复核尚未启动，请检查服务器配置'}});return;}
-    if (req.body.reportId !== undefined && (typeof req.body.reportId !== 'string'||req.body.reportId.length>200)) {res.status(400).json({success:false,error:{code:'INVALID_REPORT',message:'报告标识不正确'}});return;}
-    const count=await reviewStore().retry(req.body.reportId);wake();
-    res.json({success:true,data:{queued:count}});
-  }catch(error){next(error);}
+router.post('/retry', requireAdmin, (_req, res) => {
+  res.status(410).json({success:false,error:{code:'REVIEW_RETIRED',message:'报告已改为程序分析，无需 AI 复核。'}});
 });
 router.get('/reports/:id/draft', async(req,res,next)=>{
   try{const index=await ensureIndex();if(!index.reports.some(r=>r.id===req.params.id)){res.status(404).json({success:false,error:{code:'REPORT_NOT_FOUND',message:'报告不存在'}});return;}await sendCachedReport(req,res,index,async()=>getReportDraft(req.params.id,index));}catch(error){next(error);}
 });
-// Public structured facts only; candidate tombstones and original model output
-// remain in the private store, never in a public list/assistant payload.
 router.get('/reports/:id/structure', async(req,res,next)=>{
-  try{
-    const index=await ensureIndex();const result=await getReviewedReportFact(req.params.id,index);
-    if(!result){res.status(404).json({success:false,error:{code:'REVIEW_PENDING',message:'该报告尚无已发布的结构化结果'}});return;}
-    res.json({success:true,data:{publicationId:index.version,reportId:result.reportId,sourceHash:result.sourceHash,records:result.records.filter(r=>!r.status||r.status==='active'),evidence:result.evidence,identityGraph:index.identityGraph??null,identityMapping:Object.fromEntries(result.records.filter(r=>r.kind==='mention').flatMap(r=>index.identityMapping?.[r.id]?[[r.id,index.identityMapping[r.id]]]:[])),readiness:result.readiness}});
+  try {
+    const overview=await getReportOverview(req.params.id);
+    if(!overview){res.status(404).json({success:false,error:{code:'REPORT_NOT_FOUND',message:'报告不存在'}});return;}
+    res.json({success:true,data:{...overview,mode:'program'}});
   }catch(error){next(error);}
 });
 router.get('/reports/:id/revisions/:hash', async(req,res,next)=>{

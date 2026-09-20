@@ -49,11 +49,15 @@ export function classifyOpinionTypes(input: {
 }
 
 export function extractOpinions(report: ReportDocument): OpinionRecord[] {
+  return extractOpinionsFromMentions(report, extractTargetMentions(report));
+}
+
+export function extractOpinionsFromMentions(report: ReportDocument, mentions: TargetMention[]): OpinionRecord[] {
   // Recognition keeps unscored security mentions for coverage and event
   // views, but article/list labels must never become opinion records. Keep
   // this boundary here as a second guard for downstream consumers.
   const sourceHash = createHash('sha256').update(report.markdown).digest('hex');
-  return extractTargetMentions(report)
+  return mentions
     .filter((mention) => !isInvalidEntityName(mention.targetName) && !isPseudoTargetName(mention.targetName))
     .map((mention, index) => {
       const opinion = toOpinion(report, mention, index);

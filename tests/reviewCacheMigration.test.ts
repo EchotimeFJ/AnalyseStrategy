@@ -10,6 +10,6 @@ try{
  const script=`import {ensureIndex} from ${JSON.stringify(path.resolve('api/services/reportIndex.ts'))};const i=await ensureIndex();console.log(JSON.stringify({opinions:i.opinions.length,mentions:i.mentions.length,states:i.reviewStates}));`;
  const env={...process.env,REPORT_DIR:reports,REPORT_INDEX_CACHE_DIR:path.join(root,'cache'),REPORT_PUBLICATION_FILE:path.join(root,'publication.json'),RESEARCH_REVIEW_DIR:path.join(root,'review')};
  const old=await exec(process.execPath,['--import','tsx','--input-type=module','-e',script],{env:{...env,RESEARCH_REVIEW_ENABLED:'false'}});assert(JSON.parse(old.stdout).opinions>0);
- const migrated=await exec(process.execPath,['--import','tsx','--input-type=module','-e',script],{env:{...env,RESEARCH_REVIEW_ENABLED:'true'}});const value=JSON.parse(migrated.stdout);assert.equal(value.opinions,0);assert.equal(value.mentions,0);assert.equal(Object.values(value.states)[0].status,'legacy_unreviewed');
+ const migrated=await exec(process.execPath,['--import','tsx','--input-type=module','-e',script],{env:{...env,RESEARCH_REVIEW_ENABLED:'true'}});const value=JSON.parse(migrated.stdout);assert(value.opinions>0);assert(value.mentions>0);assert.equal(value.states,undefined,'AI flags cannot gate program results');
 }finally{await fs.rm(root,{recursive:true,force:true});}
 console.log('unreviewed cache migration tests passed');

@@ -1,8 +1,7 @@
 import fs from 'node:fs/promises';
 import type { ReviewedReport } from '../domain/review.js';
-import { isPublishableReview, loadReviewProjection, type ReportReviewState, type ReviewFactRef } from './reviewProjection.js';
-import { reviewEnabled, reviewStore } from './reviewRuntime.js';
-import { contentHash } from './reviewStore.js';
+import type { ReportReviewState, ReviewFactRef } from './reviewProjection.js';
+import { reviewStore } from './reviewRuntime.js';
 import path from 'node:path';
 import { randomUUID, createHash } from 'node:crypto';
 import {
@@ -24,7 +23,7 @@ import type {
 } from '../domain/research.js';
 import { dictionaryCodeNames } from './securityDictionary.js';
 import { mergeSecurityEntities, resolveInstitution, securityKey, normalizeSecurityCode } from './entityResolver.js';
-import { extractOpinions } from './opinionExtractor.js';
+import { extractOpinionsFromMentions } from './opinionExtractor.js';
 import { classifySearchIntent, groupSearchHits } from './searchService.js';
 import { readUserConfig, type WatchItem } from './localConfig.js';
 import { getReportDir } from '../runtimeConfig.js';
@@ -35,10 +34,9 @@ import { getBuyCoverage } from './buyCoverage.js';
 import { resolveOpinions as dedupeOpinions } from './opinionResolution.js';
 
 export type IndexState = {
+  analysisMode?: 'program';
   sourceDir: string;
-  /** Current files read from disk before review overlays an older published
-   * result for a pending modification. This stays in memory for source-change
-   * reporting and is deliberately excluded from public snapshots. */
+  /** Source snapshot used for added/modified/removed comparisons. */
   sourceReports?: ReportDocument[];
   reports: ReportDocument[];
   mentions: TargetMention[];
@@ -186,15 +184,7 @@ export async function ensureIndex(options: { checkSource?: boolean } = {}): Prom
   initializing = (async () => {
     const published = await restorePublishedIndex(getReportDir());
     if (published) {
-      if (reviewEnabled() && !published.reviewFingerprint) {
-        // Old snapshots are readable originals, not AI-validated facts. Never
-        // promote a separately staged review result during pointer recovery.
-        published.opinions = []; published.mentions = []; published.entities = new Map();
-        published.reviewFacts = []; published.reviewFactRefs = {}; published.reviewOverviewSignals = {}; published.reviewSummaries = {}; published.reviewSignals = [];
-        published.reviewStates = Object.fromEntries(published.reports.map(r => [r.id, { status: 'legacy_unreviewed', sourceHash: '' , issueCount: 0 }]));
-        published.version = `${published.version}:review-migration`;
-        published.views = buildIndexViews(published);
-      }
+      if (published.analysisMode !== 'program') return buildAndSaveIndex(await readSourceManifest(getReportDir()));
       state = published;
       publishedState = true;
       return state;
@@ -202,13 +192,7 @@ export async function ensureIndex(options: { checkSource?: boolean } = {}): Prom
     const manifest = await readSourceManifest(getReportDir());
     const restored = await readReportSnapshot(manifest);
     if (restored && (await readSourceManifest(manifest.sourceDir)).fingerprint === manifest.fingerprint) {
-      if (reviewEnabled() && !restored.reviewFingerprint) {
-        restored.opinions = []; restored.mentions = []; restored.entities = new Map();
-        restored.reviewFacts = []; restored.reviewFactRefs = {}; restored.reviewOverviewSignals = {}; restored.reviewSummaries = {}; restored.reviewSignals = [];
-        restored.reviewStates = Object.fromEntries(restored.reports.map(r => [r.id, { status: 'legacy_unreviewed', sourceHash: '', issueCount: 0 }]));
-        restored.version = `${restored.version}:review-migration`;
-        restored.views = buildIndexViews(restored);
-      }
+      if (restored.analysisMode !== 'program') return buildAndSaveIndex(manifest);
       state = restored;
       return state;
     }
@@ -261,7 +245,6 @@ async function buildAndSaveIndex(manifest: SourceManifest): Promise<IndexState> 
 
 export async function prepareIndexForPublication(): Promise<IndexState> {
   const manifest = await readSourceManifest(getReportDir());
-  if (reviewEnabled() && state.indexedAt) return buildIncrementalReviewIndex(manifest);
   return buildIndexCandidate(manifest);
 }
 
@@ -298,12 +281,10 @@ async function buildIndexCandidate(manifest: SourceManifest): Promise<IndexState
   }
 
   if (errors.length) throw new Error(`Report rebuild failed: ${errors.length} unreadable reports`);
-  if (reviewEnabled()) {
-    const synced = await reviewStore(sourceDir).sync(reports);
-    return buildReviewedIndex(manifest, synced.map(item => item.report), errors);
-  }
+  for (const report of reports) await reviewStore(sourceDir).saveReport(report);
   const sourceReports = reports.map(report => ({ ...report, lines: [...report.lines], institutions: report.institutions.map(block => ({ ...block })) }));
-  const rawOpinions = reports.flatMap((report) => extractOpinions(report));
+  const extracted = new Map(reports.map(report => [report.id, extractTargetMentions(report)]));
+  const rawOpinions = reports.flatMap(report => extractOpinionsFromMentions(report, extracted.get(report.id) ?? []));
   const entities = mergeSecurityEntities(
     rawOpinions.map((opinion) => ({
       name: opinion.security.displayName,
@@ -311,12 +292,18 @@ async function buildIndexCandidate(manifest: SourceManifest): Promise<IndexState
       aliases: opinion.security.aliases,
     })),
   );
+  // A/H listings remain separate securities while identical company names
+  // share one program-generated company page.
+  for (const entity of entities.values()) {
+    entity.organizationId = `company:${normalizeText(entity.displayName)}`;
+    entity.securityId = entity.key;
+  }
   const opinions = rawOpinions.map((opinion) => ({
     ...opinion,
     security: entities.get(opinion.security.key) ?? opinion.security,
   }));
   const reportHashes = new Map(reports.map(r => [r.id, createHash('sha256').update(r.markdown).digest('hex')]));
-  const mentions = reports.flatMap((report) => extractTargetMentions(report)).map((mention) => {
+  const mentions = reports.flatMap(report => extracted.get(report.id) ?? []).map((mention) => {
     const key = securityKey({ code: mention.code, name: mention.targetName });
     const entity = entities.get(key);
     const institution = resolveInstitution(mention.institution);
@@ -339,6 +326,7 @@ async function buildIndexCandidate(manifest: SourceManifest): Promise<IndexState
   const next: IndexState = {
     sourceDir,
     sourceReports,
+    analysisMode: 'program',
     reports: reports.sort((left, right) => left.date.localeCompare(right.date)),
     mentions,
     opinions,
@@ -350,129 +338,6 @@ async function buildIndexCandidate(manifest: SourceManifest): Promise<IndexState
     sourceFingerprint: manifest.fingerprint,
     cache: { origin: 'rebuilt', persisted: false },
   };
-  const reviewed = await loadReviewProjection(reports, sourceDir);
-  if (reviewed) {
-    next.reports = reviewed.reports;
-    next.opinions = reviewed.opinions; next.mentions = reviewed.mentions; next.entities = reviewed.entities;
-    next.reviewStates = reviewed.states; next.reviewFacts = reviewed.facts; next.reviewFactRefs = reviewed.factRefs;
-    next.reviewOverviewSignals = reviewed.overviewSignals; next.reviewSummaries = reviewed.overviewSummaries;
-    next.reviewSignals = reviewed.signals; next.reviewFingerprint = reviewed.fingerprint;
-    next.identityGraph = reviewed.identityGraph; next.identityMapping = reviewed.identityMapping;
-    next.qualityIssues = buildQualityIssues(next.reports, next.opinions);
-    for (const [reportId,review] of Object.entries(reviewed.states)) if(review.status!=='succeeded') next.qualityIssues.push({type:review.status==='partial'?'review-partial':review.status==='failed'?'review-failed':'review-pending',reportId,message:review.status==='partial'?'报告有待核对字段':review.status==='failed'?'报告复核失败':'报告尚待复核'});
-  }
-  next.views = buildIndexViews(next);
-  return next;
-}
-
-async function buildIncrementalReviewIndex(manifest: SourceManifest): Promise<IndexState> {
-  const previous = state.sourceReports ?? state.reports;
-  const byPath = new Map(previous.map(report => [report.filePath, report]));
-  const reports: ReportDocument[] = [];
-  const errors: IndexState['errors'] = [];
-  for (const filePath of manifest.files) {
-    try {
-      const stat = await fs.stat(filePath);
-      const reused = byPath.get(filePath);
-      if (reused && reused.updatedAt === stat.mtime.toISOString()) {
-        reports.push(reused);
-        continue;
-      }
-      reports.push(buildReportFromMarkdown({
-        id: makeReportId(manifest.sourceDir, filePath),
-        filePath,
-        markdown: await fs.readFile(filePath, 'utf-8'),
-        updatedAt: stat.mtime.toISOString(),
-      }));
-    } catch (error) {
-      errors.push({ filePath, message: error instanceof Error ? error.message : String(error) });
-    }
-  }
-  if (errors.length) throw new Error(`Report rebuild failed: ${errors.length} unreadable reports`);
-  const store = reviewStore(manifest.sourceDir);
-  const synced = await store.sync(reports);
-  const currentReports = synced.map(item => item.report);
-  const storeState = await store.read();
-  const previousSourceById = new Map(previous.map(report => [report.id, report]));
-  const previousPublishedById = new Map(state.reports.map(report => [report.id, report]));
-  const affected = new Set<string>();
-  for (const report of currentReports) {
-    const old = previousSourceById.get(report.id);
-    if (!old || contentHash(old.markdown) !== contentHash(report.markdown)) affected.add(report.id);
-  }
-  for (const report of previous) if (!currentReports.some(current => current.id === report.id)) affected.add(report.id);
-  const previousRefs = state.reviewFactRefs ?? {};
-  for (const report of currentReports) {
-    const source = storeState.sources[report.id];
-    const job = source && storeState.jobs[source.jobId];
-    if ((previousRefs[report.id]?.resultRef ?? null) !== (job?.resultRef ?? null)) affected.add(report.id);
-  }
-  const affectedReports = currentReports.filter(report => affected.has(report.id));
-  const reviewed = affectedReports.length ? await loadReviewProjection(affectedReports, manifest.sourceDir) : null;
-  const reviewedReports = new Map((reviewed?.reports ?? []).map(report => [report.id, report]));
-  const nextReports = currentReports.map(report => reviewedReports.get(report.id) ?? previousPublishedById.get(report.id) ?? report)
-    .sort((left, right) => left.date.localeCompare(right.date));
-  const currentIds = new Set(currentReports.map(report => report.id));
-  const oldOpinions = state.opinions.filter(opinion => currentIds.has(opinion.reportId) && !affected.has(opinion.reportId));
-  const opinions = [...oldOpinions, ...(reviewed?.opinions ?? [])];
-  const mentions = [...state.mentions.filter(mention => currentIds.has(mention.reportId) && !affected.has(mention.reportId)), ...(reviewed?.mentions ?? [])];
-  const signals = [...(state.reviewSignals ?? []).filter(signal => currentIds.has(signal.reportId) && !affected.has(signal.reportId)), ...(reviewed?.signals ?? [])];
-  const entities = new Map(opinions.map(opinion => [opinion.security.key, opinion.security]));
-  const reviewStates: Record<string, ReportReviewState> = {};
-  for (const report of currentReports) {
-    const source = storeState.sources[report.id];
-    const job = source && storeState.jobs[source.jobId];
-    const old = state.reviewStates?.[report.id];
-    reviewStates[report.id] = { status: job?.status ?? old?.status ?? 'pending', sourceHash: contentHash(report.markdown), model: job?.pin?.model ?? old?.model, issueCount: old?.issueCount ?? 0 };
-  }
-  Object.assign(reviewStates, reviewed?.states ?? {});
-  const reviewFactRefs = Object.fromEntries(Object.entries(previousRefs).filter(([id]) => currentIds.has(id)));
-  const reviewOverviewSignals = Object.fromEntries(Object.entries(state.reviewOverviewSignals ?? {}).filter(([id]) => currentIds.has(id) && !affected.has(id)));
-  const reviewSummaries = Object.fromEntries(Object.entries(state.reviewSummaries ?? {}).filter(([id]) => currentIds.has(id) && !affected.has(id)));
-  for (const [id, value] of Object.entries(reviewed?.factRefs ?? {})) reviewFactRefs[id] = value;
-  for (const [id, value] of Object.entries(reviewed?.overviewSignals ?? {})) reviewOverviewSignals[id] = value;
-  for (const [id, value] of Object.entries(reviewed?.overviewSummaries ?? {})) reviewSummaries[id] = value;
-  const identityMapping = { ...(state.identityMapping ?? {}), ...(reviewed?.identityMapping ?? {}) };
-  const identityGraph = reviewed?.identityGraph ?? state.identityGraph;
-  const next: IndexState = {
-    sourceDir: manifest.sourceDir, sourceReports: currentReports, reports: nextReports,
-    mentions, opinions, entities, qualityIssues: buildQualityIssues(nextReports, opinions),
-    version: `${new Date().toISOString()}-${randomUUID()}`, indexedAt: new Date().toISOString(), errors,
-    sourceFingerprint: manifest.fingerprint, cache: { origin: 'rebuilt', persisted: false },
-    reviewStates, reviewFacts: [], reviewFactRefs, reviewOverviewSignals, reviewSummaries,
-    reviewSignals: signals, identityGraph, identityMapping,
-  };
-  next.reviewFingerprint = contentHash(JSON.stringify([reviewStates, identityMapping, reviewFactRefs, reviewOverviewSignals, reviewSummaries]));
-  next.views = buildIndexViews(next);
-  return next;
-}
-
-async function buildReviewedIndex(manifest: SourceManifest, reports: ReportDocument[], errors: IndexState['errors']): Promise<IndexState> {
-  if ((await readSourceManifest(manifest.sourceDir)).fingerprint !== manifest.fingerprint) throw new Error('Report files changed during rebuild; retry when the update has finished');
-  const sourceReports = reports;
-  const indexedAt = new Date().toISOString();
-  const next: IndexState = {
-    sourceDir: manifest.sourceDir,
-    sourceReports,
-    reports: reports.slice().sort((left, right) => left.date.localeCompare(right.date)),
-    mentions: [], opinions: [], entities: new Map(), qualityIssues: buildQualityIssues(reports, []),
-    version: `${indexedAt}-${randomUUID()}`,
-    indexedAt,
-    errors,
-    sourceFingerprint: manifest.fingerprint,
-    cache: { origin: 'rebuilt', persisted: false },
-  };
-  const reviewed = await loadReviewProjection(reports, manifest.sourceDir);
-  if (reviewed) {
-    next.reports = reviewed.reports;
-    next.opinions = reviewed.opinions; next.mentions = reviewed.mentions; next.entities = reviewed.entities;
-    next.reviewStates = reviewed.states; next.reviewFacts = reviewed.facts; next.reviewFactRefs = reviewed.factRefs;
-    next.reviewOverviewSignals = reviewed.overviewSignals; next.reviewSummaries = reviewed.overviewSummaries;
-    next.reviewSignals = reviewed.signals; next.reviewFingerprint = reviewed.fingerprint;
-    next.identityGraph = reviewed.identityGraph; next.identityMapping = reviewed.identityMapping;
-    next.qualityIssues = buildQualityIssues(next.reports, next.opinions);
-    for (const [reportId, review] of Object.entries(reviewed.states)) if (review.status !== 'succeeded') next.qualityIssues.push({ type: review.status === 'partial' ? 'review-partial' : review.status === 'failed' ? 'review-failed' : 'review-pending', reportId, message: review.status === 'partial' ? '报告有待核对字段' : review.status === 'failed' ? '报告复核失败' : '报告尚待复核' });
-  }
   next.views = buildIndexViews(next);
   return next;
 }
@@ -598,7 +463,7 @@ function buildIndexViews(index: IndexState): IndexViews {
         const e=evidence.get(r.payload.summary.evidenceIDs[0]);return e?[{id:r.id,title:r.payload.title,summary:r.payload.summary.value,lineNumber:e.startLine,sourceHash:facts.sourceHash}]:[];
       });
     }
-    return {...overview,companyCount:index.identityGraph?new Set(overview.securities.map(s=>s.organizationId??s.key)).size:undefined,signals,summaries,review:index.reviewStates?.[report.id]??{status:'legacy_unreviewed'},publicationId:index.version};
+    return {...overview,companyCount:index.identityGraph?new Set(overview.securities.map(s=>s.organizationId??s.key)).size:undefined,signals,summaries,review:index.reviewStates?.[report.id]??{status:'program'},publicationId:index.version};
   });
   const mentionCounts = new Map<string, number>();
   for (const mention of index.mentions) mentionCounts.set(mention.reportId, (mentionCounts.get(mention.reportId) ?? 0) + 1);
@@ -631,22 +496,7 @@ function getIndexViews(index: IndexState) {
 
 
 export async function getReportDraft(reportId: string, snapshot?: IndexState): Promise<ReportOverview | null> {
-  const index=snapshot??await ensureIndex();const report=index.reports.find(r=>r.id===reportId);
-  if(!report)return null;
-  return {...buildReportOverview(report,extractOpinions(report)),review:{status:'legacy_unreviewed',sourceHash:createHash('sha256').update(report.markdown).digest('hex')},publicationId:index.version} as ReportOverview;
-}
-
-/** Load one published full review result without retaining every report's
- * candidate records in the process heap. */
-export async function getReviewedReportFact(reportId: string, snapshot?: IndexState): Promise<ReviewedReport | null> {
-  const index = snapshot ?? await ensureIndex({ checkSource: false });
-  const inMemory = index.reviewFacts?.find(result => result.reportId === reportId);
-  if (inMemory) return inMemory;
-  const ref = index.reviewFactRefs?.[reportId];
-  if (!ref) return null;
-  const saved = await reviewStore().loadResult<ReviewedReport>(ref.resultRef);
-  if (saved.reportId !== reportId || saved.sourceHash !== ref.sourceHash || saved.result.reportId !== reportId || saved.result.sourceHash !== ref.sourceHash || !isPublishableReview(saved.result)) return null;
-  return saved.result;
+  return getReportOverview(reportId, snapshot);
 }
 
 export async function getReportOverview(reportId: string, snapshot?: IndexState): Promise<ReportOverview | null> {
@@ -726,7 +576,7 @@ export async function getReportById(id: string, snapshot?: IndexState) {
     markdown: report.markdown,
     institutions: report.institutions,
     mentions: index.mentions.filter((mention) => mention.reportId === id),
-    review: index.reviewStates?.[id] ?? { status: 'legacy_unreviewed' },
+    review: index.reviewStates?.[id] ?? { status: 'program' },
     publicationId: index.version,
   };
 }

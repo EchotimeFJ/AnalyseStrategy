@@ -8,7 +8,7 @@ import type { ResolvedAiConfig } from './aiConfig.js';
 import { writeAtomicJson } from './atomicJson.js';
 
 const rulesDigest = createHash('sha256');
-for (const relative of ['./reportRecognition.ts', './opinionExtractor.ts', './reportParser.ts', './entityResolver.ts', './securityDictionary.ts', './securityAliases.ts', '../data/security-aliases.json', '../../src/lib/markdownTags.ts', './researchReview.ts', './reviewGrounding.ts', './reviewWorker.ts', './reviewScheduler.ts', './aiProvider.ts', './aiConfig.ts', '../data/securities.json', '../../src/shared/researchVocabulary.ts']) rulesDigest.update(readFileSync(new URL(relative, import.meta.url)));
+for (const relative of ['./reportRecognition.ts', './opinionExtractor.ts', './reportParser.ts', './entityResolver.ts', './securityDictionary.ts', './securityAliases.ts', '../data/security-aliases.json', '../../src/lib/markdownTags.ts', './researchReview.ts', './reviewGrounding.ts', './reviewWorker.ts', './aiProvider.ts', './aiConfig.ts', '../data/securities.json', '../../src/shared/researchVocabulary.ts']) rulesDigest.update(readFileSync(new URL(relative, import.meta.url)));
 export const REVIEW_PIPELINE_VERSION = `hybrid-1:${rulesDigest.digest('hex').slice(0, 20)}`;
 export const contentHash = (value: string) => createHash('sha256').update(value).digest('hex');
 export type ReviewJobState = SharedReviewJobState;
@@ -125,6 +125,11 @@ export function createReviewStore(directory: string) {
     if (value.id !== job.reportId || contentHash(value.markdown) !== job.sourceHash) throw new Error('REVIEW_SOURCE_CORRUPT');
     return value;
   }
+  async function saveReport(report: ReportDocument) {
+    const hash = contentHash(report.markdown);
+    const file = objectPath('sources', contentHash(JSON.stringify([report.id, hash])));
+    try { await fs.access(file); } catch { await writeAtomicJson(file, report); }
+  }
   async function writeResult<T>(job: ReviewJob, result: T) {
     const record: StoredReviewResult<T> = { reportId: job.reportId, sourceHash: job.sourceHash, jobId: job.id, completedAt: new Date().toISOString(), model: job.pin?.model ?? '', result };
     const ref = contentHash(JSON.stringify(record));
@@ -160,5 +165,5 @@ export function createReviewStore(directory: string) {
   async function saveChunk<T>(key: string, value: T) {
     await writeAtomicJson(objectPath('chunks', contentHash(key)), { key, hash: contentHash(JSON.stringify(value)), value });
   }
-  return { directory, read, transaction, sync, loadReport, writeResult, loadResult, retry, loadChunk, saveChunk };
+  return { directory, read, transaction, sync, loadReport, saveReport, writeResult, loadResult, retry, loadChunk, saveChunk };
 }

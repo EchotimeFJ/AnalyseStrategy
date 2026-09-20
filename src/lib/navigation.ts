@@ -1,4 +1,4 @@
-export type RouteId = 'today' | 'reports' | 'search' | 'company' | 'assistant' | 'watchlist' | 'data';
+export type RouteId = 'today' | 'reports' | 'search' | 'company' | 'watchlist' | 'data';
 
 export type AppRouteMeta = {
   id: RouteId;
@@ -14,7 +14,6 @@ export const routes: AppRouteMeta[] = [
   { id: 'reports', path: '/reports', label: '报告库', mobileLabel: '报告', description: '浏览报告速览和 Markdown 原文', nav: 'primary' },
   { id: 'search', path: '/search', label: '智能检索', mobileLabel: '检索', description: '搜索公司、代码、机构与原文', nav: 'primary' },
   { id: 'company', path: '/company', label: '公司研究', mobileLabel: '公司', description: '查看单一公司的历史观点', nav: 'primary' },
-  { id: 'assistant', path: '/assistant', label: '研究助手', mobileLabel: 'AI', description: '基于报告内容进行可追溯问答', nav: 'primary' },
   { id: 'watchlist', path: '/watchlist', label: '关注列表', mobileLabel: '关注', description: '跟踪重点公司的新增变化', nav: 'secondary' },
   { id: 'data', path: '/manage', label: '数据与版本', mobileLabel: '版本', description: '查看数据和网站的最近发布时间', nav: 'secondary' },
 ];

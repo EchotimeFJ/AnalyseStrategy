@@ -207,6 +207,7 @@ function asyncRoute(handler: (req: Request, res: Response) => Promise<void>): Re
 
 function toIndexStatus(index: IndexState, reportChanges?: ReportChangeSet) {
   return {
+    analysisMode: index.analysisMode,
     sourceDir: index.sourceDir,
     indexedAt: index.indexedAt,
     reportCount: index.reports.length,

@@ -159,6 +159,7 @@ export type SummaryData = {
 };
 
 export type ReportReviewStatusName =
+  | 'program'
   | 'queued'
   | 'running'
   | 'retry_wait'

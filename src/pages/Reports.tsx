@@ -8,7 +8,6 @@ import { Badge, EmptyState, ErrorBlock, LoadingBlock, Panel } from '@/components
 import { MarkdownViewer } from '@/components/MarkdownViewer';
 import { findSourceLineElement, getCenteredScrollTop, getSourceLineScrollTop } from '@/lib/reportScroll';
 import { ReportOpinionTable } from '@/components/ReportOpinionTable';
-import { normalizeReportReview, reviewStatusLabel } from '@/lib/reviewDisplay';
 
 export default function Reports() {
   const [params, setParams] = useSearchParams();
@@ -20,7 +19,6 @@ export default function Reports() {
   const [year, setYear] = useState('');
   const [visibleCount, setVisibleCount] = useState(48);
   const [refreshKey, setRefreshKey] = useState(0);
-  const [showDraft,setShowDraft]=useState(false);
   const reportsQuery = useMemo(() => (year ? `/api/reports?year=${year}` : '/api/reports'), [year]);
   const reports = useAsyncData(() => apiGet<ReportSummary[]>(reportsQuery), [reportsQuery]);
   const firstId = reports.data?.[0]?.id;
@@ -33,7 +31,6 @@ export default function Reports() {
     () => (activeId && !revision ? apiGet<ReportOverview>(`/api/reports/${encodeURIComponent(activeId)}/overview`) : Promise.resolve(null)),
     [activeId, revision, refreshKey],
   );
-  const draft=useAsyncData(()=>activeId&&showDraft&&!revision?apiGet<ReportOverview>(`/api/review/reports/${encodeURIComponent(activeId)}/draft`):Promise.resolve(null),[activeId,showDraft,revision,refreshKey]);
   const activeDetail = detail.data?.id === activeId ? detail.data : null;
   const activeOverview = overview.data?.reportId === activeId ? overview.data : null;
   const publicationsAligned = samePublication(activeDetail, activeOverview);
@@ -99,7 +96,7 @@ export default function Reports() {
       <PageHeader
         eyebrow="Report Library"
         title="报告库"
-        description="先速览每份报告里的买入、评级和目标价变化，再按来源跳回 Markdown 原文核对。"
+        description="先速览每份报告里的买入、评级和目标价变化，再按来源跳回 Markdown 原文查看。"
       />
       <div className="grid min-w-0 gap-6 xl:grid-cols-[minmax(0,360px)_minmax(0,1fr)]">
         <Panel
@@ -165,7 +162,7 @@ export default function Reports() {
                   <Meta label="机构" value={`${activeDetail.institutions.length} 家`} />
                   <Meta label={revision ? "视图" : "标的提及"} value={revision ? "历史原文" : `${activeDetail.mentions.length} 条`} />
                   <Meta label="报告编号" value={activeDetail.id} />
-                  <Meta label="自动整理" value={revision ? "历史引用，仅展示原文" : reviewStatusLabel(normalizeReportReview(activeDetail.review).status)} />
+                  <Meta label="自动整理" value={revision ? "历史引用，仅展示原文" : "程序分析"} />
                 </div>
               </Panel>
               {activeOverview && publicationsAligned ? (
@@ -173,7 +170,6 @@ export default function Reports() {
                   <ReportOpinionTable key={`${activeOverview.reportId}:${activeOverview.publicationId ?? 'legacy'}`} overview={activeOverview} />
                 </Panel>
               ) : null}
-              {!revision && normalizeReportReview(activeDetail.review).status !== 'succeeded' ? <Panel title="程序草稿" eyebrow="Unreviewed draft"><p className="text-sm text-slate-500">这里仅展示程序匹配结果，尚未通过 AI 复核，不计入默认统计。</p><button className="mt-3 text-sm font-semibold text-blue-600" onClick={()=>setShowDraft(!showDraft)}>{showDraft?'收起草稿':'查看规则草稿'}</button>{showDraft&&draft.loading?<LoadingBlock label="正在读取草稿…"/>:null}{showDraft&&draft.error?<ErrorBlock message={draft.error}/>:null}{showDraft&&draft.data?(draft.data.publicationId===activeDetail.publicationId?<ReportOpinionTable overview={draft.data}/>:<PublicationMismatchNotice onRefresh={()=>setRefreshKey(v=>v+1)}/>):null}</Panel> : null}
               {revision ? <div className="rounded-xl border border-blue-200 p-3 text-sm text-slate-600">正在查看引用时保存的原文版本。<button className="ml-3 font-semibold text-blue-600" onClick={() => setParams({id:activeId!})}>查看当前版本</button></div> : null}
               <Panel title="Markdown 原文" eyebrow="Original" className="overflow-hidden">
                 <MarkdownViewer markdown={activeDetail.markdown} highlightTerms={highlightTerms} />
