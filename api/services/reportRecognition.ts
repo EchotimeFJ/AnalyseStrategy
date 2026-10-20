@@ -13,7 +13,10 @@ type Value = { value: string; rawValue?: string; line: number; excerpt: string; 
 type Row = { candidate: Candidate; references: Candidate[]; ratings: Value[]; recommendations: Value[]; prices: Value[]; currents: Value[]; priceChanged: boolean };
 type Signals = (report: ReportDocument, block: InstitutionBlock, targetName?: string, range?: { startLine: number; endLine: number }) => CatalystRiskItem[];
 
-const RATING = '(?:买入(?:[/／]高风险)?|增持|超配|中性|持有|减持|卖出|跑赢(?:大市|大盘|行业)?|跑输(?:大市|大盘|行业)?|优于大市|弱于大市|低于行业表现|Overweight|Underweight|Neutral|Buy|Hold|Sell|OW|UW)';
+// English ratings must be complete tokens in every recognition path, including
+// name-only candidates and transitions. "National Team Buying" is not "Team Buy".
+// ASCII boundaries still allow mixed text such as “维持Buy评级”.
+const RATING = '(?:买入(?:[/／]高风险)?|增持|超配|中性|持有|减持|卖出|跑赢(?:大市|大盘|行业)?|跑输(?:大市|大盘|行业)?|优于大市|弱于大市|低于行业表现|(?<![A-Za-z0-9_])(?:Overweight|Underweight|Neutral|Buy|Hold|Sell|OW|UW)(?![A-Za-z0-9_]))';
 const CODE = /\b(\d{1,6}|[A-Z]{1,8})[.\s]+(HK|SS|SH|SZ|BJ|US|TW|KS|KQ|JP|L|O|N|SI|CH|C1|C2)\b/gi;
 const PAREN = /([\p{L}][\p{L}\p{N}·・&.'’\-\s]{1,70})\(([^()]*)\)/gu;
 const PRICE_LABEL = /(?:目标价(?:格)?|target price|\bTP\b|\bPT\b)/gi;
@@ -384,7 +387,6 @@ function ratingValues(line: Line) {
     const position = match.index!;
     if (results.some((result) => result.position === position)) continue;
     if (oldRanges.some(([start, end]) => position >= start && position <= end)) continue;
-    if (/^[A-Za-z]/.test(match[0]) && /[A-Za-z]/.test((line.text[position - 1] ?? '') + (line.text[position + match[0].length] ?? ''))) continue;
     const before = line.text.slice(Math.max(0, position - 45), position);
     const after = line.text.slice(position + match[0].length, position + match[0].length + 18);
     if (/(?:此前|原为|原先|原评级|曾经|不再|并非|不是)[^。；]{0,12}$/.test(before) || /^["']?评级以来/.test(after)) continue;

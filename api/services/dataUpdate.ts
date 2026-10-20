@@ -56,9 +56,10 @@ export function createDataUpdater(options: { statusFile?: string; now?: () => Da
       const manifest = await readSourceManifest(getReportDir());
       const app = getAppVersion();
       const appRevision = `${app.version}:${app.commit}`;
-      // Unchanged sources reuse the current program index. Deployments force
-      // a rebuild when extraction rules change.
-      const useBaseline = !force && baseline?.analysisMode === 'program' && manifest.fingerprint === baseline.sourceFingerprint;
+      // Extraction rules can change without any source edits. A new app revision
+      // or an explicit reindex must publish fresh results instead of the old snapshot.
+      const useBaseline = !force && (!previous || previous.appRevision === appRevision)
+        && baseline?.analysisMode === 'program' && manifest.fingerprint === baseline.sourceFingerprint;
       // A migrated in-memory index is not the old publication's disk snapshot.
       // Only reuse that file after its publication fingerprint also matches.
       let reuseSnapshot = false;
@@ -67,12 +68,12 @@ export function createDataUpdater(options: { statusFile?: string; now?: () => Da
       for (const report of index.reports) hash.update(JSON.stringify([report.id, report.markdown]));
       if (index.reviewFingerprint) hash.update(index.reviewFingerprint);
       const fingerprint = hash.digest('hex');
-      if (baseline && previous?.fingerprint === fingerprint && baseline.sourceFingerprint === manifest.fingerprint) {
+      if (useBaseline && previous?.fingerprint === fingerprint) {
         index = baseline; reuseSnapshot = true;
       }
       const reportChanges = diffReportChanges(baseline ?? emptyIndex(getReportDir()), index);
       const details = {
-        publishedAt: previous?.fingerprint === fingerprint ? previous.publishedAt : now().toISOString(),
+        publishedAt: reuseSnapshot ? previous!.publishedAt : now().toISOString(),
         checkedAt: now().toISOString(), revision, fingerprint, appRevision,
         reportChanges,
         reviewRevisions: [...new Map([...(previous?.reviewRevisions ?? []), ...index.reports.map(r => ({ reportId: r.id, sourceHash: createHash('sha256').update(r.markdown).digest('hex') }))].map(r => [`${r.reportId}:${r.sourceHash}`, r])).values()],

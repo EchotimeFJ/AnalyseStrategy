@@ -110,6 +110,31 @@ try {
   }
   await scheduled.stop();
   assert.equal((await scheduled.status()).checkedAt, '2026-09-07T03:00:00.000Z');
+
+  // Parser fixes must replace the published results even when no report text
+  // has changed. Neither forced rebuilds nor app upgrades may reuse stale data.
+  now = new Date('2026-09-07T04:00:00Z');
+  const beforeReindex = await ensureIndex({ checkSource: false });
+  const oldPointer = JSON.parse(await fs.readFile(statusFile, 'utf8'));
+  await updater.reindex();
+  const reindexed = await ensureIndex({ checkSource: false });
+  assert.notEqual(reindexed.version, beforeReindex.version, 'forced reindex must publish the newly built index');
+  assert.notEqual(JSON.parse(await fs.readFile(statusFile, 'utf8')).snapshot, oldPointer.snapshot);
+  const fresh = await exec(process.execPath, ['--import', 'tsx', '-e', "import('./api/services/reportIndex.ts').then(async m => console.log((await m.ensureIndex({checkSource:false})).version))"], { env: process.env });
+  assert.equal(fresh.stdout.trim(), reindexed.version, 'restart restores the corrected snapshot');
+
+  const previousCommit = process.env.APP_GIT_COMMIT;
+  try {
+    process.env.APP_GIT_COMMIT = 'a'.repeat(40);
+    await updater.update();
+    const upgraded = await ensureIndex({ checkSource: false });
+    assert.notEqual(upgraded.version, reindexed.version, 'app upgrades rebuild unchanged source reports');
+    await updater.update();
+    assert.equal((await ensureIndex({ checkSource: false })).version, upgraded.version, 'unchanged hourly checks still reuse the current snapshot');
+  } finally {
+    if (previousCommit === undefined) delete process.env.APP_GIT_COMMIT;
+    else process.env.APP_GIT_COMMIT = previousCommit;
+  }
 } finally {
   await updater.stop();
   await fs.rm(root, { recursive: true, force: true });
