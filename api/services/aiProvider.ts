@@ -45,8 +45,8 @@ export const AI_PROVIDER_PRESETS: AiProviderPreset[] = [
     id: 'mimo',
     name: 'MiMo',
     baseUrl: 'https://api.xiaomimimo.com/v1',
-    defaultModel: 'mimo-v2.5-pro',
-    models: ['mimo-v2.5-pro', 'mimo-v2.5'],
+    defaultModel: 'mimo-v2.6-pro',
+    models: ['mimo-v2.6-pro', 'mimo-v2.6-flash'],
   },
   {
     id: 'openrouter',

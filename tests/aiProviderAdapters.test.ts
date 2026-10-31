@@ -23,7 +23,7 @@ assert.deepEqual(getPreset?.('deepseek'), {
   models: ['deepseek-v4-pro', 'deepseek-v4-flash'],
 });
 assert.equal(getPreset?.('mimo').baseUrl, 'https://api.xiaomimimo.com/v1');
-assert.equal(getPreset?.('mimo').defaultModel, 'mimo-v2.5-pro');
+assert.equal(getPreset?.('mimo').defaultModel, 'mimo-v2.6-pro');
 assert.equal(getPreset?.('openrouter').baseUrl, 'https://openrouter.ai/api/v1');
 assert.equal(getPreset?.('openrouter').defaultModel, 'openrouter/auto');
 

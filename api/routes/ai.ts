@@ -85,9 +85,17 @@ function asyncRoute(handler: (req: Request, res: Response) => Promise<void>, adm
   };
 }
 
-function aiError(error: unknown) {
+export function aiError(error: unknown) {
   const raw = error instanceof Error ? error.message : String(error);
   const [code, ...parts] = raw.split(':');
+  if (code === 'AI_PROVIDER_ERROR') {
+    const status = Number(parts[0]);
+    if (/unsupported model|model.*(?:not found|not supported)|unknown model/i.test(parts.slice(1).join(':'))) return {status:502,code:'AI_MODEL_UNAVAILABLE',message:'当前模型已下线或接口不支持，请在研究助手 AI 配置中选择可用模型'};
+    if (status === 401 || status === 403) return {status:502,code:'AI_KEY_INVALID',message:'模型服务密钥验证失败，请联系管理员检查该配置的 Key'};
+    if (status === 402) return {status:502,code:'AI_PROVIDER_PAYMENT_REQUIRED',message:'模型服务商返回额度或付费限制，请在服务商账户检查 Key 的可用额度'};
+    if (status === 429) return {status:429,code:'AI_PROVIDER_RATE_LIMIT',message:'模型服务商暂时限流，请稍后重试'};
+    return {status:502,code:'AI_PROVIDER_UNAVAILABLE',message:'模型服务商暂时不可用，请稍后重试或在 AI 配置中切换模型'};
+  }
   const known = ['AI_NOT_CONFIGURED', 'AI_RATE_LIMIT', 'AI_BUSY', 'AI_DAILY_BUDGET', 'AI_NO_EVIDENCE', 'QUESTION_REQUIRED', 'QUESTION_TOO_LONG', 'QUESTION_INVALID', 'AI_INCOMPLETE_COMPLETION', 'AI_STREAM_INTERRUPTED', 'AI_EMPTY_COMPLETION', 'AI_RESPONSE_BLOCKED'].includes(code);
   const message = known ? parts.join(':') : '研究助手暂时不可用，请稍后重试';
   const status = code === 'AI_NOT_CONFIGURED' ? 503 : code === 'AI_RATE_LIMIT' ? 429 : code === 'AI_BUSY' ? 429 : code === 'AI_DAILY_BUDGET' ? 429 : 400;

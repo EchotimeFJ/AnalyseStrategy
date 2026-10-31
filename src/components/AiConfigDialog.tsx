@@ -145,6 +145,7 @@ function ConfigEditor({ open, status, onClose, onSaved, initialAdminToken, onSet
           </div>
           {providerNotes[providerId] ? <p className="mt-2 text-xs leading-5 text-slate-500">{providerNotes[providerId]}</p> : null}
         </div>
+        {providerId === 'mimo' && /^mimo-v2\.5(?:-pro)?$/.test(model) ? <p role="status" className="mt-4 rounded-xl bg-amber-50 p-3 text-sm text-amber-800">MiMo 官方 API 已下线此模型，请选择 mimo-v2.6-pro 或 mimo-v2.6-flash 后测试连接。</p> : null}
         <div className="mt-5 grid gap-4 sm:grid-cols-2">
           {providerId === 'custom' ? <Field label="服务商名称"><input value={providerName} onChange={(e) => setForm({ ...form, providerName: e.target.value })} /></Field> : null}
           <Field label="模型"><><input list={`provider-models-${providerId}`} value={model} onChange={(e) => changeIdentity({ model: e.target.value })} placeholder={selectedPreset?.defaultModel || '输入模型名称'} /><datalist id={`provider-models-${providerId}`}>{selectedPreset?.models.map((modelName) => <option key={modelName} value={modelName} />)}</datalist></></Field>
