@@ -112,9 +112,7 @@ export function createAiService(options: AiServiceOptions = {}) {
         return { sources, stream: stringStream(cached), cached: true };
       }
       const messages = buildMessages(question, retrieval.chunks, intent, history);
-      // Reserve a conservative allowance before contacting the provider, including
-      // both possible attempts (2400 + 3600 output tokens). Failed/disconnected
-      // requests retain their reservation so retries cannot bypass the daily cap.
+      // Record estimated usage; spending is controlled by the provider's key.
       const reserved = 2 * Buffer.byteLength(JSON.stringify(messages), 'utf8') + 6000 + 1024;
       await usage.reserve(reserved, config.dailyTokenBudget);
       signal.throwIfAborted();

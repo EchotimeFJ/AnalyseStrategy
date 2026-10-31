@@ -31,8 +31,11 @@ try {
   assert.strictEqual(concurrent[1], concurrent[2]);
   assert.equal(concurrent[0].cache?.persisted, true);
 
-  const files = await fs.readdir(cacheDir);
-  assert.equal(files.length, 1, 'a complete rebuild writes one snapshot, without leftover temp files');
+  const entries = await fs.readdir(cacheDir);
+  const files = entries.filter(name => name.endsWith('.json.gz'));
+  assert.equal(files.length, 1, 'a complete rebuild writes one publication snapshot');
+  assert.ok(entries.includes('analysis'), 'per-report derived data is stored separately');
+  assert.equal((await fs.readdir(cacheDir, { recursive: true })).some(name => name.endsWith('.tmp')), false, 'no temporary cache writes remain');
   const cachePath = path.join(cacheDir, files[0]);
   const snapshot = await fs.readFile(cachePath);
   assert.ok(gunzipSync(snapshot).toString().includes('1810.HK'));

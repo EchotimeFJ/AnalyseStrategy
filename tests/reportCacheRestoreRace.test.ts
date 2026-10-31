@@ -16,7 +16,7 @@ process.env.REPORT_DIR = source;
 process.env.REPORT_INDEX_CACHE_DIR = cache;
 try {
   execFileSync(process.execPath, ['--import', 'tsx', fileURLToPath(new URL('./helpers/reportCacheProbe.ts', import.meta.url))], { env: process.env });
-  const snapshotPath = path.join(cache, (await fs.readdir(cache))[0]);
+  const snapshotPath = path.join(cache, (await fs.readdir(cache)).find(name => name.endsWith('.json.gz'))!);
   const originalStat = fs.stat.bind(fs);
   let changed = false;
   // The streaming reader stats the snapshot after collecting the source

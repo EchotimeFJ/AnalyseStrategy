@@ -20,15 +20,15 @@ export default function Reports() {
   const [visibleCount, setVisibleCount] = useState(48);
   const [refreshKey, setRefreshKey] = useState(0);
   const reportsQuery = useMemo(() => (year ? `/api/reports?year=${year}` : '/api/reports'), [year]);
-  const reports = useAsyncData(() => apiGet<ReportSummary[]>(reportsQuery), [reportsQuery]);
+  const reports = useAsyncData(signal => apiGet<ReportSummary[]>(reportsQuery, signal), [reportsQuery]);
   const firstId = reports.data?.[0]?.id;
   const activeId = selectedId || firstId;
   const detail = useAsyncData(
-    () => (activeId ? apiGet<ReportDetail>(revision ? `/api/review/reports/${encodeURIComponent(activeId)}/revisions/${encodeURIComponent(revision)}` : `/api/reports/${encodeURIComponent(activeId)}`) : Promise.resolve(null)),
+    signal => (activeId ? apiGet<ReportDetail>(revision ? `/api/review/reports/${encodeURIComponent(activeId)}/revisions/${encodeURIComponent(revision)}` : `/api/reports/${encodeURIComponent(activeId)}`, signal) : Promise.resolve(null)),
     [activeId, revision, refreshKey],
   );
   const overview = useAsyncData(
-    () => (activeId && !revision ? apiGet<ReportOverview>(`/api/reports/${encodeURIComponent(activeId)}/overview`) : Promise.resolve(null)),
+    signal => (activeId && !revision ? apiGet<ReportOverview>(`/api/reports/${encodeURIComponent(activeId)}/overview`, signal) : Promise.resolve(null)),
     [activeId, revision, refreshKey],
   );
   const activeDetail = detail.data?.id === activeId ? detail.data : null;

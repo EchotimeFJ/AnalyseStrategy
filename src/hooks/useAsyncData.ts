@@ -1,15 +1,16 @@
 import { useEffect, useState } from 'react';
 
-export function useAsyncData<T>(loader: () => Promise<T>, deps: unknown[]) {
+export function useAsyncData<T>(loader: (signal: AbortSignal) => Promise<T>, deps: unknown[]) {
   const [data, setData] = useState<T | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     let active = true;
+    const controller = new AbortController();
     setLoading(true);
     setError(null);
-    loader()
+    loader(controller.signal)
       .then((value) => {
         if (active) {
           setData(value);
@@ -28,6 +29,7 @@ export function useAsyncData<T>(loader: () => Promise<T>, deps: unknown[]) {
 
     return () => {
       active = false;
+      controller.abort();
     };
     // 调用方传入的 deps 是这个通用数据 Hook 的刷新边界。
     // eslint-disable-next-line react-hooks/exhaustive-deps

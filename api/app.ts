@@ -41,7 +41,7 @@ app.use('/api', (req, res, next) => {
     requireAdmin(req, res, next)
   } else next()
 })
-app.use(express.json({ limit: '64kb', strict: true }))
+app.use(express.json({ limit: '64kb', strict: true, inflate: false }))
 
 /**
  * API Routes
@@ -74,8 +74,8 @@ app.use((error: Error, req: Request, res: Response, next: NextFunction) => {
   if (error.message === 'PUBLICATION_CHANGED') { res.status(409).json({ success: false, error: { code: 'PUBLICATION_CHANGED', message: '数据已更新，请从第一页重新查询' } }); return; }
   const isIndexUnavailable = 'code' in error && error.code === 'ENOENT'
   const parseStatus = 'status' in error ? error.status : undefined
-  if (parseStatus === 400 || parseStatus === 413) {
-    res.status(parseStatus).json({ success: false, error: { code: 'INVALID_BODY', message: parseStatus === 413 ? '请求内容过大' : '请求格式不正确' } })
+  if (parseStatus === 400 || parseStatus === 413 || parseStatus === 415) {
+    res.status(parseStatus).json({ success: false, error: { code: 'INVALID_BODY', message: parseStatus === 415 ? '请求正文不支持压缩编码' : parseStatus === 413 ? '请求内容过大' : '请求格式不正确' } })
     return
   }
   res.status(500).json({

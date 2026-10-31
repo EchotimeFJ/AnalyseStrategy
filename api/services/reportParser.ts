@@ -1,4 +1,5 @@
 import path from 'node:path';
+import { resolveInstitution } from './entityResolver.js';
 import { unified } from 'unified';
 import remarkParse from 'remark-parse';
 import { recognizeTargets } from './reportRecognition.js';
@@ -243,16 +244,24 @@ function extractInstitutionBlocks(lines: string[]): InstitutionBlock[] {
     starts.push({ institution, lineNumber: index + 1 });
   });
 
-  return starts.map((start, index) => {
+  return starts.flatMap((start, index) => {
     const endLine = (starts[index + 1]?.lineNumber ?? lines.length + 1) - 1;
-    const contentLines = lines.slice(start.lineNumber - 1, endLine);
-    return {
-      institution: start.institution,
-      startLine: start.lineNumber,
-      endLine,
-      tags: extractTags(contentLines),
-      content: '',
-    };
+    const cards = lines.slice(start.lineNumber - 1, endLine)
+      .flatMap((line, offset) => /^\s*【入库卡片】\s*$/.test(line) ? [start.lineNumber + offset] : []);
+    const boundaries = [start.lineNumber, ...cards.slice(1)];
+    return boundaries.map((startLine, position) => {
+      const blockEnd = (boundaries[position + 1] ?? endLine + 1) - 1;
+      const contentLines = lines.slice(startLine - 1, blockEnd);
+      const field = contentLines.map(line => line.replace(/==|\*\*/g, '').match(/^\s*机构\s*[:：]\s*(.+?)\s*$/)?.[1]).find(Boolean);
+      const explicit = field ? resolveInstitution(field) : undefined;
+      const heading = resolveInstitution(start.institution);
+      const leadingLine = contentLines.map(line => line.trim()).find(line => line && !line.startsWith('#') && line !== '【入库卡片】');
+      const leading = leadingLine ? resolveInstitution(leadingLine) : undefined;
+      return {
+        institution: explicit?.verified ? explicit.canonicalName : heading.verified ? heading.canonicalName : leading?.verified ? leading.canonicalName : start.institution,
+        startLine, endLine: blockEnd, tags: extractTags(contentLines), content: '',
+      };
+    });
   });
 }
 

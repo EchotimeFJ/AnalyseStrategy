@@ -1,14 +1,14 @@
 import fs from 'node:fs/promises';
+import { setImmediate } from 'node:timers/promises';
+import { analyzeReport, pruneAnalysisCache } from './reportAnalysisCache.js';
 import type { ReviewedReport } from '../domain/review.js';
 import type { ReportReviewState, ReviewFactRef } from './reviewProjection.js';
 import { reviewStore } from './reviewRuntime.js';
 import path from 'node:path';
 import { randomUUID, createHash } from 'node:crypto';
 import {
-  buildReportFromMarkdown,
   createExactSearch,
   createTagSearch,
-  extractTargetMentions,
   normalizeText,
   type ReportDocument,
   type SearchHit,
@@ -23,7 +23,6 @@ import type {
 } from '../domain/research.js';
 import { dictionaryCodeNames } from './securityDictionary.js';
 import { mergeSecurityEntities, resolveInstitution, securityKey, normalizeSecurityCode } from './entityResolver.js';
-import { extractOpinionsFromMentions } from './opinionExtractor.js';
 import { classifySearchIntent, groupSearchHits } from './searchService.js';
 import { readUserConfig, type WatchItem } from './localConfig.js';
 import { getReportDir } from '../runtimeConfig.js';
@@ -259,19 +258,17 @@ async function buildIndexCandidate(manifest: SourceManifest): Promise<IndexState
   const { sourceDir, files } = manifest;
   const reports: ReportDocument[] = [];
   const errors: IndexState['errors'] = [];
+  const extracted = new Map<string, TargetMention[]>();
+  const rawOpinions: OpinionRecord[] = [];
 
   for (const filePath of files) {
     try {
       const markdown = await fs.readFile(filePath, 'utf-8');
       const stat = await fs.stat(filePath);
-      reports.push(
-        buildReportFromMarkdown({
-          id: makeReportId(sourceDir, filePath),
-          filePath,
-          markdown,
-          updatedAt: stat.mtime.toISOString(),
-        }),
-      );
+      const prepared = await analyzeReport({ id: makeReportId(sourceDir, filePath), filePath, markdown, updatedAt: stat.mtime.toISOString() }, sourceDir);
+      reports.push(prepared.report);
+      extracted.set(prepared.report.id, prepared.mentions);
+      rawOpinions.push(...prepared.opinions);
     } catch (error) {
       errors.push({
         filePath,
@@ -283,8 +280,7 @@ async function buildIndexCandidate(manifest: SourceManifest): Promise<IndexState
   if (errors.length) throw new Error(`Report rebuild failed: ${errors.length} unreadable reports`);
   for (const report of reports) await reviewStore(sourceDir).saveReport(report);
   const sourceReports = reports.map(report => ({ ...report, lines: [...report.lines], institutions: report.institutions.map(block => ({ ...block })) }));
-  const extracted = new Map(reports.map(report => [report.id, extractTargetMentions(report)]));
-  const rawOpinions = reports.flatMap(report => extractOpinionsFromMentions(report, extracted.get(report.id) ?? []));
+  await setImmediate();
   const entities = mergeSecurityEntities(
     rawOpinions.map((opinion) => ({
       name: opinion.security.displayName,
@@ -339,6 +335,7 @@ async function buildIndexCandidate(manifest: SourceManifest): Promise<IndexState
     cache: { origin: 'rebuilt', persisted: false },
   };
   next.views = buildIndexViews(next);
+  await pruneAnalysisCache(sourceDir, reports.map(report => report.id));
   return next;
 }
 
@@ -631,7 +628,8 @@ export async function searchReports(input: {
     hits = hits.filter((hit) => normalizeText(resolveInstitution(hit.institution).canonicalName) === institution);
   }
   const sourceHashes=new Map(filteredReports.map(r=>[r.id,createHash('sha256').update(r.markdown).digest('hex')]));
-  hits = hits.map(hit => ({ ...hit, sourceHash: sourceHashes.get(hit.reportId) }));
+  hits = hits.map(hit => ({ ...hit, sourceHash: sourceHashes.get(hit.reportId) }))
+    .sort((a, b) => b.date.localeCompare(a.date) || a.reportId.localeCompare(b.reportId) || a.lineNumber - b.lineNumber);
   const totalHits = hits.length;
   const offset = Number.isFinite(input.offset) ? Math.max(0, Math.floor(input.offset!)) : 0;
   const limit = Number.isFinite(input.limit) ? Math.min(500, Math.max(1, Math.floor(input.limit!))) : 500;

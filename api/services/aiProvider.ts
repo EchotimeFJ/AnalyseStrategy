@@ -216,14 +216,18 @@ export function createOpenAiCompatibleProvider(fetchImpl: typeof fetch = fetch):
         const decoder = new TextDecoder();
         let buffer = '';
         let contentChars = 0;
+        let receivedDone = false;
+        lastFinishReason = '';
         while (true) {
           const { value, done } = await reader.read();
           buffer += decoder.decode(value, { stream: !done });
           const frames = buffer.split(/\r?\n\r?\n/);
           buffer = frames.pop() ?? '';
+          if (done && buffer.trim()) { frames.push(buffer); buffer = ''; }
           for (const frame of frames) {
             const data = frame.split(/\r?\n/).filter((line) => line.startsWith('data:')).map((line) => line.slice(5).trim()).join('\n');
-            if (!data || data === '[DONE]') continue;
+            if (data === '[DONE]') { receivedDone = true; continue; }
+            if (!data) continue;
             let payload: {
               error?: { code?: string | number; message?: string };
               choices?: Array<{ delta?: { content?: string }; finish_reason?: string | null }>;
@@ -231,7 +235,7 @@ export function createOpenAiCompatibleProvider(fetchImpl: typeof fetch = fetch):
             try {
               payload = JSON.parse(data) as typeof payload;
             } catch {
-              continue;
+              throw new Error('AI_STREAM_INTERRUPTED:供应商返回的回答格式不完整，请重新生成');
             }
             if (payload.error) {
               const providerMessage = sanitizeProviderMessage(redactConfiguredKey(payload.error.message ?? '供应商流式请求失败', config.apiKey));
@@ -247,7 +251,12 @@ export function createOpenAiCompatibleProvider(fetchImpl: typeof fetch = fetch):
           }
           if (done) break;
         }
-        if (contentChars > 0) return;
+        if (contentChars > 0) {
+          if (lastFinishReason === 'length') throw new Error('AI_INCOMPLETE_COMPLETION:模型已达到单次输出长度，回答尚未完成，请继续提问或重新生成');
+          if (lastFinishReason === 'content_filter') throw new Error('AI_RESPONSE_BLOCKED:供应商中止了回答，请调整问题后重试');
+          if (!receivedDone && lastFinishReason !== 'stop') throw new Error('AI_STREAM_INTERRUPTED:回答连接提前结束，请重新生成');
+          return;
+        }
       }
       const reason = lastFinishReason === 'length' ? '模型推理耗尽了输出额度' : '模型没有返回可见正文';
       throw new Error(`AI_EMPTY_COMPLETION:${reason}，已自动重试仍未恢复，请更换模型或稍后重试`);

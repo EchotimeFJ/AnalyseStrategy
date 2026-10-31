@@ -61,7 +61,7 @@ REPORT_AUTO_UPDATE=false REPORT_DIR=/path/to/reports npm run dev
 
 ## 程序分析与同步
 
-网站使用证券代码、公司词库、机构段落、评级和价格句式提取报告。支持 A/H 多市场代码、无后缀代码、括号评级、标题评级和明确名单共用评级。评级和目标价保留原文行号；未覆盖、历史和否定表述不直接作为当前买入推荐。
+网站使用证券代码、公司词库、机构段落、评级和价格句式提取报告。支持 A/H 多市场代码、无后缀代码、名称中的连续括号、括号评级、标题评级和明确名单共用评级。评级和目标价保留原文行号；未覆盖、历史、否定和条件表述不直接作为当前买入推荐。机构取自文章元数据或段首的明确机构名称。
 
 研究助手（`/assistant`）提供基于报告的 AI 问答、来源引用和浏览器聊天历史。管理员可在 AI 配置中保存多套模型及各自独立的 Key，并切换问答模型；配置只服务于聊天和连接测试。服务器使用 `AI_CONFIG_SECRET` 加密保存配置，原有配置可继续使用。
 
@@ -71,24 +71,25 @@ REPORT_AUTO_UPDATE=false REPORT_DIR=/path/to/reports npm run dev
 
 ## 缓存与部署
 
-已发布快照由发布记录指向，校验格式和完整性后恢复；应用升级后，后台会重建候选索引，成功才替换发布记录。本地按需构建的缓存位于 `data/runtime/report-cache/`，还会校验应用版本、源码提交和报告文件指纹。快照不包含 AI 配置、聊天或管理员凭据。固定报告接口支持 gzip、ETag、304 和 HEAD，缓存最多 128 项、32 MiB。
+已发布快照由发布记录指向，校验格式和完整性后恢复；应用升级后，后台会重建候选索引，成功才替换发布记录。本地按需构建的缓存位于 `data/runtime/report-cache/`，还会校验应用版本、源码提交和报告文件指纹。逐篇解析结果按原文内容、规则和依赖摘要缓存在该目录的 `analysis/` 下；新增、修改和删除报告会更新对应缓存。解析过程中逐篇让出主线程，成功后统一发布。快照不包含 AI 配置、聊天或管理员凭据。固定报告接口支持 gzip、ETag、304 和 HEAD，缓存最多 128 项、32 MiB。
 
 生产环境的自动更新由后台任务负责，访问不会另外触发源文件检查。本地关闭自动任务时，仍可通过 `REPORT_INDEX_CHECK_MS` 设置访问时的检查间隔。
 
-发布顺序为 GitHub → 服务器。先测试、构建、推送并核对 GitHub `main`，然后在 `/opt/AnalyseStrategy` 执行：
+发布顺序为 GitHub → 服务器。先在开发机测试、构建、推送并核对 GitHub `main`；将 `dist/` 产物上传生产，构建时的 `APP_GIT_COMMIT` 和 `APP_BUILD_TIME` 须与服务器保持一致。生产只安装运行依赖，避免在 2 GB 主机上执行并行构建。在 `/opt/AnalyseStrategy` 执行：
 
 ```bash
 git pull --ff-only
 export PATH="/opt/AnalyseStrategy-runtime/node-v24.20.0-linux-x64/bin:$PATH"
-npm ci
 export APP_GIT_COMMIT="$(git rev-parse HEAD)"
-export APP_BUILD_TIME="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
-npm run build
+export APP_BUILD_TIME="构建产物对应的 UTC 时间"
+pm2 stop analyse-api
+npm ci --omit=dev
+# 安装已验证的 dist/ 产物后启动
 pm2 startOrReload deploy/ecosystem.config.cjs --update-env
 pm2 save
 ```
 
-使用单个 PM2 fork 实例，保证定时任务和本地用量记录只有一个服务进程负责。不要直接扩成多实例；扩容前需要共享调度锁、用量存储和限流存储。Vercel 请求入口不启动定时任务。
+使用单个 PM2 fork 实例，堆内存参数统一为 768 MiB，保证定时任务和本地用量记录只有一个服务进程负责。不要直接扩成多实例；扩容前需要共享调度锁、用量存储和限流存储。Vercel 请求入口不启动定时任务。
 
 生产配置使用本项目独立的 Node.js 24.20.0，不替换系统 Node 或其他网站的运行时。首次部署需从 Node.js 官方下载对应的 Linux x64 二进制，按官方 `SHASUMS256.txt` 校验后解压到 `/opt/AnalyseStrategy-runtime/`。通过 `deploy/harden-nginx.py /etc/nginx/conf.d/websites.conf` 可更新现有的本应用代理区域；脚本会备份、检查配置并在检查失败时恢复。
 
@@ -96,7 +97,11 @@ Nginx 的 `/analyse-strategy/api/` 代理到 `127.0.0.1:3003/api/`。启用 `TRU
 
 在本应用的静态文件 location 中引入 `deploy/nginx-security.conf`，提供 CSP、防嵌入和其他安全响应头。静态目录只能映射 `dist/`，不能映射仓库根目录或 `data/`。
 
-报告源、管理员配置、AI 额度记录，以及发布记录与它指向的快照需要一起备份；本地按需缓存可重建。排障日志查看 `pm2 logs analyse-api`，公开健康接口为 `/api/health`。
+报告源、管理员配置、AI 调用用量记录，以及发布记录与它指向的快照需要一起备份；本地按需缓存可重建。排障日志查看 `pm2 logs analyse-api`，公开健康接口为 `/api/health`。
+
+关注列表和别名写入 `data/runtime/user-config.json`（可用 `USER_CONFIG_FILE` 指定）；首次保存沿用旧 `data/user-config.json` 的数据。修改串行执行并以原子替换落盘，读取错误不会清空原文件。请求正文仅接受未压缩 JSON；报告响应仍支持 gzip。
+
+GitHub 推送和 PR 自动运行测试、构建、代码检查及运行依赖安全检查。
 
 ## 验证
 

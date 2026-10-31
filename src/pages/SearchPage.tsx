@@ -1,7 +1,7 @@
 import { FormEvent, useEffect, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { Search as SearchIcon } from 'lucide-react';
-import { apiGet, queryString } from '@/lib/api';
+import { apiGet } from '@/lib/api';
 import type { GroupedSearchResponse, RawSearchResponse, SearchHit } from '@/types';
 import { Layout, PageHeader } from '@/components/Layout';
 import { Badge, EmptyState, ErrorBlock, LoadingBlock, Panel } from '@/components/ui';
@@ -23,33 +23,33 @@ export default function SearchPage() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
+  const [refreshKey, setRefreshKey] = useState(0);
+  const urlQuery = params.toString();
   useEffect(() => {
-    if (params.get('q')) void runSearch(params.get('q') ?? '', params.get('mode') ?? 'all', params.get('raw') === 'true', Number(params.get('offset') ?? 0));
-    // URL 参数是页面初次加载和首页跳转的恢复源。
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
-  async function runSearch(nextQuery = query, nextMode = mode, nextStrict = strict, offset = 0, paging = false) {
-    const value = nextQuery.trim();
-    if (!value) {
-      setResult(null);
-      setError('');
-      return;
-    }
+    const request = new URLSearchParams(urlQuery);
+    const controller = new AbortController();
+    const value = request.get('q') ?? '';
+    setQuery(value); setMode(request.get('mode') ?? 'all');
+    setFrom(request.get('from') ?? ''); setTo(request.get('to') ?? '');
+    setStrict(request.get('raw') === 'true'); setError(''); setResult(null);
+    if (!value.trim()) { setLoading(false); return () => controller.abort(); }
+    request.set('paginated', 'true'); request.set('limit', '100');
     setLoading(true);
-    setError('');
-    setResult(null);
-    try {
-      const searchParams = { ...(paging && lastSearch ? lastSearch : { q: value, mode: nextMode, from, to, institution: params.get('institution') ?? undefined, raw: nextStrict ? 'true' : undefined }), paginated: 'true', limit: '100', offset: String(offset) };
-      const data = await apiGet<(GroupedSearchResponse | RawSearchResponse) & { publicationId?: string }>(`/api/search${queryString(searchParams)}`);
-      setLastSearch({ ...searchParams, publicationId: data.publicationId });
-      setResult(data);
-      setParams(compactSearchParams(searchParams));
-    } catch (reason) {
-      setError(reason instanceof Error ? reason.message : String(reason));
-    } finally {
-      setLoading(false);
-    }
+    void apiGet<(GroupedSearchResponse | RawSearchResponse) & { publicationId?: string }>(`/api/search?${request}`, controller.signal)
+      .then(data => {
+        if (controller.signal.aborted) return;
+        setLastSearch({ ...Object.fromEntries(request), publicationId: data.publicationId });
+        setResult(data);
+      })
+      .catch(reason => { if (!controller.signal.aborted) setError(reason instanceof Error ? reason.message : String(reason)); })
+      .finally(() => { if (!controller.signal.aborted) setLoading(false); });
+    return () => controller.abort();
+  }, [urlQuery, refreshKey]);
+
+  function runSearch(nextQuery = query, nextMode = mode, nextStrict = strict, offset = 0, paging = false) {
+    const searchParams = { ...(paging && lastSearch ? lastSearch : { q: nextQuery.trim(), mode: nextMode, from, to, institution: params.get('institution') ?? undefined, raw: nextStrict ? 'true' : undefined }), paginated: 'true', limit: '100', offset: String(offset) };
+    setParams(compactSearchParams(searchParams));
+    setRefreshKey(value => value + 1);
   }
 
   function submit(event: FormEvent) {

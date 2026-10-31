@@ -3,6 +3,17 @@ import { lookupBareCode } from './securityDictionary.js';
 
 const INSTITUTION_ALIASES: Record<string, string> = {
   UBS: '瑞银',
+  'Morgan Stanley': '摩根士丹利',
+  'Goldman Sachs': '高盛',
+  'J.P. Morgan': '摩根大通',
+  JPMorgan: '摩根大通',
+  'JP Morgan': '摩根大通',
+  'Bank of America': '美银',
+  'Deutsche Bank': '德意志银行',
+  Jefferies: '杰富瑞',
+  Nomura: '野村',
+  Macquarie: '麦格理',
+  HSBC: '汇丰',
   中信证券: '中信证券',
   中金: '中金',
   中金公司: '中金',
@@ -18,6 +29,8 @@ const INSTITUTION_ALIASES: Record<string, string> = {
   申万宏源: '申万宏源',
   花旗: '花旗',
   Citi: '花旗',
+  花旗银行: '花旗',
+  'Citi Research': '花旗',
   德银: '德意志银行',
   德意志银行: '德意志银行',
   美银: '美银',
@@ -102,11 +115,13 @@ export function resolveInstitution(input: string): {
 } {
   const rawName = input.trim();
   const normalized = normalizeEntityName(rawName).replace(/[（(]\s*精选\s*\d*\s*[）)]/g, '').trim();
-  const canonicalName = INSTITUTION_ALIASES[normalized] ?? normalized;
+  const names = [normalized, normalized.replace(/\([^()]*\)/g, '').trim()];
+  const known = Object.entries(INSTITUTION_ALIASES).find(([alias]) => names.some(name => name.toLowerCase() === alias.toLowerCase()));
+  const canonicalName = known?.[1] ?? normalized;
   return {
     rawName,
     canonicalName,
-    verified: Boolean(INSTITUTION_ALIASES[normalized]),
+    verified: Boolean(known),
   };
 }
 

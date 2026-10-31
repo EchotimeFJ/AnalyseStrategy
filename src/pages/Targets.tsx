@@ -14,33 +14,24 @@ export default function Targets() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
+  const [refreshKey, setRefreshKey] = useState(0);
+  const selectedQuery = params.get('q') ?? '';
   useEffect(() => {
-    const value = params.get('q');
-    if (value) void loadProfile(value);
-    // URL 是首页和搜索页跳转到公司研究的输入源。
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
-  async function loadProfile(value = query) {
-    const nextQuery = value.trim();
-    if (!nextQuery) return;
+    const controller = new AbortController();
+    setQuery(selectedQuery); setProfiles([]); setError('');
+    if (!selectedQuery.trim()) { setLoading(false); return () => controller.abort(); }
     setLoading(true);
-    setError('');
-    try {
-      const data = await apiGet<CompanyProfile[]>(`/api/companies${queryString({ q: nextQuery })}`);
-      setProfiles(data);
-      setQuery(nextQuery);
-      setParams({ q: nextQuery });
-    } catch (reason) {
-      setError(reason instanceof Error ? reason.message : String(reason));
-    } finally {
-      setLoading(false);
-    }
-  }
+    void apiGet<CompanyProfile[]>(`/api/companies${queryString({ q: selectedQuery })}`, controller.signal)
+      .then(data => { if (!controller.signal.aborted) setProfiles(data); })
+      .catch(reason => { if (!controller.signal.aborted) setError(reason instanceof Error ? reason.message : String(reason)); })
+      .finally(() => { if (!controller.signal.aborted) setLoading(false); });
+    return () => controller.abort();
+  }, [selectedQuery, refreshKey]);
 
   function submit(event: FormEvent) {
     event.preventDefault();
-    void loadProfile();
+    setParams(query.trim() ? { q: query.trim() } : {});
+    setRefreshKey(value => value + 1);
   }
 
   const profile = profiles[0];
@@ -58,7 +49,7 @@ export default function Targets() {
         {loading ? <LoadingBlock label="正在归并公司历史观点…" /> : null}
         {error ? <ErrorBlock message={error} /> : null}
         {!loading && !error && profiles.length > 1 ? (
-          <Panel title="找到多个匹配公司" eyebrow="Matches"><div className="flex flex-wrap gap-2">{profiles.slice(0, 10).map((item) => <button key={item.security.key} onClick={() => { setProfiles([item]); setQuery(item.security.code ?? item.security.displayName); }} className="min-h-10 rounded-full border border-slate-200 px-4 text-sm hover:border-blue-300">{item.security.displayName} {item.security.code}</button>)}</div></Panel>
+          <Panel title="找到多个匹配公司" eyebrow="Matches"><div className="flex flex-wrap gap-2">{profiles.slice(0, 10).map((item) => <button key={item.security.key} onClick={() => { setParams({ q: item.security.code ?? item.security.displayName }); setRefreshKey(value => value + 1); }} className="min-h-10 rounded-full border border-slate-200 px-4 text-sm hover:border-blue-300">{item.security.displayName} {item.security.code}</button>)}</div></Panel>
         ) : null}
         {profile ? <CompanyProfileView profile={profile} /> : !loading && !error ? <EmptyState title="输入公司开始研究" description="输入名称、历史别名或上市代码，查看机构观点时间线。" /> : null}
       </div>

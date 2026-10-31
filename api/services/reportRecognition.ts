@@ -18,7 +18,7 @@ type Signals = (report: ReportDocument, block: InstitutionBlock, targetName?: st
 // ASCII boundaries still allow mixed text such as “维持Buy评级”.
 const RATING = '(?:买入(?:[/／]高风险)?|增持|超配|中性|持有|减持|卖出|跑赢(?:大市|大盘|行业)?|跑输(?:大市|大盘|行业)?|优于大市|弱于大市|低于行业表现|(?<![A-Za-z0-9_])(?:Overweight|Underweight|Neutral|Buy|Hold|Sell|OW|UW)(?![A-Za-z0-9_]))';
 const CODE = /\b(\d{1,6}|[A-Z]{1,8})[.\s]+(HK|SS|SH|SZ|BJ|US|TW|KS|KQ|JP|L|O|N|SI|CH|C1|C2)\b/gi;
-const PAREN = /([\p{L}][\p{L}\p{N}·・&.'’\-\s]{1,70})\(([^()]*)\)/gu;
+const PAREN = /([\p{L}][\p{L}\p{N}·・&.'’\-\s]{1,70}(?:\([^()]{1,20}\))?)\(([^()]*)\)/gu;
 const PRICE_LABEL = /(?:目标价(?:格)?|target price|\bTP\b|\bPT\b)/gi;
 const GENERIC = /^(?:评级|投资评级|Rating|买入|增持|超配|中性|卖出|持有|公司|目标价|当前价|发布日期|估值|财务|风险|催化剂|行业|市场|主题|观点|核心|展望|摘要|结论|我们|由于|因为|因此|当|从|基于|考虑|对所有|盈利|利润|收入|营收|基本面|投资策略|投资要点|业务概览|中国互联网行业|中国房地产|视点|附录|核心要点)(?:$|[:：\s]|[^A-Za-z])/i;
 const ACRONYMS = new Set(['AI', 'AH', 'EPS', 'EBIT', 'EBITDA', 'DCF', 'ROE', 'ROI', 'ASP', 'CEO', 'CFO', 'GPU', 'CPU', 'CAPEX', 'FCF', 'AIDC', 'IDC', 'OS', 'PFS', 'HR', 'DIO', 'TP', 'PT', 'HK', 'US', 'SS', 'SZ', 'RMB', 'BUY', 'HOLD', 'SELL', 'OW', 'UW', 'GPM', 'OPM', 'NPM', 'GMV', 'CAGR', 'TAM', 'WACC', 'SOTP', 'YTD', 'YOY', 'MOM', 'QOQ', 'CPI', 'PPI']);
@@ -88,6 +88,9 @@ function currency(value?: Market) {
 }
 function codes(text: string, name?: string, confirmedPairs = new Set<string>()) {
   const explicit = [...text.matchAll(CODE)].flatMap((match) => {
+    // Spaced exchange labels require a symbol, not a capitalized prose word
+    // such as the 'Finance L' inside 'Bloomberg Finance L.P.'.
+    if (/^[A-Za-z]/.test(match[1]) && /\s/.test(match[0]) && match[1] !== match[1].toUpperCase() && !lookupBareCode(match[1])) return [];
     const code = normalizeSecurityCode(match[0]);
     return code ? [{ code, start: match.index!, end: match.index! + match[0].length }] : [];
   });
@@ -164,7 +167,7 @@ function candidatesFor(lines: Line[]) {
   for (const line of lines) {
     for (const match of line.text.matchAll(PAREN)) {
       let name = nameOf(match[1]);
-      const knownName = dictionaryName(name);
+      const knownName = dictionaryName(name) ?? dictionaryName(name.replace(/\([^()]*\)/g, ''));
       if (knownName) name = knownName.name;
       if (/[)）]\s*$/.test(line.text.slice(0, match.index!))) name = name.replace(/^(?:和|与|及)\s*/, '');
       if (!validName(name)) continue;
@@ -182,7 +185,7 @@ function candidatesFor(lines: Line[]) {
       // A parenthesized industry abbreviation is not a ticker just because it
       // is uppercase. Bare symbols need title or recommendation structure.
       if (bare && !codes(inside).length && !knownName && !hasField && !explicitName && !companyProfile && line.number !== firstContentLine && !namedRecommendation) continue;
-      const innerStart = start + match[0].indexOf('(') + 1;
+      const innerStart = start + match[0].lastIndexOf('(') + 1;
       const prefix = line.text.slice(0, start).trim();
       const prefixedRating = new RegExp(`^[【\\[]${RATING}[】\\]]$`, 'i').test(prefix);
       const atHeading = !prefix || /^[#>*•\d.\s-]+$/.test(prefix) || /^(?:标题|标的)\s*[:：]$/.test(prefix) || explicitName || prefixedRating;
@@ -424,7 +427,11 @@ function buyRecommendations(line: Line) {
   return [...line.text.matchAll(/(?:建议|推荐)[^。；,，]{0,20}买入|(?:积极|逢低|择机)买入/g)].flatMap((match) => {
     const position = match.index! + match[0].lastIndexOf('买入');
     const before = line.text.slice(Math.max(0, match.index! - 100), match.index!);
-    if (/(?:不|未|别|避免)\s*$|参见[^。]{0,85}报告|此前[^。]{0,30}|曾经[^。]{0,20}/.test(before)) return [];
+    const clause = before.split(/[。；;，,]/).at(-1) ?? '';
+    const recommendation = line.text.slice(match.index!, position);
+    if (/(?:不|未|别|避免)\s*$|参见[^。]{0,85}报告/.test(before)
+      || /(?:此前|曾经|去年|当时|过去|曾)[^。；，,]{0,30}$/.test(clause)
+      || /(?:不要|不宜|不应|不再|不可|不能|暂不|暂缓|避免|停止|取消|放弃|谨慎|不排除|如果|若|假如)[^。；，,]{0,20}$/.test(recommendation)) return [];
     const offsets = originalOffsets(line);
     return [{ value: '买入', line: line.number, position, excerpt: excerpt(line, position), score: 4,
       startColumn: (offsets[position] ?? position) + 1, endColumn: (offsets[position + 2] ?? line.raw.length) + 1 }];

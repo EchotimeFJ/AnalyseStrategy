@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { resolveApiPath } from '@/lib/api';
 import { getApiErrorMessage } from '@/lib/api';
 import { parseSseFrames } from '@/lib/sse';
@@ -22,6 +22,7 @@ export function useAiChat() {
   const [state, setState] = useState<ChatSessionState>(readInitialState);
   const [phase, setPhase] = useState<ChatPhase>('idle');
   const abortRef = useRef<AbortController | null>(null);
+  useEffect(() => () => abortRef.current?.abort(), []);
   const activeSession = state.sessions.find((session) => session.id === state.activeSessionId) ?? state.sessions[0];
   const messages = activeSession?.messages ?? [];
 
@@ -102,6 +103,7 @@ export function useAiChat() {
     abortRef.current = controller;
     setPhase('retrieving');
     let receivedText = false;
+    let completed = false;
     try {
       const response = await fetch(resolveApiPath('/api/ai/chat'), {
         method: 'POST',
@@ -132,10 +134,12 @@ export function useAiChat() {
             appendAssistant(sessionId, assistantId, payload.text);
             setPhase('generating');
           }
+          if (event.event === 'done') completed = true;
           if (event.event === 'error') throw new Error(payload.message ?? '回答中断，请重新生成');
         }
         if (done) break;
       }
+      if (!completed) throw new Error('回答连接提前结束，请重新生成');
       if (!receivedText) throw new Error('模型没有返回正文，请重新生成或更换模型');
       patchAssistant(sessionId, assistantId, { pending: false, failed: false });
     } catch (reason) {
@@ -148,8 +152,7 @@ export function useAiChat() {
         error: message,
       });
     } finally {
-      abortRef.current = null;
-      setPhase('idle');
+      if (abortRef.current === controller) { abortRef.current = null; setPhase('idle'); }
     }
   }
 
